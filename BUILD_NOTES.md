@@ -12,5 +12,24 @@
 2. **`TradeState` = 11 champs de 11.3** (pas les 9 de M05) : 11.3 est LE contrat custom_data ; M05 en omettait `trade_no` et `entry_conviction`, nécessaires au journal/sizing. Défini dans `contracts.py` (le prompt de build l'y place), gestion.py l'IMPORTE au lieu de le redéfinir.
 3. **`s_structure` « contexte TREND »** (PDR 05.1) : features.py est pur et n'a pas accès au macro_state → « contexte TREND » = conditions prix du régime TREND (ADX≥25, EMA50>EMA200, close>EMA50). Le veto macro/F&G reste dans regimes.py. Écart documenté, à confirmer par Jonas au rapport.
 
+## 2026-07-06 — point de review T4 (G4, à vérifier au GATE G1)
+Le coder T4 fait retourner à `partial_tp` `−(0.5 × amount × open_rate)` (« 50 % du stake d'entrée »). Le PDR 03.4 G4 dit « vendre **50 % de la quantité** » : via `adjust_trade_position`, freqtrade convertit le stake négatif au PRIX COURANT → à +1,5R ça vend MOINS de 50 % des coins. Correction attendue si confirmé : dériver `current_rate = entry + profit_r × (entry − initial_sl)` (possible dans la signature M05) et retourner `−(0.5 × amount × current_rate)`. → transmis au reviewer T4.
+
+## 2026-07-06 — point de review T3 (CB séquentiel, à vérifier au GATE G1)
+Le coder T3 laisse « la fenêtre 12 bougies / 5 trades à charge de M07 » : `cb_sequential_state(Trade)` (signature M04 sans `now`) ne peut pas dire seul si le cooldown est actif. M07 doit rester SANS logique métier → correction attendue si confirmé : param optionnel `now=None` injecté (cohérent avec le reste du module) et `(cooldown_active, risk_divisor)` entièrement dérivés de la DB dans risk.py. → transmis au reviewer T3.
+
+## 2026-07-06 — point de review T5 (journal, à vérifier au GATE G1)
+Actés côté contrats : enveloppe `event_type` + `signal_id` ajouté aux champs requis d'`evaluation` (contracts.py mis à jour — reconstruction de cycle M06 impossible sinon). Reste à corriger côté module si confirmé : `ev_gate_check` dérive `pair` du signal_id → donne « BTCUSDT » alors que tous les autres événements portent « BTC/USDT » (dataset V2 incohérent) ; correction attendue : param `pair` explicite dans `ev_gate_check`. → transmis au reviewer T5.
+
+## 2026-07-06 — note d'intégration T2 → M07 (Phase 3)
+`cio.explain(row)` lit `fear_greed`/`macro_stale` depuis la row, mais classify n'écrit que ses 3 colonnes (11.3) : la stratégie devra fusionner ces 2 valeurs du macro_state dans le dict `explain` avant `ev_evaluation` (sinon `regime_inputs` sera null). À inclure dans le prompt du coder M07.
+
+## 2026-07-06 — extensions de contrat ACTÉES (review risk, à valider par Jonas au rapport)
+Ajoutées à `contracts.py` (noms canoniques, risk.py doit les importer) : `CB_DAY_FILE = "state/cb_day.json"` · `VETO_INTENT_SUFFIX = ".intent"` · `SKIP_ZERO_STOP_DISTANCE`. Également actée : la signature `compute_stake(...) -> (stake|None, raison|None)` (écart vs M04 `-> float`, nécessaire pour journaliser `skip_min_notional`) — **le prompt du coder M07 devra explicitement déballer le tuple et journaliser le skip**.
+
+## 2026-07-06 — reviews GATE G1 (1er passage) & incident quota
+Verdicts reviewers : regimes+cio FAIL (littéral `50` → corrigé par l'orchestrateur : `params.FG_NEUTRAL_BACKTEST`, re-vérifié 33 tests verts + ruff) · gestion FAIL (G4 vendait 50 % du stake d'entrée, pas 50 % de la quantité — renvoyé au coder) · journal FAIL (pair « BTCUSDT » incohérent dans gate_check, json.dumps hors garde — renvoyé au coder) · risk : review interrompue par la limite de session, relancée.
+Leçon : la limite de session (reset 21:50) a tué T1 ×2 et la review risk EN VOL — les transcripts d'agents survivent, reprise par SendMessage sans perte. Ne pas relancer un agent from scratch avant d'avoir vérifié son transcript/l'état disque.
+
 ## 2026-07-06 — sous-agents via l'outil Agent
 Session lancée depuis `C:\Users\jofar` → les `.claude/agents/` du repo ne sont pas chargés (chargement au démarrage seulement). Reproduction fidèle : outil Agent, modèle Opus, spec du `.md` injectée en tête de prompt. Pour une future session : lancer `claude` DANS le repo.

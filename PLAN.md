@@ -35,13 +35,14 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
 ## Phase 2 — Modules purs (5 × arit-coder EN PARALLÈLE, Opus)
 | T | Spec | Produit | Statut |
 |---|---|---|---|
-| T1 | `modules/M01` + `05_features.md` | `arit_lib/features.py` + tests (dont anti-look-ahead) | ☐ |
-| T2 | `modules/M02`+`M03` + `04_cio_regimes.md` | `regimes.py` + `cio.py` + tests | ☐ |
-| T3 | `modules/M04` + `03_risque.md` | `risk.py` + tests | ☐ |
-| T4 | `modules/M05` + `03_risque.md` | `gestion.py` + tests | ☐ |
-| T5 | `modules/M06` + `08_journal_hitl.md` | `journal.py` + tests | ☐ |
-- [ ] runner : pytest global (échec → renvoi au coder, max 2 allers-retours/module puis question à Jonas)
-- [ ] reviewer sur chaque module (checklists du prompt de build)
+| T1 | `modules/M01` + `05_features.md` | `arit_lib/features.py` + tests (dont anti-look-ahead) | 🔄 en cours (features.py écrit, tests en écriture) |
+| T2 | `modules/M02`+`M03` + `04_cio_regimes.md` | `regimes.py` + `cio.py` + tests | ✅ reviewé FAIL→corrigé (FG_NEUTRAL_BACKTEST), 33 tests |
+| T3 | `modules/M04` + `03_risque.md` | `risk.py` + tests | ✅ reviewé FAIL→corrigé (CB séq DB, metrics complètes, stale lecteur, borne −6 %, constantes contracts), 22 tests |
+| T4 | `modules/M05` + `03_risque.md` | `gestion.py` + tests | ✅ reviewé FAIL→corrigé (G4 = 50 % de la quantité), 15 tests |
+| T5 | `modules/M06` + `08_journal_hitl.md` | `journal.py` + tests | ✅ reviewé FAIL→corrigé (pair explicite, dumps gardé), 8 tests |
+- [x] pytest global intermédiaire : 92 passed (T2-T5 + contrats), preuve tour du 06/07 22:5x
+- [ ] runner : pytest global final (après T1)
+- [x] reviewer sur T2/T3/T4/T5 (verdicts FAIL motivés → correctifs appliqués et re-vérifiés) ; review T1 restante
 - [ ] **GATE G1** : pytest 100 % vert · zéro import croisé entre modules arit_lib (grep : un module n'importe que contracts/params) · anti-look-ahead présent et vert
 - [ ] commit par module
 

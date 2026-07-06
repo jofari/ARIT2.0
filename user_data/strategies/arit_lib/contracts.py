@@ -71,6 +71,9 @@ HEARTBEAT_FILE = "state/heartbeat"                       # 11.3 — mtime = hear
 VETO_DIR = "veto"                                        # 11.3 — <signal_id>.flag
 DECISIONS_DIR = "logs/decisions"                         # 11.3 — YYYY-MM-DD.jsonl
 MANUAL_RESTART_FLAG = "state/manual_restart_required"    # M04 — 2 CB jour / semaine ISO
+# Extensions actees (BUILD_NOTES 2026-07-06, a valider par Jonas au rapport) :
+CB_DAY_FILE = "state/cb_day.json"          # M04 — {"iso_week","count"} declenchements CB jour
+VETO_INTENT_SUFFIX = ".intent"             # 11.6 — <signal_id>.intent, mtime = heure d'intention
 
 # --------------------------------------------------- Journal JSONL (PDR 08.1)
 SCHEMA_VERSION = 1  # M06 — toute nouvelle cle => PDR 08.1 d'abord, version += 1
@@ -79,9 +82,12 @@ EVENT_TYPES = ("evaluation", "gate_check", "entry", "gestion", "exit", "system")
 
 # Champs obligatoires par type (PDR 08.1). Cles canoniques du build (le PDR les
 # decrit en francais ; les cles JSON sont fixees ICI, une fois pour toutes).
+# Enveloppe commune ajoutee par journal.write : event_type + schema_version.
+# signal_id est present sur TOUT le cycle (M06) — y compris evaluation (derivable
+# pair+ts_4h meme sans signal).
 JOURNAL_REQUIRED_FIELDS = {
     "evaluation": (
-        "ts_utc", "pair", "regime", "regime_inputs", "scores", "cdl_features",
+        "ts_utc", "pair", "signal_id", "regime", "regime_inputs", "scores", "cdl_features",
         "conviction", "seuil", "rr_dispo", "decision", "raison",
     ),
     "gate_check": ("ts_utc", "pair", "signal_id", "gates", "decision", "failed_gate"),
@@ -113,7 +119,8 @@ GATE_NAMES = (
     "rr_min",          # 03.2.7 — RR >= 1,5
     "veto_canari",     # 03.2.8 — fenetre veto Discord (canari uniquement)
 )
-SKIP_MIN_NOTIONAL = "skip_min_notional"  # PDR 03.1 — skip journalise hors gates
+SKIP_MIN_NOTIONAL = "skip_min_notional"            # PDR 03.1 — skip journalise hors gates
+SKIP_ZERO_STOP_DISTANCE = "skip_zero_stop_distance"  # M04.4 — entry == sl_initial, jamais d'exception
 
 
 # ----------------------------------------------------------- signal_id (M06)

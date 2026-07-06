@@ -115,6 +115,8 @@ FILTER_DOJI = "CDLDOJI"           # PDR 05.4 — doji sur cassure => s_patterns 
 VOL_STRONG_MULT = 1.5             # PDR 05.5 — s_volume = 1,0 si vol >= 1,5 x SMA20
 VOL_OK_MULT = 1.0                 # PDR 05.5 — 0,5 si >= 1,0 x
 
+FG_NEUTRAL_BACKTEST = 50          # PDR M02 — macro neutre backtest (>= FG_MULT_FULL_FROM)
+
 # ----------------------------------------------------- 06 Vetos & donnees externes
 FG_CACHE_HOURS = 1                # PDR 06.2 / 06.5 — cache Fear&Greed
 CALENDAR_CACHE_MIN = 30           # PDR 06.5 — cache calendrier
