@@ -22,14 +22,14 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
 - [x] `git init` (repo imbriqué, indépendant du repo parent de `C:\Users\jofar`)
 - [x] `.gitignore` + `.env.example`
 - [x] PLAN.md + BUILD_NOTES.md
-- [ ] commit `phase0: env + plan`
+- [x] commit `phase0: env + plan` (30 fichiers)
 
 ## Phase 1 — Contrats (orchestrateur — verrou anti-dérive)
-- [ ] `user_data/strategies/arit_lib/params.py` — TOUTES les constantes du PDR, source en commentaire (`# PDR 03.4 G3`)
-- [ ] `user_data/strategies/arit_lib/contracts.py` — `COLUMNS` (docs/11 §11.3), `TradeState`, schémas événements journal (docs/08), format `signal_id`
-- [ ] `tests/conftest.py` — générateur OHLCV synthétique seedé (tendance, range, gaps, mèches)
-- [ ] Arborescence complète docs/02 §layout
-- [ ] **GATE G0** (runner) : `ruff check` propre + `pytest --collect-only` OK
+- [x] `user_data/strategies/arit_lib/params.py` — constantes PDR 03→09 + M08-M10, source en commentaire
+- [x] `user_data/strategies/arit_lib/contracts.py` — colonnes 11.3, `TradeState` (11 champs), événements journal 08.1, gates 03.2, `make_signal_id`
+- [x] `tests/conftest.py` — `make_ohlcv(kind)` seedé : trend / range / gaps / wicks + fixtures
+- [x] Arborescence docs/02 §layout (+ pyproject.toml pour ruff/pytest ; ruff 0.15.20, pytest 9.1.1 dans le venv)
+- [x] **GATE G0 PASS** (arit-runner, agent a8834234d750a9266) : `ruff check .` → « All checks passed! » · `pytest --collect-only -q` → exit 5 « no tests collected » (normal, zéro erreur d'import)
 - [ ] commit `phase1: contrats`
 
 ## Phase 2 — Modules purs (5 × arit-coder EN PARALLÈLE, Opus)

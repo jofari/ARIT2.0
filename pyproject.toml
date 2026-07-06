@@ -1,0 +1,12 @@
+# Outillage des gates (ruff + pytest) — G0/G1/G2 du prompt de build.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["docs", "ARIT_PDR_v3", "ARIT_claudecode_pack"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
