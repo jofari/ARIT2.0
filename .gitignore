@@ -1,0 +1,28 @@
+# Secrets
+.env
+
+# Runtime / donnees
+user_data/logs/
+!user_data/logs/decisions/.gitkeep
+user_data/state/
+user_data/veto/
+user_data/data/
+user_data/backtest_results/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Pack de lancement (doublons — la spec canonique vit dans docs/)
+ARIT_PDR_v3/
+ARIT_claudecode_pack/
+ARIT_PDR_v3_README.md
+PROMPT_ARIT_BUILD.md
