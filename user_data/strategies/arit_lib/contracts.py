@@ -120,7 +120,7 @@ GATE_NAMES = (
     "veto_canari",     # 03.2.8 — fenetre veto Discord (canari uniquement)
 )
 SKIP_MIN_NOTIONAL = "skip_min_notional"            # PDR 03.1 — skip journalise hors gates
-SKIP_ZERO_STOP_DISTANCE = "skip_zero_stop_distance"  # M04.4 — entry == sl_initial, jamais d'exception
+SKIP_ZERO_STOP_DISTANCE = "skip_zero_stop_distance"  # M04.4 — entry == sl_initial
 
 
 # ----------------------------------------------------------- signal_id (M06)

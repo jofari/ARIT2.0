@@ -111,6 +111,7 @@ PIN_BAR_CLOSE_TOP_FRACTION = 1 / 3  # PDR 05.4 — cloture dans le tiers haut
 PATTERN_RECENT_CANDLES_4H = 3     # PDR 05.4 — s_patterns = 0,5 si pattern < 3 bougies
 ENTRY_CDL_PATTERNS = ("CDLENGULFING", "CDLHAMMER")  # PDR 05.4 — == 100
 FILTER_DOJI = "CDLDOJI"           # PDR 05.4 — doji sur cassure => s_patterns = 0
+CDL_BULLISH = 100                 # PDR 05.4 — sortie talib CDL* pour pattern bullish
 
 VOL_STRONG_MULT = 1.5             # PDR 05.5 — s_volume = 1,0 si vol >= 1,5 x SMA20
 VOL_OK_MULT = 1.0                 # PDR 05.5 — 0,5 si >= 1,0 x

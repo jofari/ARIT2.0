@@ -30,21 +30,21 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
 - [x] `tests/conftest.py` — `make_ohlcv(kind)` seedé : trend / range / gaps / wicks + fixtures
 - [x] Arborescence docs/02 §layout (+ pyproject.toml pour ruff/pytest ; ruff 0.15.20, pytest 9.1.1 dans le venv)
 - [x] **GATE G0 PASS** (arit-runner, agent a8834234d750a9266) : `ruff check .` → « All checks passed! » · `pytest --collect-only -q` → exit 5 « no tests collected » (normal, zéro erreur d'import)
-- [ ] commit `phase1: contrats`
+- [x] commit `phase1: contrats` (a98a082)
 
 ## Phase 2 — Modules purs (5 × arit-coder EN PARALLÈLE, Opus)
 | T | Spec | Produit | Statut |
 |---|---|---|---|
-| T1 | `modules/M01` + `05_features.md` | `arit_lib/features.py` + tests (dont anti-look-ahead) | 🔄 en cours (features.py écrit, tests en écriture) |
+| T1 | `modules/M01` + `05_features.md` | `arit_lib/features.py` + tests (dont anti-look-ahead) | ✅ reviewé PASS (2 notes mineures → CDL_BULLISH déplacé dans params.py), 14 tests |
 | T2 | `modules/M02`+`M03` + `04_cio_regimes.md` | `regimes.py` + `cio.py` + tests | ✅ reviewé FAIL→corrigé (FG_NEUTRAL_BACKTEST), 33 tests |
 | T3 | `modules/M04` + `03_risque.md` | `risk.py` + tests | ✅ reviewé FAIL→corrigé (CB séq DB, metrics complètes, stale lecteur, borne −6 %, constantes contracts), 22 tests |
 | T4 | `modules/M05` + `03_risque.md` | `gestion.py` + tests | ✅ reviewé FAIL→corrigé (G4 = 50 % de la quantité), 15 tests |
 | T5 | `modules/M06` + `08_journal_hitl.md` | `journal.py` + tests | ✅ reviewé FAIL→corrigé (pair explicite, dumps gardé), 8 tests |
 - [x] pytest global intermédiaire : 92 passed (T2-T5 + contrats), preuve tour du 06/07 22:5x
-- [ ] runner : pytest global final (après T1)
-- [x] reviewer sur T2/T3/T4/T5 (verdicts FAIL motivés → correctifs appliqués et re-vérifiés) ; review T1 restante
-- [ ] **GATE G1** : pytest 100 % vert · zéro import croisé entre modules arit_lib (grep : un module n'importe que contracts/params) · anti-look-ahead présent et vert
-- [ ] commit par module
+- [x] runner : pytest global final (07/07) : ruff « All checks passed! » · **92 passed** (cio 18 + features 14 + gestion 15 + journal 8 + regimes 15 + risk 22)
+- [x] reviewer sur T1..T5 — T1 PASS (correctif mineur CDL_BULLISH → params.py) ; T2-T5 FAIL motivés → corrigés et re-vérifiés
+- [x] **GATE G1 PASS** : pytest 92/92 vert · grep import-croisé arit_lib = zéro match (chaque module n'importe que contracts/params) · anti-look-ahead : `test_anti_lookahead_compute_all` + `test_anti_lookahead_etage_4h` verts
+- [x] commit par module (M02-M06 : f1cfc87, 3c9fb03, 3aa0e00, faa798f ; M01 : commit features ci-dessous)
 
 ## Phase 3 — Intégration (séquentiel)
 - [ ] coder : `user_data/strategies/AritV1.py` (M07) — < 250 lignes, zéro logique métier
@@ -58,4 +58,12 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
 - [ ] commit final + tag `v0.1.0-build`
 
 ## Questions ouvertes à Jonas
-- (aucune pour l'instant)
+- **features/s_structure — priorité BOS vs CHoCH (cas croisé)** : si un CHoCH baissier survient
+  pendant la fenêtre `bos_fresh` (3 bougies 4h) d'un BOS haussier en contexte TREND, `np.select`
+  donne priorité au BOS → s_structure = 1,0. La spec 05.1 ne tranche pas ce conflit ; le cas
+  « BOS postérieur au CHoCH » est testé et correct. À confirmer si le cas croisé doit primer CHoCH.
+
+## Écarts mineurs vs PDR (à reporter dans RAPPORT_BUILD)
+- `hh_hl_intact_4h`, `pivot_high_4h`, `pivot_low_4h` existent sur le df mergé mais ne sont pas
+  listés dans `contracts.FEATURE_COLUMNS` (usage interne à features/module_scores uniquement,
+  jamais décisionnels bruts — écart de documentation, aucun impact runtime).

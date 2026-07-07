@@ -27,6 +27,10 @@ Actés côté contrats : enveloppe `event_type` + `signal_id` ajouté aux champs
 ## 2026-07-06 — extensions de contrat ACTÉES (review risk, à valider par Jonas au rapport)
 Ajoutées à `contracts.py` (noms canoniques, risk.py doit les importer) : `CB_DAY_FILE = "state/cb_day.json"` · `VETO_INTENT_SUFFIX = ".intent"` · `SKIP_ZERO_STOP_DISTANCE`. Également actée : la signature `compute_stake(...) -> (stake|None, raison|None)` (écart vs M04 `-> float`, nécessaire pour journaliser `skip_min_notional`) — **le prompt du coder M07 devra explicitement déballer le tuple et journaliser le skip**.
 
+## 2026-07-06 — T1 features : deux points remontés par le coder
+1. **Bollinger(20,2)_1h non émises** : PDR 05.3 les veut « calculées et journalisées », mais ni M01 (signatures), ni 11.3 (colonnes), ni 08.1 (schéma evaluation) ne les câblent. Non implémenté = écart documenté pour le RAPPORT (décision Jonas : les ajouter = étendre 11.3 + 08.1 d'abord).
+2. **`hh_hl_intact_4h`** : colonne intermédiaire de track_structure (étiquettes HH/HL prévues par M01) consommée par s_structure — extension de fait de la liste 11.3, à vérifier en review et à acter si PASS.
+
 ## 2026-07-06 — reviews GATE G1 (1er passage) & incident quota
 Verdicts reviewers : regimes+cio FAIL (littéral `50` → corrigé par l'orchestrateur : `params.FG_NEUTRAL_BACKTEST`, re-vérifié 33 tests verts + ruff) · gestion FAIL (G4 vendait 50 % du stake d'entrée, pas 50 % de la quantité — renvoyé au coder) · journal FAIL (pair « BTCUSDT » incohérent dans gate_check, json.dumps hors garde — renvoyé au coder) · risk : review interrompue par la limite de session, relancée.
 Leçon : la limite de session (reset 21:50) a tué T1 ×2 et la review risk EN VOL — les transcripts d'agents survivent, reprise par SendMessage sans perte. Ne pas relancer un agent from scratch avant d'avoir vérifié son transcript/l'état disque.
