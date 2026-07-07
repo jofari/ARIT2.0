@@ -147,3 +147,5 @@ WATCHDOG_HEARTBEAT_MAX_S = 600    # PDR 09.5 / M10 — heartbeat > 10 min => ale
 WATCHDOG_LOOP_S = 60              # M10 — boucle 60 s
 WATCHDOG_CONFIRM_READS = 2        # M10 — 2 lectures avant d'agir (anti-faux-positif)
 DISCORD_DOWN_ALERT_MIN = 15       # M09 — watchdog alerte si bot Discord down > 15 min
+WATCHDOG_DUST_THRESHOLD_USDT = 1.0  # M10 §tests (seuil dust) — valeur NON fixee par le PDR,
+                                    # actee 1.0 USDT au build (a valider par Jonas au rapport)

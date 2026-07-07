@@ -300,7 +300,7 @@ def _veto_ok(cfg, now: datetime):
     base = Path(cfg["user_data_dir"]) / contracts.VETO_DIR
     signal_id = cfg["signal_id"]
     now_ts = now.timestamp()
-    if (base / f"{signal_id}.flag").exists():
+    if (base / f"{signal_id}{contracts.VETO_FLAG_SUFFIX}").exists():
         return False, "human_veto", False
     intent = base / f"{signal_id}{contracts.VETO_INTENT_SUFFIX}"
     if not intent.exists():

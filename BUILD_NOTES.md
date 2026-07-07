@@ -1,5 +1,13 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-07 — venv : scipy manquant · aiodns cassé sous Windows
+1. `freqtrade download-data` plantait sur `ModuleNotFoundError: scipy` (import module-level de
+   `freqtrade/data/metrics.py`, non tiré par l'install initiale) → `pip install scipy` (1.18.0).
+2. Puis `aiodns.error.DNSError: Could not contact DNS servers` : le résolveur c-ares d'aiodns ne lit
+   pas la config DNS de cette machine (problème connu c-ares/Windows) — testé hors sandbox, même échec,
+   alors que curl/résolveur système passent. Fix : `pip uninstall aiodns` → aiohttp/ccxt retombe sur le
+   ThreadedResolver (DNS système). Ne PAS réinstaller aiodns dans ce venv.
+
 ## 2026-07-06 — venv hors OneDrive
 **Décision** : venv à `C:\Users\jofar\venvs\arit`, pas dans le repo.
 **Pourquoi** : le repo vit dans OneDrive ; un venv freqtrade ≈ dizaines de milliers de fichiers que OneDrive synchronise et verrouille (échecs pip aléatoires, CPU). `venv/` reste dans .gitignore au cas où.

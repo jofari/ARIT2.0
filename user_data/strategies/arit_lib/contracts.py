@@ -74,6 +74,7 @@ MANUAL_RESTART_FLAG = "state/manual_restart_required"    # M04 — 2 CB jour / s
 # Extensions actees (BUILD_NOTES 2026-07-06, a valider par Jonas au rapport) :
 CB_DAY_FILE = "state/cb_day.json"          # M04 — {"iso_week","count"} declenchements CB jour
 VETO_INTENT_SUFFIX = ".intent"             # 11.6 — <signal_id>.intent, mtime = heure d'intention
+VETO_FLAG_SUFFIX = ".flag"                 # 11.3 — <signal_id>.flag : discord_bot pose, risk lit
 
 # --------------------------------------------------- Journal JSONL (PDR 08.1)
 SCHEMA_VERSION = 1  # M06 — toute nouvelle cle => PDR 08.1 d'abord, version += 1

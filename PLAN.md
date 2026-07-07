@@ -47,9 +47,13 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
 - [x] commit par module (M02-M06 : f1cfc87, 3c9fb03, 3aa0e00, faa798f ; M01 : commit features ci-dessous)
 
 ## Phase 3 — Intégration (séquentiel)
-- [ ] coder : `user_data/strategies/AritV1.py` (M07) — < 250 lignes, zéro logique métier
-- [ ] coder : `services/macro_state.py` + `services/discord_bot.py` + `services/watchdog.py` (M08-M10) + tests
-- [ ] orchestrateur : `user_data/config.dry.json` (07) · `CLAUDE.md` racine · `arit_lib/CLAUDE.md`
+- [ ] coder : `user_data/strategies/AritV1.py` (M07) — < 250 lignes, zéro logique métier — 🔄 coder lancé 07/07
+- [x] coder : `services/macro_state.py` + `services/discord_bot.py` + `services/watchdog.py` (M08-M10) + tests — livrés 07/07, ruff propre + 32 tests verts (rapport coder)
+  - review services : FAIL (fuite clé Finnhub possible dans les logs · dust 1.0 USDT magique · 3 LOW) → correctifs appliqués (aller-retour 1/2) et **re-vérifiés** : scrub `_scrub_finnhub_error` + 2 tests anti-fuite, dust miroir de `params.WATCHDOG_DUST_THRESHOLD_USDT`, `contracts.VETO_FLAG_SUFFIX` partagé (discord_bot + risk.py), véto fail-closed testé — ruff propre, **127 passed** global (07/07)
+  - ⚠️ coder M07 tué par la limite de session APRÈS avoir écrit AritV1.py (310 lignes, ruff OK, AUCUN test) — à reprendre : compaction < 250 + tests/test_strategy.py
+- [x] orchestrateur : `user_data/config.dry.json` vérifié conforme docs/07 §7.1 (07/07) · `CLAUDE.md` racine + `arit_lib/CLAUDE.md` écrits (session du 06/07) — commit avec phase3
+  - ⚠️ à vérifier à la review M07 : Protections freqtrade (CooldownPeriod, StoplossGuard/MaxDrawdown — 07 §7.1) vivent dans la stratégie sur freqtrade 2026, pas dans la config
+- [ ] download-data smoke (BTC/USDT 30 j, 5m/1h/4h/1d) — 🔄 lancé 07/07 en arrière-plan
 - [ ] **GATE G2 — smoke** : `freqtrade download-data` BTC/USDT 30 j (`-t 5m 1h 4h 1d`) puis `freqtrade backtesting --strategy AritV1 -c user_data/config.dry.json --timeframe-detail 5m` — critère : aucune exception
 - [ ] commit `phase3: integration + smoke`
 
@@ -64,6 +68,12 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
   « BOS postérieur au CHoCH » est testé et correct. À confirmer si le cas croisé doit primer CHoCH.
 
 ## Écarts mineurs vs PDR (à reporter dans RAPPORT_BUILD)
+- Services (review 07/07, écarts assumés non bloquants) : digest Discord sans « positions ouvertes
+  avec R courant » (non dérivable du JSONL seul depuis un process séparé — M09/08.2) · alerte
+  « Discord down > 15 min » (`DISCORD_DOWN_ALERT_MIN`) non implémentée dans le watchdog ·
+  `WATCHDOG_DUST_THRESHOLD_USDT = 1.0` acté au build (PDR ne fixe pas de valeur) ·
+  `state/watchdog_flattened` (flag interne idempotence flatten) hors 11.3 · discord.py optionnel
+  à l'import (non installé dans le venv — à installer avant le dry-run).
 - `hh_hl_intact_4h`, `pivot_high_4h`, `pivot_low_4h` existent sur le df mergé mais ne sont pas
   listés dans `contracts.FEATURE_COLUMNS` (usage interne à features/module_scores uniquement,
   jamais décisionnels bruts — écart de documentation, aucun impact runtime).
