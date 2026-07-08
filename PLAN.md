@@ -63,11 +63,11 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
 - [ ] **GATE G2 — smoke** : download-data fait (07/07, après fix scipy+aiodns) ; backtest `--timerange 20260607- --timeframe-detail 5m --cache none` — critère : aucune exception
   - run 1 (08/07) : FAIL ×3 bloqueurs — (a) schéma freqtrade 2026.6 : `telegram`/`api_server` avec `enabled:false` exigent quand même token/chat_id/username/password → blocs RETIRÉS de config.dry.json (absents = off ; pour le dry-run réel, réintroduire api_server avec credentials locaux, cf. 07.4) ; (b) `populate_exit_trend` manquant → corrigé au renvoi coder
   - run 2 (08/07) : **GATE G2 PASS** — backtest terminé sans exception (~7,3 s, 0 trade = sans importance) ; ETH/SOL/BNB sans données = simples WARNING, config intouchée ; warm-up 200 bougies normal
-- [ ] commit `phase3: integration + smoke`
+- [x] commit `phase3: integration M07 + GATE G2` (`82882fc`, poussé)
 
 ## Phase 4 — Rapport (orchestrateur)
-- [ ] `RAPPORT_BUILD.md` : fait/non fait + preuves · écarts vs PDR (aucun silencieux) · questions ouvertes · commandes suivantes (download 2017+, backtest complet, A/B docs/09 §9.1, dry-run)
-- [ ] commit final + tag `v0.1.0-build`
+- [x] `RAPPORT_BUILD.md` (08/07) : 21 écarts listés, 6 questions ouvertes, commandes prêtes
+- [x] commit final + tag `v0.1.0-build` + push --tags
 
 ## Questions ouvertes à Jonas
 - **features/s_structure — priorité BOS vs CHoCH (cas croisé)** : si un CHoCH baissier survient
