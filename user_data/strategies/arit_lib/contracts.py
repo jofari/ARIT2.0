@@ -32,6 +32,7 @@ CUSTOM_DATA_KEYS = (
     "initial_sl", "risk_pct", "trade_no", "tp1_done", "extension_on",
     "mae_r", "mfe_r", "last_candle_ts", "entry_conviction", "entry_regime",
     "signal_id",
+    "tp2",  # 11.3 / PDR 03.3 — TP2 fige a l'entree (extension actee 2026-07-08, review M07)
 )
 
 
@@ -53,6 +54,7 @@ class TradeState:
     entry_conviction: float = 0.0
     entry_regime: str = ""
     signal_id: str = ""
+    tp2: float = 0.0  # PDR 03.3 — fige a l'entree, jamais recalcule (review M07)
 
     def as_dict(self) -> dict:
         return {f.name: getattr(self, f.name) for f in fields(self)}

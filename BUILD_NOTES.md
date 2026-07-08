@@ -1,5 +1,24 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-08 — GATE G2 run 1 : pièges freqtrade 2026.6 (à repatcher si on retombe dessus)
+1. **Schéma config** : `telegram` et `api_server` avec `enabled: false` exigent QUAND MÊME leurs
+   champs obligatoires (`token`/`chat_id`, `username`/`password`) — la validation plante avant
+   même de charger la stratégie. **Patch appliqué** : blocs RETIRÉS de `config.dry.json`
+   (bloc absent = désactivé par défaut). **Pour le dry-run réel** : réintroduire `api_server`
+   (FreqUI locale, PDR 07.4) avec `username`/`password` locaux — jamais committés — sinon même
+   erreur ; `telegram` reste absent (off).
+   Contournement alternatif sans toucher la config (utilisé par le runner pour diagnostiquer) :
+   env `FREQTRADE__TELEGRAM__TOKEN`/`__CHAT_ID` + `FREQTRADE__API_SERVER__USERNAME`/`__PASSWORD`
+   factices — zéro effet runtime tant que `enabled: false`.
+2. **`populate_exit_trend` obligatoire** même quand toutes les sorties passent par les callbacks
+   (`custom_exit`/`custom_stoploss`) : freqtrade lève « must be implemented » au chargement.
+   Patch : stub dans `AritV1.py` (df inchangé, aucune colonne exit posée).
+3. **Latent, jamais atteint au run 1** : whitelist 4 paires (config) vs données BTC/USDT seul
+   sur disque. Si le re-run G2 lève une exception pour données manquantes : smoke avec
+   `--pairs BTC/USDT` en CLI (ne PAS modifier la whitelist contractuelle de la config).
+4. Backtest 100 % local : le piège DNS/aiodns (note du 07/07) ne concerne PAS `backtesting`,
+   seulement les commandes réseau (`download-data`, live/dry).
+
 ## 2026-07-07 — venv : scipy manquant · aiodns cassé sous Windows
 1. `freqtrade download-data` plantait sur `ModuleNotFoundError: scipy` (import module-level de
    `freqtrade/data/metrics.py`, non tiré par l'install initiale) → `pip install scipy` (1.18.0).

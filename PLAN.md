@@ -15,6 +15,10 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
                               Phase 3 (M07 → M08-M10 → config) ──► G2 ──► Phase 4 (rapport)
 ```
 
+## Règle de session (08/07, demande Jonas)
+- Remote GitHub : `https://github.com/jofari/ARIT2.0.git`, branche `main` (renommée depuis master).
+- **Push après CHAQUE commit** (`git push`). Premier push fait le 08/07 (8 commits + README).
+
 ## Phase 0 — Env & plan (orchestrateur)
 - [x] `docs/` complet : 22 .md dont `modules/` ×10 — restauré depuis `Downloads\ARIT_PDR_v3_2.zip` (hash-identique à `_v3_1.zip`)
 - [x] `.claude/` copié (arit-coder, arit-reviewer, arit-runner)
@@ -47,14 +51,18 @@ Phase 0 (env) ──► Phase 1 (contrats) ──► G0 ──► Phase 2 (T1..T
 - [x] commit par module (M02-M06 : f1cfc87, 3c9fb03, 3aa0e00, faa798f ; M01 : commit features ci-dessous)
 
 ## Phase 3 — Intégration (séquentiel)
-- [ ] coder : `user_data/strategies/AritV1.py` (M07) — < 250 lignes, zéro logique métier — 🔄 coder lancé 07/07
+- [x] coder : `user_data/strategies/AritV1.py` (M07) — livré 08/07 : 249 lignes + `tests/test_strategy.py` (15 tests), 142 verts ; 2 points contractuels BUILD_NOTES confirmés câblés
+  - review M07 : **FAIL** (TP2 non figé HIGH · ev_evaluation backtest MEDIUM · `_initial_levels` métier MEDIUM · garde custom_stoploss LOW · spread inerte = à tracer) → renvoi groupé (AR 2/2) avec le bloqueur G2
+  - correctifs appliqués et **vérifiés par moi** (08/07) : `tp2` contractualisé (docs/11 §11.3 + contracts + TradeState) persisté `order_filled`/relu figé `custom_exit` (test dédié) · stub `populate_exit_trend` · `gestion.initial_levels` pure (4 tests, formule PDR 03.3 réf. entry, divergence vs rr_available documentée) · floor None si initial_sl absent · ev_evaluation scopé live/dry (décision Jonas 08/07, docs/08 amendé) — **245 lignes**, ruff propre, **146 passed**
 - [x] coder : `services/macro_state.py` + `services/discord_bot.py` + `services/watchdog.py` (M08-M10) + tests — livrés 07/07, ruff propre + 32 tests verts (rapport coder)
   - review services : FAIL (fuite clé Finnhub possible dans les logs · dust 1.0 USDT magique · 3 LOW) → correctifs appliqués (aller-retour 1/2) et **re-vérifiés** : scrub `_scrub_finnhub_error` + 2 tests anti-fuite, dust miroir de `params.WATCHDOG_DUST_THRESHOLD_USDT`, `contracts.VETO_FLAG_SUFFIX` partagé (discord_bot + risk.py), véto fail-closed testé — ruff propre, **127 passed** global (07/07)
-  - ⚠️ coder M07 tué par la limite de session APRÈS avoir écrit AritV1.py (310 lignes, ruff OK, AUCUN test) — à reprendre : compaction < 250 + tests/test_strategy.py
+  - coder M07 tué 2× par la limite de session en cours de route — repris par SendMessage (transcript intact), livraison complète 08/07
 - [x] orchestrateur : `user_data/config.dry.json` vérifié conforme docs/07 §7.1 (07/07) · `CLAUDE.md` racine + `arit_lib/CLAUDE.md` écrits (session du 06/07) — commit avec phase3
   - ⚠️ à vérifier à la review M07 : Protections freqtrade (CooldownPeriod, StoplossGuard/MaxDrawdown — 07 §7.1) vivent dans la stratégie sur freqtrade 2026, pas dans la config
 - [ ] download-data smoke (BTC/USDT 30 j, 5m/1h/4h/1d) — 🔄 lancé 07/07 en arrière-plan
-- [ ] **GATE G2 — smoke** : `freqtrade download-data` BTC/USDT 30 j (`-t 5m 1h 4h 1d`) puis `freqtrade backtesting --strategy AritV1 -c user_data/config.dry.json --timeframe-detail 5m` — critère : aucune exception
+- [ ] **GATE G2 — smoke** : download-data fait (07/07, après fix scipy+aiodns) ; backtest `--timerange 20260607- --timeframe-detail 5m --cache none` — critère : aucune exception
+  - run 1 (08/07) : FAIL ×3 bloqueurs — (a) schéma freqtrade 2026.6 : `telegram`/`api_server` avec `enabled:false` exigent quand même token/chat_id/username/password → blocs RETIRÉS de config.dry.json (absents = off ; pour le dry-run réel, réintroduire api_server avec credentials locaux, cf. 07.4) ; (b) `populate_exit_trend` manquant → corrigé au renvoi coder
+  - run 2 (08/07) : **GATE G2 PASS** — backtest terminé sans exception (~7,3 s, 0 trade = sans importance) ; ETH/SOL/BNB sans données = simples WARNING, config intouchée ; warm-up 200 bougies normal
 - [ ] commit `phase3: integration + smoke`
 
 ## Phase 4 — Rapport (orchestrateur)

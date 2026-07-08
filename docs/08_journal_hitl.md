@@ -5,6 +5,7 @@
 ## 8.1 Journal JSONL (`user_data/logs/decisions/YYYY-MM-DD.jsonl`)
 Une ligne par événement. Types et champs obligatoires :
 - **`evaluation`** (chaque clôture 4h, par paire) : `ts_utc, pair, regime, regime_inputs{adx4h, ema50_4h, ema200_4h, close_vs_ema, fear_greed, macro_stale}, scores{structure, momentum, sr, patterns, volume}, cdl_features{...toutes les CDL*...}, conviction, seuil, rr_dispo, decision("signal"|"no_signal"), raison`.
+  Portée : **live/dry-run uniquement** — en backtest (populate vectorisé), `gate_check` + `entry`/`exit` suffisent, les `no_signal` ne sont pas journalisés (décision Jonas 2026-07-08, review M07).
 - **`gate_check`** (si signal) : chaque garde-fou de 03.2 avec `pass|fail` + valeur mesurée (spread, résiduel_total, budget_semaine, entrées_semaine, slots, fenêtre_news). Décision finale `enter|skip` + gate fautif.
 - **`entry`** : prix, quantité, risque %, stake, SL_initial, TP1, TP2, conviction, régime.
 - **`gestion`** : chaque déclenchement G1-G7 : règle, ancien/nouveau SL ou action, profit courant en R.

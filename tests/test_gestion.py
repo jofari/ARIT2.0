@@ -35,6 +35,31 @@ def _hours(n):
     return T0 + pd.Timedelta(hours=n)
 
 
+# --------------------------------------------------------------- initial_levels (PDR 03.3)
+def test_initial_levels_hl_based():
+    sl, tp1, tp2 = gestion.initial_levels(100.0, 95.0, 2.0, 130.0)
+    assert sl == pytest.approx(95.0 - params.SL_HL_ATR_BUFFER * 2.0)      # HL 4h - 0,1xATR
+    assert tp1 == pytest.approx(100.0 + params.TP1_R * (100.0 - sl))      # TP1 +1,5R
+    assert tp2 == 130.0                                                   # resistance > TP1
+
+
+def test_initial_levels_fallback_when_hl_above_entry():
+    sl, tp1, tp2 = gestion.initial_levels(100.0, 105.0, 2.0, float("nan"))
+    assert sl == pytest.approx(100.0 - params.SL_FALLBACK_ATR_MULT * 2.0)  # fallback entry-1,5xATR
+    assert tp2 is None
+
+
+def test_initial_levels_hl_none_and_res_below_tp1():
+    sl, tp1, tp2 = gestion.initial_levels(100.0, None, 2.0, 100.5)
+    assert sl == pytest.approx(100.0 - params.SL_FALLBACK_ATR_MULT * 2.0)  # HL absent -> fallback
+    assert tp2 is None                                                    # resistance <= TP1
+
+
+def test_initial_levels_atr_nan_gives_nan_sl():
+    sl, _tp1, _tp2 = gestion.initial_levels(100.0, 95.0, float("nan"), 130.0)
+    assert sl != sl                                                       # NaN -> le caller skip
+
+
 # --------------------------------------------------------------------- r_multiple / flags
 def test_r_multiple_sign_and_zero_risk():
     assert gestion.r_multiple(105.0, 100.0, 95.0) == pytest.approx(1.0)

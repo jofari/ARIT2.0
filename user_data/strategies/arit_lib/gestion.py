@@ -54,6 +54,26 @@ def r_multiple(price: float, entry: float, initial_sl: float) -> float:
     return (price - entry) / risk
 
 
+def initial_levels(entry, last_hl_4h, atr_4h, nearest_res_4h):
+    """SL/TP1/TP2 initiaux a l'entree (PDR 03.3) — fonction PURE, appelee par M07.
+
+    SL = last_hl_4h - SL_HL_ATR_BUFFER x atr_4h si HL exploitable (non-NaN et sous l'entree),
+    sinon fallback entry - SL_FALLBACK_ATR_MULT x atr_4h. Reference = prix d'ENTREE (PDR 03.3) ;
+    features.rr_available utilise `close` pour l'ESTIMATION pre-entree (pas encore d'entree) —
+    divergence assumee et documentee. TP1 = entry + TP1_R x (entry - SL). TP2 = nearest_res_4h
+    si strictement > TP1, sinon None (pas de cible). atr_4h NaN => SL NaN (le caller skip, M04.4).
+    """
+    hl_ok = last_hl_4h is not None and last_hl_4h == last_hl_4h and last_hl_4h < entry
+    if hl_ok:
+        sl = last_hl_4h - params.SL_HL_ATR_BUFFER * atr_4h
+    else:
+        sl = entry - params.SL_FALLBACK_ATR_MULT * atr_4h
+    tp1 = entry + params.TP1_R * (entry - sl)
+    res_ok = (nearest_res_4h is not None and nearest_res_4h == nearest_res_4h
+              and nearest_res_4h > tp1)
+    return sl, tp1, (nearest_res_4h if res_ok else None)
+
+
 def _candle_ts(row) -> int:
     """Epoch UTC (s) de la bougie — cle de la garde une-action-par-bougie (11.3 last_candle_ts)."""
     return int(pd.Timestamp(row["date"]).value // 1_000_000_000)
