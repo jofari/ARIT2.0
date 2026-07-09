@@ -2,6 +2,7 @@
 .env
 
 # Runtime / donnees
+user_data/macro_state.json
 user_data/logs/
 !user_data/logs/decisions/.gitkeep
 user_data/state/
