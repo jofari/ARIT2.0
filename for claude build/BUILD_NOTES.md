@@ -1,5 +1,21 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-09 — décisions de Jonas (réponses aux questions du RAPPORT_BUILD)
+1. **BOS vs CHoCH (s_structure)** : trancher par l'EXPÉRIENCE — backtester DEUX versions
+   (A : priorité BOS = comportement actuel · B : priorité CHoCH) sur l'historique complet,
+   garder celle qui a les meilleurs résultats. → nécessite un flag de comparaison dans params
+   (`S_STRUCTURE_CHOCH_PRIORITY`, défaut = comportement actuel) + 2 runs au moment du backtest
+   complet. PAS ENCORE CODÉ.
+3. **Service spread_state : VALIDÉ pour V1.1** (avant canari) — petit service qui écrit le
+   spread dans un fichier d'état (modèle macro_state), pour réactiver le gate 03.2.3.
+   PAS ENCORE CODÉ.
+4. **Bollinger(20,2)_1h : ON CÂBLE** — les émettre et les journaliser = étendre docs/11 §11.3
+   (colonnes) + docs/08 §8.1 (événement evaluation) + features.add_indicators + contracts.
+   PAS ENCORE CODÉ.
+Questions 2 (validation des extensions de contrat), 5 (script de lancement) et 6 (digest R
+courant) : incomprises → réexpliquées à Jonas le 09/07, réponses en attente. AUCUN code tant
+que ces réponses ne sont pas données.
+
 ## 2026-07-08 — GATE G2 run 1 : pièges freqtrade 2026.6 (à repatcher si on retombe dessus)
 1. **Schéma config** : `telegram` et `api_server` avec `enabled: false` exigent QUAND MÊME leurs
    champs obligatoires (`token`/`chat_id`, `username`/`password`) — la validation plante avant

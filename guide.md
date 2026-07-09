@@ -74,7 +74,30 @@ Les 2 fichiers « contrats » (jamais de logique) : `arit_lib/params.py` = TOUTE
 Le protocole de validation (A/B, ablation G1-G7, seuils PF/DD) : `docs/09_validation_deploy.md`.
 Ce qui a déjà tourné : uniquement le **smoke** du 08/07 (BTC 30 j, 0 trade, critère = pas d'exception).
 
-## 5. Trouver vite
+## 5. « Où sont les 10 agents ? » (Macro Analyst, CIO, Backtester…)
+
+**Ils existent, mais pas sous forme d'agents IA.** L'interdit n°1 du PDR = AUCUN LLM dans le
+runtime. La vision multi-agents (façon Aladdin) a été traduite en **modules déterministes** :
+chaque « agent » est devenu un fichier de code testable. Claude ne sert qu'à DÉVELOPPER le bot.
+
+| Agent (vision d'origine) | Devenu quoi | Le code est ici |
+|---|---|---|
+| **Macro Analyst** | collecteur macro (Fear&Greed + calendrier éco → fichier d'état) | `services/macro_state.py` (M08) |
+| **Sentiment Watcher** | le Fear&Greed du macro_state + veto RISK_OFF | `services/macro_state.py` + `arit_lib/regimes.py` |
+| **Technical Analyst** | toutes les features techniques (indicateurs, structure, S/R, patterns) | `arit_lib/features.py` (M01) |
+| **Flow Specialist** | réduit au score volume `s_volume` (PDR 05.5) | `arit_lib/features.py` (M01) |
+| **Main Agent CIO** | classification du régime + vote pondéré → conviction | `arit_lib/regimes.py` (M02) + `arit_lib/cio.py` (M03) |
+| **Strategist** | profils de poids par régime + seuils (figés, jamais hyperoptés) | `arit_lib/params.py` (POIDS, SEUIL_*) consommés par `cio.py` |
+| **Risk Manager** | garde-fous d'entrée, sizing, circuit breakers + gestion G1-G7 | `arit_lib/risk.py` (M04) + `arit_lib/gestion.py` (M05) |
+| **Executing Trader** | l'exécution des ordres = freqtrade lui-même, piloté par la stratégie | `user_data/strategies/AritV1.py` (M07) |
+| **Performance Controller** | journal de chaque décision + chien de garde | `arit_lib/journal.py` (M06) + `services/watchdog.py` (M10) |
+| **Quant / Backtester** | PAS un module : c'est le moteur de backtest freqtrade + le protocole A/B | commande §4 + `docs/09_validation_deploy.md` |
+
+À ne pas confondre avec les **sous-agents de BUILD** (`arit-coder`, `arit-reviewer`,
+`arit-runner`) : ce sont des prompts `.md` dans `.claude/agents/` que Claude Code utilise
+pour CONSTRUIRE le bot — aucun rapport avec le code qui trade.
+
+## 6. Trouver vite
 
 - **« Pourquoi le bot a fait ça ? »** → `user_data/logs/decisions/YYYY-MM-DD.jsonl` (1 ligne = 1 décision, format `docs/08`).
 - **« C'est quoi cette constante ? »** → `user_data/strategies/arit_lib/params.py` (le commentaire cite le PDR).
