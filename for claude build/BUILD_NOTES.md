@@ -1,5 +1,20 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-11 — PIÈGE MAJEUR : l'état fichier de risk.py contamine les backtests
+Les circuit breakers persistent dans `user_data/state/` (cb_day.json, day_equity.json,
+manual_restart_required). Conséquences MESURÉES : (1) chaque backtest hérite de l'état du
+précédent (un `manual_restart_required` posé par un run bloque les entrées de TOUS les
+suivants — B est passé de 263 à 19 trades) ; (2) des runs PARALLÈLES partageant user_data
+s'écrasent mutuellement l'état → résultats invalides. TOUS les chiffres absolus des runs des
+10-11/07 avant cette note sont invalides (le diagnostic G6 état/événement reste valide).
+**Règles désormais** : jamais 2 backtests sur le même user_data ; purger
+`state/*.json + manual_restart_required + veto/*` AVANT CHAQUE run ; pour paralléliser →
+lanes `user_data_runN/` (state/logs/veto locaux + junctions NTFS vers data/ et strategies/,
+`--userdir user_data_runN`), isolation VÉRIFIÉE par smoke. Question de fond pour Jonas/V1.1 :
+le bot devrait purger lui-même cet état en mode backtest (bot_start) — non implémenté.
+Correctif G6 additionnel au passage : garde « vie du trade » (l'événement ne compte que sur
+une bougie entièrement postérieure à l'entrée) — sans elle, 145 sorties G6 à ~7 min.
+
 ## 2026-07-10 (soir) — décision Jonas : G6 devient un ÉVÉNEMENT
 Suite au diagnostic (voir note du 10/07 ci-dessous), Jonas a choisi l'option « événement » :
 G6 sort seulement quand une bougie 1h CASSE le dernier HL en clôture pendant la vie du trade.
