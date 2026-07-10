@@ -1,5 +1,12 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-10 — download 2017+ : piège freqtrade `--prepend`
+`download-data` ne remplit JAMAIS avant des données existantes sans `--prepend` : BTC/USDT
+(qui avait déjà les 30 j du smoke) est resté à 2026-06-07 alors qu'ETH/SOL/BNB (vierges) ont
+bien tout pris depuis 2017/2020. Fix : re-run ciblé
+`download-data -p BTC/USDT -t 5m 1h 4h 1d --prepend --timerange 20170801-20260608`.
+Vérification qui fait foi : `freqtrade list-data --exchange binance --show-timerange`.
+
 ## 2026-07-09 (2e tour) — extensions de contrat : verdict de Jonas
 - n°2 (TradeState 12 champs), n°3 (contracts étendu), n°4 (compute_stake tuple), n°7
   (ev_evaluation live/dry) : **VALIDÉS tels quels**.
