@@ -14,7 +14,8 @@ from arit_lib import contracts, features, params
 
 SCORE_COLS = ["s_structure", "s_momentum", "s_sr", "s_patterns", "s_volume"]
 COMPUTE_ALL_COLS = [
-    "atr_1h", "last_hl_1h", "choch_bear_1h", "new_4h", "rr_dispo", *SCORE_COLS,
+    "atr_1h", "last_hl_1h", "choch_bear_1h", "choch_bear_event_1h",
+    "new_4h", "rr_dispo", *SCORE_COLS,
 ]
 # Bougie de reference : TR = 2 constant => ATR(14) = 2 exactement (Wilder).
 BASE = (100.0, 101.0, 99.0, 100.2)
@@ -141,6 +142,24 @@ def test_choch_correct():
     assert not df["choch_bear"].iloc[26]               # cloture revenue au-dessus
     # Le pivot low 97.4 (LL, confirme a 27) ne remplace PAS le dernier HL.
     assert df["last_hl"].iloc[30] == pytest.approx(98.0)
+
+
+def test_choch_bear_event_only_on_breakout_candle():
+    # G6 = EVENEMENT de cassure (decision Jonas 2026-07-10, docs/03 §3.4) : la colonne
+    # choch_bear_event_1h n'est vraie QUE sur la bougie ou l'etat passe de faux a vrai,
+    # jamais sur les bougies suivantes ou l'etat choch_bear_1h persiste.
+    out = features.compute_all(build_merged(n4=280, kind="gaps", seed=7))
+    state = out["choch_bear_1h"].astype(bool).to_numpy()
+    event = out["choch_bear_event_1h"].astype(bool).to_numpy()
+    rising = state & ~np.concatenate(([False], state[:-1]))   # front montant de l'etat
+    assert (event == rising).all()
+    # Le scenario contient bien de la persistance d'etat (etat vrai >=2 bougies de suite)...
+    persist = state & np.concatenate(([False], state[:-1]))
+    assert persist.any()
+    # ... et l'evenement ne s'y declenche jamais (que sur la bougie de cassure).
+    assert not (event & persist).any()
+    assert not (event & ~state).any()            # jamais d'evenement sans etat
+    assert not bool(event[0])                    # warm-up (1re bougie) => False
 
 
 # ----------------------------------------------------------------- S/R 05.2

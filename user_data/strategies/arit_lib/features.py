@@ -62,7 +62,7 @@ def compute_all(df: pd.DataFrame) -> pd.DataFrame:
     """M01 / BUILD_NOTES 2 — etage 1h merge, ordre fixe.
 
     Requiert le df 1h merge par freqtrade (*_4h/*_1d, date_4h presents).
-    Ajoute : atr_1h, last_hl_1h, choch_bear_1h (G2/G6), new_4h (PDR 11.2),
+    Ajoute : atr_1h, last_hl_1h, choch_bear_1h (G2), choch_bear_event_1h (G6), new_4h (PDR 11.2),
     rr_dispo (05.2) et s_structure/s_momentum/s_sr/s_patterns/s_volume (05).
     Idempotente (M01 invariant 2) : tout est recalcule depuis les inputs.
     """
@@ -78,6 +78,11 @@ def compute_all(df: pd.DataFrame) -> pd.DataFrame:
     tmp = track_structure(find_pivots(tmp))
     df["last_hl" + SUFFIX_1H] = tmp["last_hl"]
     df["choch_bear" + SUFFIX_1H] = tmp["choch_bear"]
+    # G6 = EVENEMENT de cassure (decision Jonas 2026-07-10, docs/03 par.3.4) : la bougie ou
+    # l'etat choch_bear_1h PASSE de faux a vrai en cloture. L'etat persistant reste journalise
+    # (choch_bear_1h). shift(1) = passe seul => aucun look-ahead ; warm-up => False (fill_value).
+    choch_state = df["choch_bear" + SUFFIX_1H]
+    df["choch_bear_event" + SUFFIX_1H] = choch_state & ~choch_state.shift(1, fill_value=False)
     # PDR 11.2 — nouvelle bougie 4h. Garde NaT : avant la premiere bougie 4h
     # mergee il n'y a PAS de nouvelle donnee 4h (warm-up du merge).
     date4 = df["date" + SUFFIX_4H]

@@ -38,7 +38,7 @@ Chaque check échoué → skip + ligne de journal avec le nom exact du gate.
 | G3 | Trailing ATR (fallback) | Actif seulement après +1R : SL = max(SL_courant, close_1h − **2,0 × ATR(14)_1h**). En régime RISK_OFF : 1,5 × ATR. |
 | G4 | TP partiel | Au premier touch de **+1,5R** → vendre **50 %** de la quantité (adjust_trade_position). Une seule fois par trade. |
 | G5 | Extension | Après G4, si **nouveau BOS 4h haussier confirmé** → supprimer TP2 : le reste court sous trailing (G2/G3) uniquement. |
-| G6 | Exit structure adverse | **CHoCH 1h confirmé en clôture** (close 1h < dernier HL 1h pivot) → sortie market immédiate du reste. |
+| G6 | Exit structure adverse | **ÉVÉNEMENT de CHoCH 1h en clôture** : la bougie 1h qui CASSE le dernier HL 1h pivot (close passe au-dessus → en-dessous) pendant la vie du trade → sortie market immédiate du reste. *Amendement 2026-07-10 (décision Jonas)* : la définition originale « close 1h < dernier HL » était un ÉTAT, vrai 32,5 % des bougies (mesuré BTC 2017-2026) → tuait 87 % des trades à l'entrée ; l'événement de cassure = 5,1 % des bougies. |
 | G7 | Time-stop | Si après **24 bougies 1h** le trade n'a jamais atteint +0,5R → sortie market (trade mort). |
 Invariant absolu (natif freqtrade, ne pas contourner) : **le SL ne descend jamais**.
 

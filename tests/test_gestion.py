@@ -22,11 +22,17 @@ class _Trade:
 
 
 def _row(date=T0, close=100.0, high=100.0, low=100.0, atr_1h=1.0, last_hl_1h=0.0,
-         choch_bear_1h=False, bos_fresh_4h=False, regime="TREND", nearest_res_4h=999.0):
-    """Bougie 1h cloturee (Series, colonnes contractuelles 11.3)."""
+         choch_bear_1h=False, choch_bear_event_1h=False, bos_fresh_4h=False,
+         regime="TREND", nearest_res_4h=999.0):
+    """Bougie 1h cloturee (Series, colonnes contractuelles 11.3).
+
+    G6 lit choch_bear_event_1h (EVENEMENT de cassure, decision Jonas 10/07) ; choch_bear_1h
+    reste l'etat persistant journalise mais n'est plus decisionnel pour la sortie.
+    """
     return pd.Series({
         "date": date, "close": close, "high": high, "low": low, "atr_1h": atr_1h,
         "last_hl_1h": last_hl_1h, "choch_bear_1h": choch_bear_1h,
+        "choch_bear_event_1h": choch_bear_event_1h,
         "bos_fresh_4h": bos_fresh_4h, "regime": regime, "nearest_res_4h": nearest_res_4h,
     })
 
@@ -169,10 +175,15 @@ def test_g4_below_trigger_no_fire():
 
 
 # --------------------------------------------------------------------------------- check_exit
-def test_g6_priority_over_g4_same_candle():
+def test_g6_event_not_state_and_priority_over_g4():
     trade = _Trade()
     st = TradeState(initial_sl=95.0, mfe_r=2.0)  # G4 aurait declenche (>=1,5R)
-    row = _row(date=_hours(1), choch_bear_1h=True)
+    # decision Jonas 10/07 : G6 = EVENEMENT de cassure. Etat present mais pas d'evenement
+    # (cassure a une bougie anterieure, etat qui persiste) => AUCUNE sortie.
+    persist = _row(date=_hours(1), choch_bear_1h=True, choch_bear_event_1h=False)
+    assert gestion.check_exit(trade, persist, st, tp2=None) is None
+    # Bougie de cassure (event True) => G6, prioritaire sur G4.
+    row = _row(date=_hours(1), choch_bear_1h=True, choch_bear_event_1h=True)
     assert gestion.check_exit(trade, row, st, tp2=None) == "G6"
     # ordre M05 : le caller sort sur G6 avant partial_tp -> G4 jamais joue
     assert st.tp1_done is False
@@ -191,10 +202,11 @@ def test_check_exit_priority_order():
     trade = _Trade(open_date_utc=T0)
     # G6 > G7
     st = TradeState(initial_sl=95.0, mfe_r=0.0)
-    assert gestion.check_exit(trade, _row(date=_hours(24), choch_bear_1h=True), st, None) == "G6"
+    g6row = _row(date=_hours(24), choch_bear_event_1h=True)
+    assert gestion.check_exit(trade, g6row, st, None) == "G6"
     # G7 > TP2
     st2 = TradeState(initial_sl=95.0, mfe_r=0.0, tp1_done=True)
-    row2 = _row(date=_hours(24), high=999.0, choch_bear_1h=False)
+    row2 = _row(date=_hours(24), high=999.0, choch_bear_event_1h=False)
     assert gestion.check_exit(trade, row2, st2, tp2=100.0) == "G7"
 
 
@@ -244,7 +256,46 @@ def test_each_g_flag_off_makes_rule_inert():
     st4 = TradeState(initial_sl=95.0)
     assert gestion.partial_tp(trade, 3.0, st4, off) is None
     assert st4.tp1_done is False
-    # G6 off (malgre choch) + G7 off (malgre age & mfe bas)
+    # G6 off (malgre event de cassure) + G7 off (malgre age & mfe bas)
     st67 = TradeState(initial_sl=95.0, mfe_r=0.0, tp1_done=False)
-    row67 = _row(date=_hours(24), choch_bear_1h=True)
+    row67 = _row(date=_hours(24), choch_bear_1h=True, choch_bear_event_1h=True)
     assert gestion.check_exit(trade, row67, st67, tp2=None, flags=off) is None
+
+
+# ---------------------------------------------------- MODE CONTROLE A (PDR 09 §9.1.1)
+def test_control_a_total_exit_at_exactly_1_5r(monkeypatch):
+    monkeypatch.setattr(params, "CONTROL_A_MODE", True)
+    trade = _Trade(open_rate=100.0, stop_loss=95.0)
+    st = TradeState(initial_sl=95.0)
+    tp = 100.0 + params.TP1_R * (100.0 - 95.0)          # +1,5R = 107.5
+    assert gestion.check_exit(trade, _row(high=tp), st, tp2=None) == "TP_CONTROL_A"
+    assert gestion.check_exit(trade, _row(high=tp - 0.01), st, tp2=None) is None  # juste sous
+
+
+def test_control_a_sl_frozen_and_grules_inert(monkeypatch):
+    monkeypatch.setattr(params, "CONTROL_A_MODE", True)
+    trade = _Trade(open_rate=100.0, stop_loss=95.0)
+    st = TradeState(initial_sl=95.0, mfe_r=5.0)
+    # sequence ou G1/G2/G3 auraient resserre (fort MFE, HL haut, close haut) : SL immuable.
+    for i in range(1, 6):
+        row_i = _row(date=_hours(i), close=110.0, atr_1h=1.0, last_hl_1h=109.0, high=106.0)
+        gestion.update_excursions(st, row_i, 100.0)
+        assert gestion.compute_sl(trade, row_i, st) is None
+    # G4 inerte.
+    assert gestion.partial_tp(trade, 3.0, st) is None
+    assert st.tp1_done is False
+    # G6/G7 inertes (event de cassure + age 24 + mfe bas), high sous TP => aucune sortie.
+    dead = TradeState(initial_sl=95.0, mfe_r=0.0)
+    row67 = _row(date=_hours(24), high=106.0, choch_bear_event_1h=True)
+    assert gestion.check_exit(trade, row67, dead, tp2=None) is None
+
+
+def test_control_a_flag_false_keeps_existing_behavior():
+    assert params.CONTROL_A_MODE is False               # defaut = produit B
+    trade = _Trade(open_rate=100.0, stop_loss=95.0)
+    only_g1 = gestion.flags()
+    only_g1.update(G2=False, G3=False)
+    st = TradeState(initial_sl=95.0, mfe_r=1.0)
+    assert gestion.compute_sl(trade, _row(), st, only_g1) == pytest.approx(100.0 * 1.001)
+    st6 = TradeState(initial_sl=95.0, mfe_r=2.0)
+    assert gestion.check_exit(trade, _row(choch_bear_event_1h=True), st6, tp2=None) == "G6"

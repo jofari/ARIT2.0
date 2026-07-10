@@ -14,6 +14,7 @@ FEATURE_COLUMNS = (
     "pivot_high_conf_4h", "pivot_low_conf_4h",
     "last_ph_4h", "last_hl_4h", "last_hl_1h",
     "bos_bull_4h", "bos_fresh_4h", "choch_bear_4h", "choch_bear_1h",
+    "choch_bear_event_1h",  # 11.3 / 03.4 G6 — EVENEMENT de cassure (decision Jonas 10/07)
     "nearest_res_4h", "nearest_sup_4h", "res_touches_4h",
     "rr_dispo",
     "s_structure", "s_momentum", "s_sr", "s_patterns", "s_volume",

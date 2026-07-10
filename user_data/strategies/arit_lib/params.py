@@ -39,6 +39,10 @@ G4_SELL_FRACTION = 0.5         # PDR 03.4 G4 — vendre 50 %, une seule fois
 G7_MAX_CANDLES_1H = 24         # PDR 03.4 G7 — time-stop apres 24 bougies 1h
 G7_MIN_R = 0.5                 # PDR 03.4 G7 — si jamais atteint +0,5R
 
+# PDR 09 §9.1.1 — controle A du test A/B : TP fixe +1,5R sortie totale, SL initial,
+# aucune G-rule. Defaut False = produit B.
+CONTROL_A_MODE = False
+
 # Flags d'ablation (PDR 03.4 / 09.1.4) — version A du test central = tous False.
 G_FLAGS_DEFAULT = {
     "G1": True, "G2": True, "G3": True, "G4": True,

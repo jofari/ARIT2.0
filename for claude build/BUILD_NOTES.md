@@ -1,5 +1,13 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-10 (soir) — décision Jonas : G6 devient un ÉVÉNEMENT
+Suite au diagnostic (voir note du 10/07 ci-dessous), Jonas a choisi l'option « événement » :
+G6 sort seulement quand une bougie 1h CASSE le dernier HL en clôture pendant la vie du trade.
+Spec amendée (docs/03 §3.4 G6) + nouvelle colonne contractuelle `choch_bear_event_1h`
+(docs/11 §11.3 + contracts.FEATURE_COLUMNS). L'état `choch_bear_1h` reste (journal/debug).
+Au même tour : reprise du mode CONTRÔLE A interrompu par la limite de session (compute_sl et
+partial_tp déjà faits par le coder tué — conservés ; manquent check_exit + tests).
+
 ## 2026-07-10 — backtest baseline B : G6 défectueux (état vs événement)
 Run complet 2018→2026, 4 paires, détail 5m : **−49,7 %, PF 0,14, 463 trades** — et le
 diagnostic est net : **402/463 sorties par G6 avec durée 0:00** (sortie à la bougie d'entrée).
