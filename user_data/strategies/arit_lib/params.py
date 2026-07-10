@@ -5,6 +5,8 @@ cite sa source PDR. Modifier une valeur = modifier docs/ d'abord.
 G1-G7 et poids : JAMAIS hyperoptes (docs/README interdit n5, PDR 09.3).
 """
 
+import os as _os  # uniquement pour les overrides du protocole A/B (PDR 09 §9.1)
+
 # ---------------------------------------------------------------- 03.1 Sizing
 RISK_BASE_PCT = 0.01           # PDR 03.1 — risque plancher 1 %
 RISK_CAP_FIRST_PCT = 0.02      # PDR 03.1 — cap 2 % trades n1..100
@@ -39,14 +41,20 @@ G4_SELL_FRACTION = 0.5         # PDR 03.4 G4 — vendre 50 %, une seule fois
 G7_MAX_CANDLES_1H = 24         # PDR 03.4 G7 — time-stop apres 24 bougies 1h
 G7_MIN_R = 0.5                 # PDR 03.4 G7 — si jamais atteint +0,5R
 
-# PDR 09 §9.1.1 — controle A du test A/B : TP fixe +1,5R sortie totale, SL initial,
-# aucune G-rule. Defaut False = produit B.
-CONTROL_A_MODE = False
+# ---- Outillage du protocole A/B (PDR 09 §9.1) — overrides d'ENVIRONNEMENT ----
+# Permet de lancer plusieurs backtests EN PARALLELE sans editer ce fichier (chaque
+# process recoit son env). Env non defini => defauts STRICTEMENT inchanges (produit B).
+# Jamais utilise en dry-run/live ; ce n'est PAS de l'hyperopt (les valeurs G restent figees,
+# on ne fait qu'activer/desactiver pour l'ablation 09 §9.1.4).
 
-# Flags d'ablation (PDR 03.4 / 09.1.4) — version A du test central = tous False.
+# PDR 09 §9.1.1 — controle A du test A/B : TP fixe +1,5R sortie totale, SL initial,
+# aucune G-rule. Defaut False = produit B. Override : ARIT_CONTROL_A=1
+CONTROL_A_MODE = _os.environ.get("ARIT_CONTROL_A", "") == "1"
+
+# Flags d'ablation (PDR 03.4 / 09.1.4). Override : ARIT_G_OFF=G3 (desactive UNE regle).
+_G_OFF = _os.environ.get("ARIT_G_OFF", "")
 G_FLAGS_DEFAULT = {
-    "G1": True, "G2": True, "G3": True, "G4": True,
-    "G5": True, "G6": True, "G7": True,
+    g: (g != _G_OFF) for g in ("G1", "G2", "G3", "G4", "G5", "G6", "G7")
 }
 
 # --------------------------------------------------------- 03.5 Circuit breakers
@@ -93,8 +101,9 @@ PIVOT_N = 2                       # PDR 05.1 — fractal N=2
 PIVOT_CONFIRM_SHIFT = 2           # PDR 05.1 / M01 — confirme 2 bougies apres (anti-repaint)
 BOS_DISPLACEMENT_ATR = 1.0        # PDR 05.1 — corps de cassure >= 1,0 x ATR(14)_4h
 BOS_FRESH_CANDLES_4H = 3          # PDR 05.1 — BOS "frais" 3 bougies 4h
-# décision Jonas 09/07 (BUILD_NOTES) — A/B : True = CHoCH prime sur BOS frais ; défaut = actuel
-S_STRUCTURE_CHOCH_PRIORITY = False
+# décision Jonas 09/07 (BUILD_NOTES) — A/B : True = CHoCH prime sur BOS frais ; défaut = actuel.
+# Override protocole (voir bloc 09 §9.1 plus haut) : ARIT_CHOCH_PRIORITY=1
+S_STRUCTURE_CHOCH_PRIORITY = _os.environ.get("ARIT_CHOCH_PRIORITY", "") == "1"
 SR_CLUSTER_TOL_ATR = 0.5          # PDR 05.2 — meme niveau si ecart <= 0,5 x ATR
 SR_FORCE_TOUCHES_DIV = 4          # PDR 05.2 — force = min(touches/4, 1)
 SR_WINDOW_4H = 180                # M01 — clustering sur 180 dernieres bougies 4h
