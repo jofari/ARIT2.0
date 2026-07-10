@@ -20,8 +20,10 @@ Protocole `trade` (duck-typed, pas d'import freqtrade — docs/11 §11.5) :
 Protocole `row_1h` : pandas Series de la bougie 1h CLOTUREE, colonnes 11.3 —
     close, high, low, date, atr_1h, last_hl_1h,
     choch_bear_1h (bool), bos_fresh_4h (bool), regime (str).
-Le TP2 fige a l'entree est passe explicitement (parametre `tp2`), PAS recalcule
-depuis nearest_res_4h (decision d'orchestration).
+Le niveau TP2 de sortie est fourni explicitement par l'appelant (parametre `tp2`) :
+depuis la decision Jonas 09/07 c'est la resistance 4h COURANTE (nearest_res_4h de la
+row), recalculee a chaque cloture 1h — plus le TP2 fige a l'entree (docs/03 par.3.3
+amendement). Ce module ne change pas : il recoit deja le niveau en parametre.
 
 Ordre d'evaluation par cloture 1h (applique par le caller, docs/M05 §2) :
     garde last_candle_ts -> update_excursions (toujours) -> check_exit (G6>G7>TP2)
@@ -160,7 +162,8 @@ def check_exit(trade, row_1h, state: TradeState, tp2: float | None,
     G6 : choch_bear_1h vrai en cloture -> "G6" (prioritaire sur tout).
     G7 : age >= G7_MAX_CANDLES_1H ET mfe_r < G7_MIN_R -> "G7" (trade mort).
     TP2 : extension_on False ET tp1_done True ET high >= tp2 -> "TP2".
-    `tp2` = TP2 FIGE a l'entree (caller), None si aucun. extension_on (G5) neutralise TP2.
+    `tp2` = niveau fourni par le caller (resistance 4h courante, decision Jonas 09/07),
+    None si aucun. extension_on (G5) neutralise TP2.
     """
     active = _resolve(flags)
     if active["G6"] and bool(row_1h["choch_bear_1h"]):

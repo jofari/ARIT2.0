@@ -21,6 +21,12 @@ Chaque check échoué → skip + ligne de journal avec le nom exact du gate.
 ## 3.3 Stop initial et TP initial
 - **SL initial** = sous le dernier HL 4h confirmé − 0,1 × ATR(14)_4h ; fallback si pas de HL exploitable : prix_entrée − 1,5 × ATR(14)_4h.
 - **TP1 = +1,5R** (fixe). **TP2 initial** = résistance 4h la plus proche (si > TP1, sinon pas de TP2 — tout sort à TP1... non : voir G4/G5, 50 % sortent à TP1, le reste court).
+- **Amendement 2026-07-09 (décision Jonas)** : le niveau TP2 de SORTIE est **recalculé à chaque
+  clôture 1h** (résistance 4h courante), il n'est PAS figé à l'entrée. Le `tp2` d'entrée reste
+  journalisé (`ev_entry`) et stocké en custom_data à titre d'AUDIT. L'optimisation ML du TP
+  (modèle MAE/MFE) reste en V2 (docs/10 point 3). ⚠️ Choix fait en connaissance : la review du
+  build avait signalé la dérive du niveau de sortie comme risque (le TP peut s'éloigner ou se
+  rapprocher avec le marché).
 - **Gate RR** : distance à la première résistance 4h ≥ 1,5 × distance de stop, sinon pas de trade.
 
 ## 3.4 Les règles de gestion G1-G7 (défauts FIGÉS — jamais hyperoptés — chacune avec flag on/off pour ablation)

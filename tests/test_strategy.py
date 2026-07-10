@@ -200,9 +200,10 @@ def test_custom_stake_happy_path_stashes_pending(monkeypatch):
     assert pend["signal_id"].startswith("BTCUSDT-")
 
 
-# --------------------------------------------------- TP2 fige (11.3, PDR 03.3)
-def test_custom_exit_uses_frozen_tp2_not_current_res(monkeypatch):
-    """Le TP2 relu du custom_data ne bouge pas quand nearest_res_4h change apres l'entree."""
+# ------------------------------ TP2 = resistance 4h COURANTE (Jonas 09/07, docs/03 par.3.3)
+def test_custom_exit_uses_current_res_not_frozen_tp2(monkeypatch):
+    """Quand nearest_res_4h change apres l'entree, la sortie TP2 utilise la valeur COURANTE ;
+    le tp2 fige en custom_data (audit) reste inchange."""
     _capture(monkeypatch)
     seen = {}
     monkeypatch.setattr(strat_mod.gestion, "update_excursions", lambda st, r, e: st)
@@ -212,13 +213,14 @@ def test_custom_exit_uses_frozen_tp2_not_current_res(monkeypatch):
     trade = _CDTrade()
     trade.pair, trade.open_rate = "BTC/USDT", 100.0
     s._save_state(trade, contracts.TradeState(initial_sl=95.0, signal_id="x", tp2=130.0))
-    # nearest_res_4h a bouge a 999 depuis l'entree : ignore, on lit le TP2 fige (130).
+    # nearest_res_4h a bouge a 999 depuis l'entree : c'est la valeur COURANTE qui sert.
     monkeypatch.setattr(s, "_closed_1h_row", lambda pair: pd.Series({"nearest_res_4h": 999.0}))
     s.custom_exit("BTC/USDT", trade)
-    assert seen["tp2"] == 130.0
+    assert seen["tp2"] == 999.0
+    assert trade.get_custom_data("tp2") == 130.0          # tp2 d'entree conserve (audit)
 
 
-def test_custom_exit_tp2_zero_means_no_target(monkeypatch):
+def test_custom_exit_no_current_res_means_no_target(monkeypatch):
     _capture(monkeypatch)
     seen = {}
     monkeypatch.setattr(strat_mod.gestion, "update_excursions", lambda st, r, e: st)
@@ -227,10 +229,12 @@ def test_custom_exit_tp2_zero_means_no_target(monkeypatch):
     s = _inst()
     trade = _CDTrade()
     trade.pair, trade.open_rate = "BTC/USDT", 100.0
-    s._save_state(trade, contracts.TradeState(initial_sl=95.0, signal_id="x", tp2=0.0))
-    monkeypatch.setattr(s, "_closed_1h_row", lambda pair: pd.Series({"nearest_res_4h": 999.0}))
+    s._save_state(trade, contracts.TradeState(initial_sl=95.0, signal_id="x", tp2=130.0))
+    # resistance 4h courante absente (NaN) => pas de cible (jamais un exit fantome).
+    monkeypatch.setattr(s, "_closed_1h_row",
+                        lambda pair: pd.Series({"nearest_res_4h": float("nan")}))
     s.custom_exit("BTC/USDT", trade)
-    assert seen["tp2"] is None            # tp2 == 0 => pas de cible (jamais un exit fantome)
+    assert seen["tp2"] is None
 
 
 # --------------------------------------------------- custom_data round-trip

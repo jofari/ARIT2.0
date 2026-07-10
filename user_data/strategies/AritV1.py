@@ -190,7 +190,10 @@ class AritV1(IStrategy):
             return None
         state = self._trade_state(trade)
         gestion.update_excursions(state, row, trade.open_rate)
-        tp2 = state.tp2 if state.tp2 else None   # TP2 FIGE a l'entree (custom_data), pas recalcule
+        # TP2 de SORTIE = resistance 4h COURANTE recalculee chaque cloture 1h (decision Jonas
+        # 2026-07-09, docs/03 par.3.3 amendement) ; state.tp2 reste en custom_data pour l'audit.
+        res = _num(row.get("nearest_res_4h"))
+        tp2 = res if math.isfinite(res) else None
         reason = gestion.check_exit(trade, row, state, tp2)     # "G6"/"G7"/"TP2"/None
         self._save_state(trade, state)
         return reason

@@ -1,5 +1,24 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-09 (2e tour) — extensions de contrat : verdict de Jonas
+- n°2 (TradeState 12 champs), n°3 (contracts étendu), n°4 (compute_stake tuple), n°7
+  (ev_evaluation live/dry) : **VALIDÉS tels quels**.
+- n°1 signal_id : format modifié à sa demande → `BTCUSDT-2026.07.06.T120000Z` (points acceptés
+  par Windows). `contracts.make_signal_id` mis à jour.
+- n°5 TP2 : **Jonas choisit le TP2 RECALCULÉ à chaque bougie** (résistance 4h courante), contre
+  la recommandation de la review (dérive du niveau de sortie signalée HIGH). Choix éclairé fait
+  via question explicite. Spec amendée AVANT le code : docs/03 §3.3 amendement + docs/11 §11.3.
+  Le `tp2` custom_data devient un enregistrement d'AUDIT. L'optimisation ML du TP reste en V2
+  (docs/10 point 3, nécessite les données du dry-run).
+- n°6 dust : **1.0 USDT confirmé**.
+- Script de lancement demandé et livré : `start_arit.py` (racine) — ouvre les 4 process chacun
+  dans sa console (services d'abord, bot ensuite). Zéro logique métier.
+- Webhook Discord fourni par Jonas → placé dans `.env` (ignoré par git, vérifié par
+  `git check-ignore`). ⚠️ Le webhook a transité en clair dans la conversation : le RÉGÉNÉRER
+  (Discord > Intégrations > Webhooks) avant le canari, par hygiène.
+- Digest « R courant » (option A : fichier d'état écrit par le bot) : retenu par défaut pour la
+  V1.1 avec spread_state — Jonas n'a pas tranché explicitement A/B, à confirmer.
+
 ## 2026-07-09 — décisions de Jonas (réponses aux questions du RAPPORT_BUILD)
 1. **BOS vs CHoCH (s_structure)** : trancher par l'EXPÉRIENCE — backtester DEUX versions
    (A : priorité BOS = comportement actuel · B : priorité CHoCH) sur l'historique complet,

@@ -97,7 +97,14 @@ chaque « agent » est devenu un fichier de code testable. Claude ne sert qu'à 
 `arit-runner`) : ce sont des prompts `.md` dans `.claude/agents/` que Claude Code utilise
 pour CONSTRUIRE le bot — aucun rapport avec le code qui trade.
 
-## 6. Trouver vite
+## 6. Tout lancer d'un coup
+
+```powershell
+& C:\Users\jofar\venvs\arit\Scripts\python.exe start_arit.py        # les 4 process (4 fenêtres)
+& C:\Users\jofar\venvs\arit\Scripts\python.exe start_arit.py --no-bot   # services seuls
+```
+
+## 7. Trouver vite
 
 - **« Pourquoi le bot a fait ça ? »** → `user_data/logs/decisions/YYYY-MM-DD.jsonl` (1 ligne = 1 décision, format `docs/08`).
 - **« C'est quoi cette constante ? »** → `user_data/strategies/arit_lib/params.py` (le commentaire cite le PDR).

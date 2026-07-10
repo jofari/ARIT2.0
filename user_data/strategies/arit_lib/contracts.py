@@ -32,7 +32,7 @@ CUSTOM_DATA_KEYS = (
     "initial_sl", "risk_pct", "trade_no", "tp1_done", "extension_on",
     "mae_r", "mfe_r", "last_candle_ts", "entry_conviction", "entry_regime",
     "signal_id",
-    "tp2",  # 11.3 / PDR 03.3 — TP2 fige a l'entree (extension actee 2026-07-08, review M07)
+    "tp2",  # 11.3 / PDR 03.3 — TP2 INITIAL (audit) ; la sortie recalcule (decision Jonas 09/07)
 )
 
 
@@ -54,7 +54,7 @@ class TradeState:
     entry_conviction: float = 0.0
     entry_regime: str = ""
     signal_id: str = ""
-    tp2: float = 0.0  # PDR 03.3 — fige a l'entree, jamais recalcule (review M07)
+    tp2: float = 0.0  # PDR 03.3 — TP2 initial (audit) ; sortie = resistance courante (Jonas 09/07)
 
     def as_dict(self) -> dict:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -131,9 +131,10 @@ def make_signal_id(pair: str, ts_4h: datetime) -> str:
     """Cle de correlation evaluation -> gate_check -> entry -> gestion -> exit.
 
     Format PDR M06 : "{pair}-{ts_4h}". Normalise pour servir de nom de fichier
-    veto flag sous Windows ("/" et ":" interdits) : BTCUSDT-20260706T120000Z.
+    veto flag sous Windows ("/" et ":" interdits ; les points sont permis).
+    Format acte par Jonas 2026-07-09 : BTCUSDT-2026.07.06.T120000Z.
     """
     if ts_4h.tzinfo is None:
         ts_4h = ts_4h.replace(tzinfo=timezone.utc)
-    stamp = ts_4h.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = ts_4h.astimezone(timezone.utc).strftime("%Y.%m.%d.T%H%M%SZ")
     return f"{pair.replace('/', '')}-{stamp}"
