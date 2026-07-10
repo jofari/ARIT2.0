@@ -1,5 +1,19 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-10 — backtest baseline B : G6 défectueux (état vs événement)
+Run complet 2018→2026, 4 paires, détail 5m : **−49,7 %, PF 0,14, 463 trades** — et le
+diagnostic est net : **402/463 sorties par G6 avec durée 0:00** (sortie à la bougie d'entrée).
+Cause mesurée sur BTC 1h réel : `choch_bear_1h = close < last_hl_1h` est un ÉTAT persistant,
+vrai sur **32,5 %** de toutes les bougies (l'événement de cassure, lui, = 5,1 %). La spec
+(docs/03 §3.4 G6 « close 1h < dernier HL 1h pivot ») décrit un état → tel quel, G6 tue les
+positions immédiatement. Le code est CONFORME à la lettre de la spec — c'est la définition
+qui est à amender (état → événement, et/ou ignorer l'état pré-existant à l'entrée).
+DÉCISION JONAS REQUISE avant tout changement. Run d'ablation « B moins G6 » (09 §9.1.4) :
+**+0,69 %, PF 1,02, 134 trades, durée moyenne 8 j** — confirme que G6-état était le tueur
+(−49,7 % → +0,7 % en le coupant). Params remis à l'état normal après le run (G6: True,
+jamais commité en False). Reste sous le gate PF ≥ 1,3 : le protocole complet (BOS/CHoCH,
+ablations, contrôle A) reste à dérouler APRÈS la décision G6.
+
 ## 2026-07-10 — download 2017+ : piège freqtrade `--prepend`
 `download-data` ne remplit JAMAIS avant des données existantes sans `--prepend` : BTC/USDT
 (qui avait déjà les 30 j du smoke) est resté à 2026-06-07 alors qu'ETH/SOL/BNB (vierges) ont
