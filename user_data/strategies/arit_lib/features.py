@@ -295,14 +295,18 @@ def module_scores(df: pd.DataFrame) -> pd.DataFrame:
     last_choch = pos.where(choch).ffill()
     choch_last = last_choch.notna() & (last_choch > last_bos.fillna(-1.0))
     warm_structure = adx.isna() | e50.isna() | e200.isna() | atr4.isna()
+    # A/B Jonas 09/07 (BUILD_NOTES) : ordre BOS-frais/CHoCH sur bougie croisee.
+    bos_cond = (bos_fresh & trend_ctx, _S1)   # 05.1 : 1,0 — BOS frais ET TREND
+    choch_cond = (choch_last, _S0)            # 05.1 : 0 — dernier evenement = CHoCH
+    ranked = [choch_cond, bos_cond] if params.S_STRUCTURE_CHOCH_PRIORITY else [bos_cond, choch_cond]
     df["s_structure"] = np.select(
         [
             warm_structure,             # M01 invariant 3 : warm-up => 0
-            bos_fresh & trend_ctx,      # 05.1 : 1,0 — BOS frais ET contexte TREND
-            choch_last,                 # 05.1 : 0 — dernier evenement = CHoCH
+            ranked[0][0],
+            ranked[1][0],
             intact & ~bos_fresh,        # 05.1 : 0,7 — HH/HL intacte, continuation
         ],
-        [_S0, _S1, _S0, _S07],
+        [_S0, ranked[0][1], ranked[1][1], _S07],
         default=_S03,                   # 05.1 : 0,3 — structure neutre
     )
 

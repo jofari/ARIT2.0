@@ -89,6 +89,8 @@ PIVOT_N = 2                       # PDR 05.1 — fractal N=2
 PIVOT_CONFIRM_SHIFT = 2           # PDR 05.1 / M01 — confirme 2 bougies apres (anti-repaint)
 BOS_DISPLACEMENT_ATR = 1.0        # PDR 05.1 — corps de cassure >= 1,0 x ATR(14)_4h
 BOS_FRESH_CANDLES_4H = 3          # PDR 05.1 — BOS "frais" 3 bougies 4h
+# décision Jonas 09/07 (BUILD_NOTES) — A/B : True = CHoCH prime sur BOS frais ; défaut = actuel
+S_STRUCTURE_CHOCH_PRIORITY = False
 SR_CLUSTER_TOL_ATR = 0.5          # PDR 05.2 — meme niveau si ecart <= 0,5 x ATR
 SR_FORCE_TOUCHES_DIV = 4          # PDR 05.2 — force = min(touches/4, 1)
 SR_WINDOW_4H = 180                # M01 — clustering sur 180 dernieres bougies 4h

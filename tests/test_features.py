@@ -220,6 +220,27 @@ def test_s_structure_cas_construits():
     assert (out["s_structure"] == 0.3).all()
 
 
+def test_s_structure_choch_priority_flag_ab(monkeypatch):
+    # Bougie croisee : BOS frais (rolling) ET CHoCH posterieur => les deux
+    # conditions vraies sur la MEME ligne (idx 1). Flag Jonas 09/07 (BUILD_NOTES).
+    def crossing():
+        return _score_df(
+            n=3,
+            bos_bull_4h=[True, False, False],
+            bos_fresh_4h=[True, True, True],
+            choch_bear_4h=[False, True, False],
+        )
+
+    # Defaut (False) = ordre actuel : BOS frais prime => 1,0.
+    assert params.S_STRUCTURE_CHOCH_PRIORITY is False
+    out = features.module_scores(crossing())
+    assert out["s_structure"].iloc[1] == 1.0
+    # Flag True : CHoCH prime sur le BOS frais => 0,0.
+    monkeypatch.setattr(params, "S_STRUCTURE_CHOCH_PRIORITY", True)
+    out = features.module_scores(crossing())
+    assert out["s_structure"].iloc[1] == 0.0
+
+
 def test_s_momentum_cas_construits():
     out = features.module_scores(_score_df(
         n=6,
