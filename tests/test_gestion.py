@@ -189,6 +189,18 @@ def test_g6_event_not_state_and_priority_over_g4():
     assert st.tp1_done is False
 
 
+def test_g6_only_counts_after_entry_candle():
+    # docs/03 §3.4 amendement 2026-07-10 : la cassure ne compte que PENDANT LA VIE du trade.
+    # Fill a T0+30min : la bougie 1h qui le CONTIENT ouvre a T0 (date < open_date_utc) => exclue,
+    # sinon la cassure (anterieure au fill de quelques minutes) sortirait a t+0.
+    st = TradeState(initial_sl=95.0, mfe_r=0.0)
+    trade = _Trade(open_date_utc=T0 + pd.Timedelta(minutes=30))
+    entry_candle = _row(date=T0, choch_bear_event_1h=True)
+    assert gestion.check_exit(trade, entry_candle, st, tp2=None) is None
+    later = _row(date=_hours(1), choch_bear_event_1h=True)   # bougie entierement posterieure
+    assert gestion.check_exit(trade, later, st, tp2=None) == "G6"
+
+
 def test_g7_exactly_24_candles():
     trade = _Trade(open_date_utc=T0)
     dead = TradeState(initial_sl=95.0, mfe_r=0.4)  # jamais +0,5R

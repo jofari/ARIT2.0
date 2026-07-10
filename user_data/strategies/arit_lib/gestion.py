@@ -171,7 +171,10 @@ def check_exit(trade, row_1h, state: TradeState, tp2: float | None,
     G-rule (G6/G7/TP2 inertes). C'est le controle du test A/B (aucune gestion active).
     G6 : choch_bear_event_1h vrai en cloture -> "G6" (prioritaire sur tout). EVENEMENT de cassure
     et non l'etat persistant (decision Jonas 2026-07-10, docs/03 par.3.4) : l'etat pre-existant a
-    l'entree ne sort plus, seule la bougie qui CASSE le dernier HL 1h en cloture declenche.
+    l'entree ne sort plus, seule la bougie qui CASSE le dernier HL 1h en cloture declenche. La
+    cassure ne compte que PENDANT LA VIE DU TRADE (docs/03 par.3.4 amendement 2026-07-10) : la
+    bougie de l'evenement doit etre entierement posterieure a l'entree (row date d'OUVERTURE
+    >= open_date_utc) — sinon la cassure precede le fill de quelques minutes et sort a t+0.
     G7 : age >= G7_MAX_CANDLES_1H ET mfe_r < G7_MIN_R -> "G7" (trade mort).
     TP2 : extension_on False ET tp1_done True ET high >= tp2 -> "TP2".
     `tp2` = niveau fourni par le caller (resistance 4h courante, decision Jonas 09/07),
@@ -182,7 +185,8 @@ def check_exit(trade, row_1h, state: TradeState, tp2: float | None,
         tp1 = entry + params.TP1_R * (entry - state.initial_sl)
         return "TP_CONTROL_A" if row_1h["high"] >= tp1 else None
     active = _resolve(flags)
-    if active["G6"] and bool(row_1h["choch_bear_event_1h"]):
+    if (active["G6"] and bool(row_1h["choch_bear_event_1h"])
+            and row_1h["date"] >= trade.open_date_utc):
         return "G6"
     if (active["G7"] and _age_candles(trade, row_1h) >= params.G7_MAX_CANDLES_1H
             and state.mfe_r < params.G7_MIN_R):
