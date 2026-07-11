@@ -27,6 +27,7 @@ ARIT = **4 programmes séparés** qui communiquent par fichiers :
 | `services/` | Les 3 programmes annexes (macro, Discord, watchdog) — hors freqtrade | tu touches au macro/Discord/watchdog |
 | `tests/` | Les 146 tests pytest (1 fichier par module) | tu veux vérifier que rien n'est cassé |
 | `for claude build/` | Ressources du BUILD : prompt, pack, PLAN.md (checklist), BUILD_NOTES.md (pièges), RAPPORT_BUILD.md (bilan) | tu veux l'historique/état du chantier |
+| `backtest_lanes/` | Lanes isolées des backtests parallèles (`run1..runN` : état/résultats propres à chaque run, junctions vers data/strategies) — jetable, hors git | tu cherches les résultats bruts d'un run du protocole |
 | ⚠️ | `for claude build/ARIT_PDR_v3/` = **vieille copie INCOMPLÈTE** (11 fichiers, sans modules/). La vraie spec = `docs/` à la racine. | |
 
 ## 3. Où est le code de chaque module

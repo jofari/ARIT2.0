@@ -2,6 +2,7 @@
 .env
 
 # Runtime / donnees
+backtest_lanes/
 user_data_run*/
 user_data/macro_state.json
 user_data/logs/

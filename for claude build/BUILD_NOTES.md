@@ -9,8 +9,9 @@ s'écrasent mutuellement l'état → résultats invalides. TOUS les chiffres abs
 10-11/07 avant cette note sont invalides (le diagnostic G6 état/événement reste valide).
 **Règles désormais** : jamais 2 backtests sur le même user_data ; purger
 `state/*.json + manual_restart_required + veto/*` AVANT CHAQUE run ; pour paralléliser →
-lanes `user_data_runN/` (state/logs/veto locaux + junctions NTFS vers data/ et strategies/,
-`--userdir user_data_runN`), isolation VÉRIFIÉE par smoke. Question de fond pour Jonas/V1.1 :
+lanes isolées (state/logs/veto locaux + junctions NTFS vers data/ et strategies/,
+`--userdir <lane>`), isolation VÉRIFIÉE par smoke. Depuis le 11/07 (demande Jonas) les lanes
+vivent sous `backtest_lanes/run1..runN` — toujours y ranger les futures lanes. Question de fond pour Jonas/V1.1 :
 le bot devrait purger lui-même cet état en mode backtest (bot_start) — non implémenté.
 Correctif G6 additionnel au passage : garde « vie du trade » (l'événement ne compte que sur
 une bougie entièrement postérieure à l'entrée) — sans elle, 145 sorties G6 à ~7 min.
