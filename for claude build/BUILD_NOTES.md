@@ -1,5 +1,13 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-11 — décision Jonas : renforcer la couche MACRO avec des données crypto-natives
+Jonas juge F&G + calendrier éco insuffisants pour la crypto. À SPÉCIFIER (docs/06 + 04
+d'abord) puis intégrer aux FUTURS backtests : funding rates perpétuels (historique Binance
+2019+), dominance BTC, market cap stablecoins, F&G historique (alternative.me 2018+) pour
+backtester le véto RISK_OFF. Chantier V1.1 — à lancer APRÈS le verdict du protocole A/B en
+cours. Rappel vocabulaire acté : l'edge du PDR reste du SWING 4h/1h — « technique » = basé
+prix, pas scalping ; aucun changement de timeframe.
+
 ## 2026-07-11 — PIÈGE MAJEUR : l'état fichier de risk.py contamine les backtests
 Les circuit breakers persistent dans `user_data/state/` (cb_day.json, day_equity.json,
 manual_restart_required). Conséquences MESURÉES : (1) chaque backtest hérite de l'état du
