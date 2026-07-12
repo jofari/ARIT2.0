@@ -1,5 +1,31 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-13 — zéro-trade macro : unités datetime + 2 leçons de debug
+1. **Cause** : `merge_asof` refuse de joindre `datetime64[ms, UTC]` (dates des feather
+   freqtrade) avec `[ns]/[us]` (index pandas natifs) → exception avalée par le try/except de
+   populate → plus de signal_long → ZÉRO trade, silencieusement. Fix : `.as_unit("us")` sur les
+   DEUX clés dans `regimes.attach_macro_regime` + test unités mixtes. **Règle : tout merge avec
+   les données freqtrade doit normaliser les unités datetime.**
+2. **Leçon debug n°1** : les tests unitaires passaient (données synthétiques = ns partout) —
+   seul un run sur données réelles révélait le bug. Un smoke court (3 mois) reproduit en 2 min.
+3. **Leçon debug n°2** : le journal écrit au jour UTC (fichier 2026-07-12.jsonl à minuit
+   local du 13) — chercher les `indicators_error` au bon jour. Et la base du journal résout la
+   junction → les backtests en lanes écrivent leur journal dans le user_data RACINE (fichiers
+   90 Mo mélangés entre lanes) : à corriger plus tard via `journal.set_user_data_dir` dans
+   bot_start (ajouté à la liste des correctifs différés avec F1/F3/F5).
+
+## 2026-07-12 — Macro Analyst V1.1 : review PASS, findings en file d'attente
+Review indépendante du chantier macro (module + câblage) : **PASS** — point-in-time correct
+(shift +1 j unique puis merge_asof backward), seuils conformes, rétrocompat gatée. À TRAITER
+après les 2 backtests macro : **F3 MEDIUM** (au-delà de la fin de l'historique macro, le
+merge_asof forward-fill le dernier régime sans plafond → forcer NEUTRE) · **F1 LOW** (NaN
+pré-historique = ×0,85 sans bump de seuil — NEUTRE partiel incohérent) · **F5 LOW** (noms de
+fichiers macro à centraliser dans contracts). **F2/F4 différés avec l'extension live** :
+journalisation macro_regime + 5 scores dans ev_evaluation (schema_version +1, exigé 06.2)
+et bump de seuil côté live. POC arbre v0 : verdict « pas de signal sur la date seule » —
+décision Jonas 12/07 : v1 envisageable en conditionnant sur le CONTENU (surprise/consensus,
+hawkish-dovish) = chantier V2, prérequis dur : données de consensus historiques.
+
 ## 2026-07-11 — décision Jonas : renforcer la couche MACRO avec des données crypto-natives
 Jonas juge F&G + calendrier éco insuffisants pour la crypto. À SPÉCIFIER (docs/06 + 04
 d'abord) puis intégrer aux FUTURS backtests : funding rates perpétuels (historique Binance

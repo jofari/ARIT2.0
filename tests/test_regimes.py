@@ -175,6 +175,21 @@ def test_attach_macro_regime_point_in_time_backward():
     assert col.loc["2024-01-03 05:00"] == "HOSTILE"         # jamais la valeur d'un jour futur
 
 
+def test_attach_macro_regime_mixed_datetime_units():
+    # Regression 13/07 : les feather freqtrade livrent date en datetime64[ms, UTC], l'index
+    # macro en [ns] — merge_asof refusait le melange => exception avalee => ZERO trade.
+    daily = pd.DataFrame(
+        {contracts.MACRO_REGIME_COL: ["PORTEUR"]},
+        index=pd.to_datetime(["2024-01-01"], utc=True).as_unit("ns"),
+    )
+    candles = pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=24, freq="1h", tz="UTC").as_unit("ms"),
+        "close": range(24),
+    })
+    out = regimes.attach_macro_regime(candles.copy(), daily)   # ne doit PAS lever
+    assert (out[contracts.MACRO_REGIME_COL] == "PORTEUR").all()
+
+
 def test_attach_macro_regime_before_first_day_is_nan():
     daily = pd.DataFrame(
         {contracts.MACRO_REGIME_COL: ["PORTEUR"]},

@@ -120,12 +120,14 @@ def attach_macro_regime(df: pd.DataFrame, daily: pd.DataFrame) -> pd.DataFrame:
     """
     if daily is None or len(daily) == 0 or contracts.MACRO_REGIME_COL not in daily.columns:
         return df
+    # Unites homogenes obligatoires : les feather freqtrade sont en datetime64[ms],
+    # les index pandas natifs en [ns] — merge_asof refuse le melange (lecon 13/07).
     right = pd.DataFrame({
-        "date": pd.to_datetime(daily.index, utc=True).floor("D"),
+        "date": pd.to_datetime(daily.index, utc=True).floor("D").as_unit("us"),
         contracts.MACRO_REGIME_COL: daily[contracts.MACRO_REGIME_COL].to_numpy(),
     }).sort_values("date").reset_index(drop=True)
     left = df.copy()
-    left["date"] = pd.to_datetime(left["date"], utc=True)
+    left["date"] = pd.to_datetime(left["date"], utc=True).dt.as_unit("us")
     ordered = left.sort_values("date")
     merged = pd.merge_asof(ordered[["date"]], right, on="date", direction="backward")
     merged.index = ordered.index
