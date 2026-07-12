@@ -105,7 +105,13 @@ pour CONSTRUIRE le bot — aucun rapport avec le code qui trade.
 & C:\Users\jofar\venvs\arit\Scripts\python.exe start_arit.py --no-bot   # services seuls
 ```
 
-## 7. Trouver vite
+## 7. Apprendre de ce code
+
+→ **[guide_technique.md](guide_technique.md)** : chaque outil et bibliothèque expliqué
+(à quoi ça sert / pourquoi ici / où le voir dans TON code), les patterns maison, comment le
+projet a été construit (open source vs créé de zéro, module par module), et un glossaire.
+
+## 8. Trouver vite
 
 - **« Pourquoi le bot a fait ça ? »** → `user_data/logs/decisions/YYYY-MM-DD.jsonl` (1 ligne = 1 décision, format `docs/08`).
 - **« C'est quoi cette constante ? »** → `user_data/strategies/arit_lib/params.py` (le commentaire cite le PDR).
