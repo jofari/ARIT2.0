@@ -140,6 +140,23 @@ NEWS_KEYWORDS = ("NFP", "nonfarm", "FOMC", "rate decision", "CPI")  # PDR 06.1
 NEXT_EVENTS_HORIZON_H = 48        # M08 — 3 prochains events high <= 48 h
 NEXT_EVENTS_MAX = 3               # M08
 
+# -------------------------- 06.2 Macro Analyst V1.1 (valide Jonas 2026-07-12, docs/06)
+MACRO_DXY_WINDOW_D = 20           # 06.2 c1 — variation DXY sur 20 j ouvres
+MACRO_DXY_THRESH = 0.005          # 06.2 c1 — +/-0,5 %
+MACRO_RATES_WINDOW_D = 60         # 06.2 c2 — variation taux Fed sur 60 j
+MACRO_RATES_THRESH = 0.10         # 06.2 c2 — +/-0,10 point
+MACRO_STABLES_WINDOW_D = 30       # 06.2 c3 — variation mcap stablecoins sur 30 j
+MACRO_STABLES_UP = 0.02           # 06.2 c3 — >= +2 % => +1
+MACRO_STABLES_DOWN = -0.01        # 06.2 c3 — <= -1 % => -1
+MACRO_FUNDING_WINDOW_D = 7        # 06.2 c4 — moyenne funding 7 j
+MACRO_FUNDING_HOT = 0.0005        # 06.2 c4 — > +0,05 %/8h => -1 ; < 0 => +1
+MACRO_PORTEUR_MIN = 2             # 06.2 — somme >= +2 => PORTEUR
+MACRO_HOSTILE_MAX = -2            # 06.2 — somme <= -2 => HOSTILE (veto)
+MACRO_STALE_HOURS = 48            # 06.2 — composant stale => 0
+MACRO_STALE_FAILSAFE = 3          # 06.2 — >= 3 composants stale => HOSTILE
+MACRO_NEUTRE_CONV_BUMP = 0.05     # 06.2 / 04.2 — NEUTRE : seuil de conviction +0,05
+MACRO_REGIMES = ("PORTEUR", "NEUTRE", "HOSTILE")  # 06.2
+
 # ----------------------------------------------- 07 Execution & config freqtrade
 DRY_RUN_WALLET_USDT = 10_000      # PDR 07.1 / README — capital dry-run = canari prevu
 STAKE_CURRENCY = "USDT"           # PDR 07.1

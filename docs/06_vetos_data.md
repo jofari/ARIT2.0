@@ -6,9 +6,27 @@
 - Règle : aucune ENTRÉE dans la fenêtre **[−30 min, +30 min]** autour de l'event. Les positions ouvertes ne sont pas fermées (G-rules continuent).
 - Fail-safe : si le calendrier est irrécupérable depuis > 2 h → **bloquer les entrées** (flag `calendar_stale`, journalisé). La sécurité prime sur l'activité.
 
-## 6.2 Sentiment de marché
-- Source : **alternative.me Fear & Greed** (API publique, valeur quotidienne, cache 1 h).
-- Usage : uniquement via le régime (04) — F&G < 25 → RISK_OFF · 25-44 → multiplicateur 0,85 · ≥ 45 → 1,0. Jamais un score directionnel, jamais un signal.
+## 6.2 Macro Analyst V1.1 (validé Jonas 2026-07-12 — remplace l'ancien « Sentiment de marché »)
+> Version d'origine (F&G seul → RISK_OFF/multiplicateur) ABSORBÉE par ce module.
+> Spec détaillée et genèse : `for claude build/SPEC_MACRO_V1.1_PROPOSITION.md`.
+
+**5 composants quotidiens, chacun scoré ∈ {+1, 0, −1}** (calcul 1×/jour à 00:00 UTC) :
+| # | Série | Source | Score |
+|---|---|---|---|
+| 1 | Dollar broad (DXY) | FRED `DTWEXBGS` | var. 20 j ouvrés : ≤ −0,5 % ⇒ +1 · ≥ +0,5 % ⇒ −1 |
+| 2 | Taux Fed effectif | FRED `DFF` | var. 60 j : ≤ −0,10 pt ⇒ +1 · ≥ +0,10 pt ⇒ −1 |
+| 3 | Market cap stablecoins | DefiLlama | var. 30 j : ≥ +2 % ⇒ +1 · ≤ −1 % ⇒ −1 |
+| 4 | Funding rate (moy. BTC+ETH) | Binance fapi | moy. 7 j : > +0,05 %/8h ⇒ −1 · < 0 ⇒ +1 |
+| 5 | Fear & Greed | alternative.me | < 25 ⇒ −1 · ≥ 45 ⇒ +1 |
+
+**Régime macro** = Σ scores ∈ [−5,+5] : **PORTEUR** ≥ +2 · **HOSTILE** ≤ −2 · **NEUTRE** sinon.
+Composant stale (> 48 h) ⇒ 0 ; ≥ 3 composants stale ⇒ HOSTILE (fail-safe).
+**Effets** (docs/04 §4.2) : HOSTILE ⇒ véto d'entrée (ne ferme jamais une position) · NEUTRE ⇒
+taille ×0,85 ET seuil de conviction +0,05 · PORTEUR ⇒ plein. Journalisation : `macro_regime`
++ les 5 scores dans l'événement `evaluation` (docs/08, schema_version +1).
+**Backtest** : séries historiques (`scripts/download_macro.py` → `user_data/data/macro/`),
+point-in-time STRICT (valeur du jour J utilisable à partir de J+1 00:00 UTC) — remplace le
+« macro neutre ». Avant la 1re date d'une série : composant = 0. Seuils FIGÉS, jamais hyperoptés.
 
 ## 6.3 macro_state.py (service local, hors hot-path)
 - Cron horaire (Task Scheduler Windows en local). Écrit `user_data/macro_state.json` :

@@ -4,7 +4,9 @@
 
 ## 4.1 Classification de régime (déterministe, évaluée à chaque clôture 4h)
 Ordre d'évaluation (le premier qui matche gagne) :
-1. **RISK_OFF** si : fenêtre event ±30 min (06) OU Fear&Greed < 25 OU `macro_state.risk_off == true`.
+1. **RISK_OFF** si : fenêtre event ±30 min (06) OU **régime macro HOSTILE** (Macro Analyst
+   V1.1, docs/06 §6.2 — validé Jonas 2026-07-12 ; absorbe l'ancien critère « F&G < 25 »)
+   OU `macro_state.risk_off == true`.
 2. **RANGE** si : ADX(14)_4h < 20.
 3. **TRANSITION** si : 20 ≤ ADX(14)_4h < 25.
 4. **TREND** si : ADX(14)_4h ≥ 25 ET EMA50_4h > EMA200_4h ET close_4h > EMA50_4h.
@@ -13,8 +15,8 @@ Ordre d'évaluation (le premier qui matche gagne) :
 ## 4.2 Comportement par régime
 | Régime | Entrées | Seuil conviction | Multiplicateur | Gestion |
 |---|---|---|---|---|
-| TREND | Oui | **0,50** | ×1,0 si F&G ≥ 45 · ×0,85 si 25 ≤ F&G < 45 | G-rules standard |
-| TRANSITION | Oui | **0,65** | ×0,85 | G-rules standard |
+| TREND | Oui | **0,50** (+0,05 si macro NEUTRE) | ×1,0 si macro PORTEUR · ×0,85 si NEUTRE | G-rules standard |
+| TRANSITION | Oui | **0,65** (+0,05 si macro NEUTRE) | ×0,85 | G-rules standard |
 | RANGE | **Non** (veto — stratégie range = backlog V2) | — | — | Positions ouvertes : gestion continue normale |
 | RISK_OFF | **Non** (veto) | — | ×0 | **Durcie** : G3 passe à 1,5×ATR |
 Les positions déjà ouvertes ne sont jamais fermées par un simple changement de régime — seules G1-G7 gèrent les sorties.

@@ -22,6 +22,11 @@ FEATURE_COLUMNS = (
 )
 CDL_PREFIX = "cdl_"  # 11.3 / PDR 05.4 idee 9 — ~60 colonnes talib CDL*, journalisees only
 
+# Macro Analyst V1.1 (docs/06 §6.2, valide Jonas 2026-07-12) :
+MACRO_REGIME_COL = "macro_regime"          # colonne df + cle journal/evaluation
+MACRO_SCORE_KEYS = ("dxy", "taux", "stablecoins", "funding", "fear_greed")  # 06.2
+MACRO_DATA_DIR = "data/macro"              # series historiques (scripts/download_macro.py)
+
 # Produites par regimes.py (11.3) — noms francais contractuels, ne pas angliciser.
 REGIME_COLUMNS = ("regime", "seuil", "multiplicateur")
 
