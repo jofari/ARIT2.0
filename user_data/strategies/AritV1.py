@@ -1,8 +1,6 @@
-"""M07 - AritV1 : strategie freqtrade mince (docs/modules/M07). Zero logique metier :
-tout delegue a arit_lib/ (pur, teste). Aucun reseau dans les callbacks (docs/11 par.11.5) ;
-toute exception arit_lib -> action la plus sure + journal 'system'. Noms colonnes/cles/fichiers
-= arit_lib.contracts ; constantes = arit_lib.params (aucune valeur magique).
-"""
+"""M07 - AritV1 : strategie freqtrade mince (docs/modules/M07), zero logique metier (delegue a
+arit_lib/, pur+teste). Aucun reseau dans les callbacks (docs/11 par.11.5) ; exception arit_lib ->
+action sure + journal 'system' ; noms/constantes = arit_lib.contracts/params (zero magie)."""
 
 import functools
 import math
@@ -17,9 +15,9 @@ try:  # IStrategy tire scipy (rpc/metrics), indispo dans le venv de test pur.
 except Exception:  # pragma: no cover - fallback tests (helpers purs restent importables)
     IStrategy = object
 
-from arit_lib import cio, contracts, features, gestion, journal, params, regimes, risk
+from arit_lib import cio, contracts, features, gestion, journal, macro_regime, params, regimes, risk
 
-_LIVE_MODES = ("live", "dry_run")  # macro_state reel ; backtest => macro neutre (M02)
+_LIVE_MODES = ("live", "dry_run")  # live/dry : macro_state.json ; backtest : colonne macro (M08)
 
 
 def _num(value) -> float:
@@ -47,13 +45,11 @@ class AritV1(IStrategy):
     stoploss = -0.99                             # plancher ; vrai SL = custom + exchange
     process_only_new_candles = True              # docs/11 par.11.2
     startup_candle_count = params.EMA_SLOW       # warm-up EMA200 (PDR 05.3)
-
     def __init__(self, config=None):
         super().__init__(config)
         self._pending: dict = {}
     def _log(self, event, *args) -> None:  # event -> journal.ev_<event> (docs/08.1)
         journal.write(event, getattr(journal, "ev_" + event)(*args))
-
     @informative(params.TIMEFRAME_SETUP)
     def populate_indicators_4h(self, df, metadata):
         df = features.add_indicators(df)
@@ -67,7 +63,8 @@ class AritV1(IStrategy):
         try:
             df = features.compute_all(df)                    # colonnes 1h + scores (utilise *_4h)
             macro = journal.read_macro_state()               # fichier, jamais reseau
-            live = self.dp.runmode.value in _LIVE_MODES      # backtest => macro neutre (M02)
+            live = self.dp.runmode.value in _LIVE_MODES      # live/dry vs backtest
+            df = df if live else regimes.attach_macro_regime(df, self._macro_daily())  # backtest
             df = cio.conviction(regimes.classify(df, macro if live else None))
             if live:
                 self._journal_evaluation(df, metadata.get("pair"), macro)
@@ -81,10 +78,8 @@ class AritV1(IStrategy):
             sig = df["signal_long"].fillna(False) & df["new_4h"].fillna(False)
             df.loc[sig, "enter_long"] = 1
         return df
-
     def populate_exit_trend(self, df, metadata):
         return df  # sorties par callbacks (G6/G7/TP2) ; stub requis au chargement freqtrade 2026.6
-
     @_safe(False, "gate_error")
     def confirm_trade_entry(self, pair, current_time, **kwargs):
         row = self._closed_1h_row(pair)
@@ -205,11 +200,17 @@ class AritV1(IStrategy):
         hb.parent.mkdir(parents=True, exist_ok=True)
         hb.touch()
         risk.snapshot_day_equity_if_new_day(self.wallets, current_time, udd)  # ref CB -6 %
-
     # --- helpers purs (etat trade, sizing, niveaux 03.3, journal derive) ---
     def _closed_1h_row(self, pair):  # derniere bougie 1h CLOTUREE, jamais la courante (M07 regle 2)
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         return df.iloc[-1] if df is not None and len(df) else None
+    def _macro_daily(self):  # regimes macro quotidiens point-in-time (backtest) : charge+cache 1x
+        if not hasattr(self, "_macro_cache"):
+            d = Path(self.config.get("user_data_dir", "user_data")) / contracts.MACRO_DATA_DIR
+            self._macro_cache = macro_regime.daily_regimes(macro_regime.load_history(d))
+            if self._macro_cache.empty:                      # fichiers absents => macro neutre (n6)
+                journal.write("system", journal.ev_system("macro_unavailable", {"dir": str(d)}))
+        return self._macro_cache
     def _trade_state(self, trade):
         data = {k: trade.get_custom_data(k) for k in contracts.CUSTOM_DATA_KEYS}
         return contracts.TradeState.from_dict({k: v for k, v in data.items() if v is not None})

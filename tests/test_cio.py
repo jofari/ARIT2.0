@@ -162,3 +162,37 @@ def test_explain_macro_absent_is_none():
 def test_explain_close_vs_ema_signed_difference():
     d = cio.explain(_full_row())
     assert abs(d["regime_inputs"]["close_vs_ema"] - (115.0 - 110.0)) < 1e-9
+
+
+# ------------------------------------- Macro Analyst V1.1 : bump de seuil NEUTRE (04 §4.2)
+def _df_macro(scores, mult, seuil, regime, macro, rr=2.0, new_4h=True):
+    df = _df(scores, mult, seuil, regime, rr=rr, new_4h=new_4h)
+    df[contracts.MACRO_REGIME_COL] = macro
+    return df
+
+
+def test_neutre_column_bumps_seuil():
+    out = cio.conviction(
+        _df_macro(_scores(0.5), params.MULT_REDUCED, params.SEUIL_TREND, "TREND", "NEUTRE"))
+    assert out["seuil"].iloc[0] == params.SEUIL_TREND + params.MACRO_NEUTRE_CONV_BUMP
+
+
+def test_porteur_column_no_bump():
+    out = cio.conviction(
+        _df_macro(_scores(0.5), params.MULT_FULL, params.SEUIL_TREND, "TREND", "PORTEUR"))
+    assert out["seuil"].iloc[0] == params.SEUIL_TREND
+
+
+def test_column_absent_no_bump_backcompat():
+    out = _conv(_scores(0.5), params.MULT_FULL, params.SEUIL_TREND, "TREND")
+    assert out["seuil"].iloc[0] == params.SEUIL_TREND
+
+
+def test_neutre_bump_can_block_marginal_signal():
+    # Conviction pile au seuil de base : PORTEUR passe (>=), NEUTRE (+0,05) bloque.
+    conv = _conv(_scores(0.5), params.MULT_FULL, params.SEUIL_TREND, "TREND")["conviction"].iloc[0]
+    porteur = cio.conviction(_df_macro(_scores(0.5), params.MULT_FULL, conv, "TREND", "PORTEUR"))
+    assert bool(porteur["signal_long"].iloc[0]) is True
+    neutre = cio.conviction(_df_macro(_scores(0.5), params.MULT_FULL, conv, "TREND", "NEUTRE"))
+    assert neutre["seuil"].iloc[0] == conv + params.MACRO_NEUTRE_CONV_BUMP
+    assert bool(neutre["signal_long"].iloc[0]) is False

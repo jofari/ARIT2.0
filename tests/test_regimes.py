@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from arit_lib import params, regimes
+from arit_lib import contracts, params, regimes
 
 
 def _df(adx, ema50, ema200, close_4h, n=1):
@@ -115,3 +115,80 @@ def test_classify_only_touches_three_columns_across_regime_change():
     for forbidden in ("exit_long", "enter_long", "sell", "close_position", "exit"):
         assert forbidden not in df.columns
     assert df["preexisting"].iloc[0] == 7             # donnees hors-regime intactes
+
+
+# ---------------------------------- Macro Analyst V1.1 : pilotage par MACRO_REGIME_COL
+def _df_macro(adx, ema50, ema200, close_4h, macro, n=1):
+    df = _df(adx, ema50, ema200, close_4h, n=n)
+    df[contracts.MACRO_REGIME_COL] = [macro] * n
+    return df
+
+
+def test_macro_column_hostile_forces_risk_off():
+    # Technique = TREND, mais macro HOSTILE => RISK_OFF (04 §4.1 crit.1, absorbe F&G<25).
+    out = regimes.classify(_df_macro(30, 110, 100, 115, "HOSTILE"))
+    assert out["regime"].iloc[0] == "RISK_OFF"
+    assert out["multiplicateur"].iloc[0] == params.MULT_RISK_OFF
+    assert np.isnan(out["seuil"].iloc[0])
+
+
+def test_macro_column_porteur_full_multiplier():
+    out = regimes.classify(_df_macro(30, 110, 100, 115, "PORTEUR"))
+    assert out["regime"].iloc[0] == "TREND"
+    assert out["multiplicateur"].iloc[0] == params.MULT_FULL
+    assert out["seuil"].iloc[0] == params.SEUIL_TREND
+
+
+def test_macro_column_neutre_reduced_multiplier():
+    out = regimes.classify(_df_macro(30, 110, 100, 115, "NEUTRE"))
+    assert out["regime"].iloc[0] == "TREND"
+    assert out["multiplicateur"].iloc[0] == params.MULT_REDUCED
+    assert out["seuil"].iloc[0] == params.SEUIL_TREND  # bump +0,05 = job de cio, pas de regimes
+
+
+def test_macro_column_transition_reduced_even_if_porteur():
+    out = regimes.classify(_df_macro(22, 110, 100, 115, "PORTEUR"))
+    assert out["regime"].iloc[0] == "TRANSITION"
+    assert out["multiplicateur"].iloc[0] == params.MULT_REDUCED  # TRANSITION toujours x0,85
+
+
+def test_macro_column_absent_behaviour_unchanged():
+    # Sans la colonne, classify == comportement historique (neutre backtest) : retrocompat.
+    out = regimes.classify(_df(30, 110, 100, 115), None)
+    assert out["regime"].iloc[0] == "TREND"
+    assert out["multiplicateur"].iloc[0] == params.MULT_FULL
+
+
+def test_attach_macro_regime_point_in_time_backward():
+    # daily deja decale +1 j (index = jour ou le regime devient valide) ; aucun look-ahead.
+    daily = pd.DataFrame(
+        {contracts.MACRO_REGIME_COL: ["NEUTRE", "HOSTILE"]},
+        index=pd.to_datetime(["2024-01-02", "2024-01-03"], utc=True),
+    )
+    candles = pd.DataFrame({
+        "date": pd.date_range("2024-01-02", periods=48, freq="1h", tz="UTC"),
+        "close": range(48),
+    })
+    out = regimes.attach_macro_regime(candles.copy(), daily)
+    col = out.set_index("date")[contracts.MACRO_REGIME_COL]
+    assert col.loc["2024-01-02 05:00"] == "NEUTRE"          # jour J => regime d'index J (<= J-1)
+    assert col.loc["2024-01-03 05:00"] == "HOSTILE"         # jamais la valeur d'un jour futur
+
+
+def test_attach_macro_regime_before_first_day_is_nan():
+    daily = pd.DataFrame(
+        {contracts.MACRO_REGIME_COL: ["PORTEUR"]},
+        index=pd.to_datetime(["2024-01-05"], utc=True),
+    )
+    candles = pd.DataFrame({
+        "date": pd.date_range("2024-01-03", periods=24, freq="1h", tz="UTC"),
+        "close": range(24),
+    })
+    out = regimes.attach_macro_regime(candles.copy(), daily)
+    assert out[contracts.MACRO_REGIME_COL].isna().all()     # avant la 1re date => pas de regime
+
+
+def test_attach_macro_regime_empty_daily_is_noop():
+    candles = pd.DataFrame({"date": pd.date_range("2024-01-03", periods=3, freq="1h", tz="UTC")})
+    out = regimes.attach_macro_regime(candles.copy(), pd.DataFrame())
+    assert contracts.MACRO_REGIME_COL not in out.columns    # retrocompat : colonne non posee

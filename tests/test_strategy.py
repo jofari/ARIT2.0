@@ -278,3 +278,69 @@ def test_journal_evaluation_skipped_when_not_new_4h(monkeypatch):
                        "date": [T0]})
     s._journal_evaluation(df, "BTC/USDT", {"fear_greed": 55, "stale": False})
     assert not events   # pas de nouvelle bougie 4h => aucune ligne
+
+
+# ----------------------------------- Macro Analyst V1.1 : pose de la colonne en backtest
+def _fake_macro(monkeypatch, daily):
+    fake = type("M", (), {"load_history": staticmethod(lambda d: None),
+                          "daily_regimes": staticmethod(lambda h: daily)})
+    monkeypatch.setattr(strat_mod, "macro_regime", fake)
+
+
+def _capture_classify(monkeypatch, seen):
+    def _classify(df, macro=None):
+        seen["has_col"] = contracts.MACRO_REGIME_COL in df.columns
+        return df.assign(regime="TREND", seuil=0.5, multiplicateur=1.0)
+    monkeypatch.setattr(strat_mod.regimes, "classify", _classify)
+    monkeypatch.setattr(strat_mod.cio, "conviction", lambda df: df)
+    monkeypatch.setattr(strat_mod.features, "compute_all", lambda df: df)
+    monkeypatch.setattr(strat_mod.journal, "read_macro_state",
+                        lambda: {"fear_greed": 50, "stale": False})
+
+
+def _candles():
+    return pd.DataFrame({"date": pd.date_range("2024-01-02", periods=3, freq="1h", tz="UTC"),
+                         "close": [1.0, 2.0, 3.0]})
+
+
+def test_backtest_poses_macro_column(monkeypatch):
+    _capture(monkeypatch)
+    seen = {}
+    _capture_classify(monkeypatch, seen)
+    daily = pd.DataFrame({contracts.MACRO_REGIME_COL: ["PORTEUR", "NEUTRE"]},
+                         index=pd.to_datetime(["2024-01-01", "2024-01-02"], utc=True))
+    _fake_macro(monkeypatch, daily)
+    s = _inst()
+    s.dp = _DP(_candles(), runmode="backtest")
+    s.config = {"user_data_dir": "user_data"}
+    s.populate_indicators(_candles(), {"pair": "BTC/USDT"})
+    assert seen["has_col"] is True                           # colonne posee AVANT classify
+
+
+def test_backtest_no_column_when_macro_files_absent(monkeypatch):
+    events = _capture(monkeypatch)
+    seen = {}
+    _capture_classify(monkeypatch, seen)
+    empty = pd.DataFrame(columns=[contracts.MACRO_REGIME_COL])  # load_history vide => daily vide
+    _fake_macro(monkeypatch, empty)
+    s = _inst()
+    s.dp = _DP(_candles(), runmode="backtest")
+    s.config = {"user_data_dir": "user_data"}
+    s.populate_indicators(_candles(), {"pair": "BTC/USDT"})
+    assert seen["has_col"] is False                          # colonne non posee (macro neutre)
+    kinds = [p.get("kind") for et, p in events if et == "system"]
+    assert "macro_unavailable" in kinds                      # log warning UNE fois
+
+
+def test_live_does_not_pose_macro_column(monkeypatch):
+    _capture(monkeypatch)
+    seen = {}
+    _capture_classify(monkeypatch, seen)
+    _fake_macro(monkeypatch, pd.DataFrame({contracts.MACRO_REGIME_COL: ["PORTEUR"]},
+                                          index=pd.to_datetime(["2024-01-02"], utc=True)))
+    s = _inst()
+    monkeypatch.setattr(s, "_journal_evaluation", lambda *a, **k: None)
+    s.dp = _DP(_candles(), runmode="dry_run")
+    s.config = {"user_data_dir": "user_data"}
+    s.populate_indicators(_candles(), {"pair": "BTC/USDT"})
+    assert seen["has_col"] is False                          # live/dry : jamais la colonne (M08)

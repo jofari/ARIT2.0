@@ -26,6 +26,9 @@ def conviction(df: pd.DataFrame) -> pd.DataFrame:
     """
     weighted = sum(params.POIDS[col] * df[col] for col in params.POIDS)
     df["conviction"] = np.minimum(1.0, weighted * df["multiplicateur"])
+    if contracts.MACRO_REGIME_COL in df.columns:  # Macro V1.1 : NEUTRE => seuil +0,05 (04 §4.2)
+        neutre = (df[contracts.MACRO_REGIME_COL] == params.MACRO_REGIMES[1]).astype(float)
+        df["seuil"] = df["seuil"] + neutre * params.MACRO_NEUTRE_CONV_BUMP
     df["signal_long"] = (
         (df["conviction"] >= df["seuil"])
         & (df["rr_dispo"] >= params.RR_MIN)
