@@ -3,7 +3,7 @@
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-extend-exclude = ["docs", "ARIT_PDR_v3", "ARIT_claudecode_pack"]
+extend-exclude = ["docs", "ARIT_PDR_v3", "ARIT_claudecode_pack", "research"]  # research = exploratoire, hors gates prod
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
