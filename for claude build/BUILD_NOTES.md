@@ -1,5 +1,15 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-13 — verdict campagne macro V1.1 (runs propres, fix datetime inclus)
+A+macro : +5,4 %, PF 1,21, 31 trades, DD 19,3 % — vs A sans macro : +40,0 %, PF 2,12, 55
+trades. **La couche macro calibrée 06.2 DÉGRADE la base saine** : elle supprime les gagnants
+2018-2022 (funding chaud en bull ⇒ NEUTRE ⇒ taille réduite + seuil durci en pleine tendance)
+et ne filtre PAS les perdants 2023-2026 (8 trades, PF 0,31 identique). En revanche sur B
+(G-rules on) : −19,1 % → −7,0 %, DD 24,9 % → 10,6 % — le VÉTO HOSTILE est la partie qui
+marche. RECOMMANDATION posée à Jonas (décision en attente) : garder le véto HOSTILE seul,
+retirer la pénalité NEUTRE et/ou sortir le funding du score (contre-productif pour du
+trend-following long-only). Chiffres archivés : backtest_lanes/run1 et run2, derniers zips.
+
 ## 2026-07-13 — zéro-trade macro : unités datetime + 2 leçons de debug
 1. **Cause** : `merge_asof` refuse de joindre `datetime64[ms, UTC]` (dates des feather
    freqtrade) avec `[ns]/[us]` (index pandas natifs) → exception avalée par le try/except de
