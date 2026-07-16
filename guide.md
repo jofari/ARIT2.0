@@ -3,6 +3,9 @@
 > Tu te perds ? Ce fichier est la carte. Chaque dossier a aussi son mini-README.
 > Règle d'or : les noms `user_data/`, `tests/`, `services/`, `docs/` sont IMPOSÉS par les
 > outils (freqtrade, pytest, Python) — ne pas les renommer, sinon le bot casse.
+>
+> **Tu cherches un module précis (macro, technical, cio, risk, quant, backtest) ?**
+> → **[`modules/`](modules/)** : une fiche par module, qui pointe vers le vrai code.
 
 ## 1. Vue en 30 secondes
 
@@ -25,14 +28,20 @@ ARIT = **4 programmes séparés** qui communiquent par fichiers :
 | `docs/` | **LA SPEC OFFICIELLE** (PDR v3, 22 fichiers : couches 01-11 + `modules/M01-M10`) | tu veux savoir CE QUE le bot doit faire |
 | `user_data/` | Tout ce que freqtrade utilise/produit : stratégie, **code des modules**, config, données, **résultats de backtest**, journaux | tu veux le code, un backtest, un journal |
 | `services/` | Les 3 programmes annexes (macro, Discord, watchdog) — hors freqtrade | tu touches au macro/Discord/watchdog |
-| `tests/` | Les 146 tests pytest (1 fichier par module) | tu veux vérifier que rien n'est cassé |
+| `modules/` | **La carte des modules** : 1 fiche par module conceptuel (macro, technical, cio, risk, quant, backtest) → vers le vrai code. Aucun code dedans. | tu cherches « où vit le module X ? » |
+| `tests/` | Les 200 tests pytest (1 fichier par module) | tu veux vérifier que rien n'est cassé |
 | `for claude build/` | Ressources du BUILD : prompt, pack, PLAN.md (checklist), BUILD_NOTES.md (pièges), RAPPORT_BUILD.md (bilan) | tu veux l'historique/état du chantier |
 | `backtest_lanes/` | Lanes isolées des backtests parallèles (`run1..runN` : état/résultats propres à chaque run, junctions vers data/strategies) — jetable, hors git | tu cherches les résultats bruts d'un run du protocole |
 | ⚠️ | `for claude build/ARIT_PDR_v3/` = **vieille copie INCOMPLÈTE** (11 fichiers, sans modules/). La vraie spec = `docs/` à la racine. | |
 
 ## 3. Où est le code de chaque module
 
-Tout le code métier vit dans **`user_data/strategies/arit_lib/`** (1 module = 1 fichier) :
+> Vue par **concept** (« c'est quoi le module macro ? ») → **[`modules/`](modules/)**.
+> Vue par **fichier** (« où est M04 ? ») → le tableau ci-dessous.
+
+Tout le code métier vit dans **`user_data/strategies/arit_lib/`** (1 module = 1 fichier).
+Il ne peut pas être déplacé : freqtrade charge la stratégie depuis `user_data/strategies/` et met
+ce dossier sur le `sys.path` — c'est ce qui fait marcher `from arit_lib import ...`.
 
 | Module | Rôle (1 ligne) | Code | Tests | Spec |
 |---|---|---|---|---|
@@ -115,6 +124,6 @@ projet a été construit (open source vs créé de zéro, module par module), et
 
 - **« Pourquoi le bot a fait ça ? »** → `user_data/logs/decisions/YYYY-MM-DD.jsonl` (1 ligne = 1 décision, format `docs/08`).
 - **« C'est quoi cette constante ? »** → `user_data/strategies/arit_lib/params.py` (le commentaire cite le PDR).
-- **« Ça marche encore ? »** → `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 146 passed).
+- **« Ça marche encore ? »** → `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 200 passed).
 - **« Où en est le chantier ? »** → `for claude build/PLAN.md` (état) · `RAPPORT_BUILD.md` (bilan + questions) · `BUILD_NOTES.md` (pièges Windows/freqtrade et leurs patchs).
 - **Secrets** : `.env` (jamais commité) — modèle dans `.env.example`.
