@@ -87,8 +87,6 @@ VETO_FLAG_SUFFIX = ".flag"                 # 11.3 — <signal_id>.flag : discord
 # --------------------------------------------------- Journal JSONL (PDR 08.1)
 SCHEMA_VERSION = 1  # M06 — toute nouvelle cle => PDR 08.1 d'abord, version += 1
 
-EVENT_TYPES = ("evaluation", "gate_check", "entry", "gestion", "exit", "system")
-
 # Champs obligatoires par type (PDR 08.1). Cles canoniques du build (le PDR les
 # decrit en francais ; les cles JSON sont fixees ICI, une fois pour toutes).
 # Enveloppe commune ajoutee par journal.write : event_type + schema_version.

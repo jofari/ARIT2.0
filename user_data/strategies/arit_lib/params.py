@@ -31,8 +31,7 @@ TP1_R = 1.5                    # PDR 03.3 — TP1 fixe +1,5R
 # ------------------------------------- 03.4 G-rules (defauts FIGES, flags ablation)
 G1_TRIGGER_R = 1.0             # PDR 03.4 G1 — break-even si profit >= +1,0R
 G1_BE_BUFFER_FRAC = 0.001      # PDR 03.4 G1 — SL = entree x (1 + 0,001), buffer frais
-G2_PIVOT_N = 2                 # PDR 03.4 G2 — pivot fractal N=2 (HL 1h confirme)
-G2_ATR_BUFFER = 0.1            # PDR 03.4 G2 — SL = HL_1h - 0,1 x ATR(14)_1h
+G2_ATR_BUFFER = 0.1            # PDR 03.4 G2 — SL = HL_1h - 0,1 x ATR(14)_1h (pivot N = PIVOT_N)
 G3_TRIGGER_R = 1.0             # PDR 03.4 G3 — trailing ATR actif apres +1R
 G3_ATR_MULT = 2.0              # PDR 03.4 G3 — SL = close_1h - 2,0 x ATR(14)_1h
 G3_ATR_MULT_RISK_OFF = 1.5     # PDR 03.4 G3 / 04.2 — 1,5 x ATR en RISK_OFF
@@ -77,7 +76,6 @@ SLIPPAGE_FRAC = {                 # PDR 03.6 — par cote
 FG_RISK_OFF_BELOW = 25            # PDR 04.1 / 06.2 — Fear&Greed < 25 => RISK_OFF
 ADX_RANGE_BELOW = 20              # PDR 04.1 — ADX(14)_4h < 20 => RANGE
 ADX_TREND_MIN = 25                # PDR 04.1 — ADX >= 25 (+ EMAs) => TREND
-REGIMES = ("TREND", "TRANSITION", "RANGE", "RISK_OFF")  # PDR 04
 
 # ------------------------------------------------ 04.2 Comportement par regime
 SEUIL_TREND = 0.50                # PDR 04.2 — seuil conviction TREND
@@ -105,7 +103,7 @@ BOS_FRESH_CANDLES_4H = 3          # PDR 05.1 — BOS "frais" 3 bougies 4h
 # Override protocole (voir bloc 09 §9.1 plus haut) : ARIT_CHOCH_PRIORITY=1
 S_STRUCTURE_CHOCH_PRIORITY = _os.environ.get("ARIT_CHOCH_PRIORITY", "") == "1"
 SR_CLUSTER_TOL_ATR = 0.5          # PDR 05.2 — meme niveau si ecart <= 0,5 x ATR
-SR_FORCE_TOUCHES_DIV = 4          # PDR 05.2 — force = min(touches/4, 1)
+SR_FORCE_TOUCHES_DIV = 4          # PDR 05.2 — force=min(t/4,1) ⚠️ NON IMPLEMENTE (13/07)
 SR_WINDOW_4H = 180                # M01 — clustering sur 180 dernieres bougies 4h
 SR_RR_FULL = 2.0                  # PDR 05.2 — s_sr = 1,0 si RR_dispo >= 2,0
 
@@ -116,7 +114,7 @@ RSI_PERIOD = 14                   # PDR 05.3
 MACD_FAST, MACD_SLOW, MACD_SIGNAL = 12, 26, 9  # PDR 05.3
 ATR_PERIOD = 14                   # PDR 05.3
 VOL_SMA_PERIOD = 20               # PDR 05.3
-BBANDS_PERIOD, BBANDS_STD = 20, 2  # PDR 05.3 — journalisees, pas utilisees en V1
+BBANDS_PERIOD, BBANDS_STD = 20, 2  # PDR 05.3 — ⚠️ a cabler (decision Jonas 09/07)
 
 RSI_MOM_LOW, RSI_MOM_HIGH = 50, 70       # PDR 05.3 — s_momentum = 1,0 si RSI in [50,70]
 RSI_MOM_SOFT_LOW, RSI_MOM_SOFT_HIGH = 45, 75  # PDR 05.3 — 0,5 si [45,50) ou (70,75]
@@ -134,8 +132,8 @@ VOL_OK_MULT = 1.0                 # PDR 05.5 — 0,5 si >= 1,0 x
 FG_NEUTRAL_BACKTEST = 50          # PDR M02 — macro neutre backtest (>= FG_MULT_FULL_FROM)
 
 # ----------------------------------------------------- 06 Vetos & donnees externes
-FG_CACHE_HOURS = 1                # PDR 06.2 / 06.5 — cache Fear&Greed
-CALENDAR_CACHE_MIN = 30           # PDR 06.5 — cache calendrier
+FG_CACHE_HOURS = 1                # PDR 06.5 — ⚠️ service = constantes locales (a unifier)
+CALENDAR_CACHE_MIN = 30           # PDR 06.5 — idem (miroir de spec, non consomme)
 NEWS_KEYWORDS = ("NFP", "nonfarm", "FOMC", "rate decision", "CPI")  # PDR 06.1
 NEXT_EVENTS_HORIZON_H = 48        # M08 — 3 prochains events high <= 48 h
 NEXT_EVENTS_MAX = 3               # M08
@@ -158,21 +156,23 @@ MACRO_NEUTRE_CONV_BUMP = 0.05     # 06.2 / 04.2 — NEUTRE : seuil de conviction
 MACRO_REGIMES = ("PORTEUR", "NEUTRE", "HOSTILE")  # 06.2
 
 # ----------------------------------------------- 07 Execution & config freqtrade
-DRY_RUN_WALLET_USDT = 10_000      # PDR 07.1 / README — capital dry-run = canari prevu
+# NB : les valeurs marquees "miroir config" ont pour source RUNTIME user_data/config.dry.json ;
+# elles vivent ici comme reference contractuelle du PDR (le code ne les lit pas).
+DRY_RUN_WALLET_USDT = 10_000      # PDR 07.1 / README — miroir config (dry_run_wallet)
 STAKE_CURRENCY = "USDT"           # PDR 07.1
-PAIR_WHITELIST = ("BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT")  # PDR 07.1 / README
+PAIR_WHITELIST = ("BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT")  # PDR 07.1 — miroir config
 TIMEFRAME_BASE = "1h"             # PDR 07.1 / README
 TIMEFRAME_SETUP = "4h"            # README — setups/entrees en cloture 4h
 TIMEFRAME_CONTEXT = "1d"          # README
-TIMEFRAME_DETAIL = "5m"           # PDR 07.2 — obligatoire en backtest
-TRADABLE_BALANCE_RATIO = 0.99     # PDR 07.1
-COOLDOWN_POST_EXIT_CANDLES = 2    # PDR 07.1 — Protection CooldownPeriod
+TIMEFRAME_DETAIL = "5m"           # PDR 07.2 — miroir CLI (--timeframe-detail obligatoire)
+TRADABLE_BALANCE_RATIO = 0.99     # PDR 07.1 — miroir config
+COOLDOWN_POST_EXIT_CANDLES = 2    # PDR 07.1 — ⚠️ Protections NON IMPLEMENTEES (13/07)
 
 # --------------------------------------------------------- 08 Journal & HITL
 VETO_WINDOW_MIN_CANARI = 5        # PDR 08.4 — fenetre veto Discord (canari)
 VETO_WINDOW_MIN_DRYRUN = 0        # PDR 08.4 / 11.6 — dry-run : aucun veto
 DIGEST_TIME_UTC = "08:00"         # PDR 08.2 — digest quotidien
-SIGNAL_FRESH_1H_CANDLES = 3       # PDR 11.6 — signal 4h valide 3-4 bougies 1h (borne basse retenue)
+SIGNAL_FRESH_1H_CANDLES = 3       # PDR 11.6 — fraicheur 4h ⚠️ NON APPLIQUEE (13/07)
 
 # --------------------------------------------------- 09 / M10 Watchdog & services
 WATCHDOG_HEARTBEAT_MAX_S = 600    # PDR 09.5 / M10 — heartbeat > 10 min => alerte

@@ -37,7 +37,11 @@ from .contracts import TradeState
 
 
 def flags() -> dict:
-    """Copie fraiche des flags d'ablation (params.G_FLAGS_DEFAULT). Version A = tous False."""
+    """Copie fraiche des flags d'ablation (params.G_FLAGS_DEFAULT).
+
+    Defaut = les 7 a True (produit B) ; ARIT_G_OFF=Gx en passe UNE a False (ablation 09 §9.1.4).
+    Le controle A ne passe PAS par ces flags : il court-circuite via params.CONTROL_A_MODE.
+    """
     return dict(params.G_FLAGS_DEFAULT)
 
 
