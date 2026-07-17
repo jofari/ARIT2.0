@@ -3,6 +3,7 @@
 
 # Runtime / donnees
 backtest_lanes/
+analysis/out/
 user_data_run*/
 user_data/macro_state.json
 user_data/logs/

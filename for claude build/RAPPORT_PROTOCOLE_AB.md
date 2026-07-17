@@ -1,5 +1,13 @@
 # RAPPORT — Protocole de backtest A/B (docs/09 §9.1)
 
+> ⚠️ **ADDENDUM 2026-07-17 — CHIFFRES DU CONTRÔLE A INVALIDES.** Le contrôle A a tourné
+> **sans aucun stop-loss** (floor SL initial jamais posé — bug custom_stoploss, voir
+> BUILD_NOTES 2026-07-17) : le « +40 %, PF 2,12, durée 37 j » est un artefact de
+> bag-holding (ETH tenu 3,8 ans à travers −80 %). Rejoué avec le SL initial actif, le
+> même ensemble d'entrées fait ~breakeven (18 TP / 23 SL — `analysis/replay_entries.py`).
+> Les comparaisons B-vs-B (ablations, §3.2) restent internement valides ; tout verdict
+> A-vs-B et la lecture « famine 2023-2026 » sont à refaire après fix. Décision en attente.
+
 Date : 2026-07-11 · 10 runs propres (2018-01-01 → 2026-07-10, 4 paires, `--timeframe-detail 5m`,
 lanes isolées `backtest_lanes/run1..5`, état purgé avant chaque run, macro neutre + gate news ouvert).
 Code testé : commit `59c4f58`+ (G6 événement + garde « vie du trade », 152 tests verts).

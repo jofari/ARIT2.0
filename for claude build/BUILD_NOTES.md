@@ -1,6 +1,29 @@
 # BUILD_NOTES — leçons et décisions de build
 
-## 2026-07-13 — verdict campagne macro V1.1 (runs propres, fix datetime inclus)
+## 2026-07-17 — BUG MAJEUR contrôle A : il a tourné SANS stop-loss (campagne A/B invalidée)
+Découvert en déployant l'outil replay E0 (décision Jonas 17/07). Preuves (zip run2
+15-09-24, 55 trades) : `initial_stop_loss_abs` = −99 % sur TOUS les trades, zéro sortie
+stop, trades zombies (ETH 1 381 j à travers −80 % de flottant, BNB 554 j), force_exit
+final −20,3 %. **Mécanisme** (AritV1.custom_stoploss) : le floor SL initial n'est posé
+que si `after_fill` ET custom_data déjà écrit — or `order_filled` écrit le custom_data
+APRÈS → floor jamais posé ; en mode contrôle A `compute_sl` renvoie None pour toujours
+→ aucun SL pendant 8,5 ans. Deux bugs secondaires : la branche TP_CONTROL_A de
+`check_exit` n'a pas la garde « bougie postérieure à l'entrée » (ajoutée à G6 le 10/07)
+→ 14 sorties/re-entrées churn à t+0 ; et aucun cooldown post-exit (Protections jamais
+implémentées). Conséquences : le « +40 %, PF 2,12 » du RAPPORT_PROTOCOLE_AB n'est PAS
+un benchmark valide ; la « famine 2023-2026 » (8 trades) est en partie l'ombre du bug
+(2 slots sur 3 zombie-bloqués 2022-2025) ; B est aussi touché (1re bougie sans SL avant
+le 1er move G2). **Fix attendu (2 diffs, EN ATTENTE du go Jonas** car il réécrit la
+baseline) : (1) custom_stoploss retourne le floor initial_sl à CHAQUE appel dès que
+custom_data existe (freqtrade ne resserre que vers le haut — idempotent) ; (2) garde
+`row date >= open_date` sur la branche TP_CONTROL_A ; (+ décision cooldown 07.1).
+**Replay des 41 épisodes uniques (churn regroupé) avec le SL initial actif** :
+18 TP / 23 SL (44 %) ≈ breakeven après frais — MAIS gagnants très rapides (médiane
+2,8 h jusqu'à +1,5R, MAE médian −0,28R) et continuation capturable après +1,5R :
+médiane +3,8R, p75 +20R, p90 +90R (giveback pic→creux médian 5R sans gestion).
+L'histoire « swing 37 j » était un artefact du bug ; l'edge, s'il existe, est un burst
+momentum avec grosse queue droite non capturée. Outil : `analysis/replay_entries.py`
+(validé : 55/55 SL journal, tp1 à 0,0000 %, timing sorties reproduit 17/17).
 A+macro : +5,4 %, PF 1,21, 31 trades, DD 19,3 % — vs A sans macro : +40,0 %, PF 2,12, 55
 trades. **La couche macro calibrée 06.2 DÉGRADE la base saine** : elle supprime les gagnants
 2018-2022 (funding chaud en bull ⇒ NEUTRE ⇒ taille réduite + seuil durci en pleine tendance)
