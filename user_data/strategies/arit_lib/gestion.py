@@ -172,7 +172,8 @@ def check_exit(trade, row_1h, state: TradeState, tp2: float | None,
 
     CONTROLE A (PDR 09 §9.1.1) : si params.CONTROL_A_MODE, sortie TOTALE "TP_CONTROL_A" des
     que high >= entry + TP1_R x (entry - initial_sl) (TP fixe +1,5R), sinon None — AVANT toute
-    G-rule (G6/G7/TP2 inertes). C'est le controle du test A/B (aucune gestion active).
+    G-rule (G6/G7/TP2 inertes). C'est le controle du test A/B (aucune gestion active). Meme
+    garde "vie du trade" que G6 (fix 2026-07-18) : bougie entierement posterieure a l'entree.
     G6 : choch_bear_event_1h vrai en cloture -> "G6" (prioritaire sur tout). EVENEMENT de cassure
     et non l'etat persistant (decision Jonas 2026-07-10, docs/03 par.3.4) : l'etat pre-existant a
     l'entree ne sort plus, seule la bougie qui CASSE le dernier HL 1h en cloture declenche. La
@@ -185,6 +186,11 @@ def check_exit(trade, row_1h, state: TradeState, tp2: float | None,
     None si aucun. extension_on (G5) neutralise TP2.
     """
     if params.CONTROL_A_MODE:
+        # Meme garde "vie du trade" que G6 (docs/03 par.3.4 amendement 2026-07-10) : la bougie
+        # doit etre entierement posterieure a l'entree, sinon un high PRE-fill sort a t+0
+        # (14 sorties/re-entrees churn mesurees sur la campagne du 11/07, BUILD_NOTES 17/07).
+        if row_1h["date"] < trade.open_date_utc:
+            return None
         entry = trade.open_rate
         tp1 = entry + params.TP1_R * (entry - state.initial_sl)
         return "TP_CONTROL_A" if row_1h["high"] >= tp1 else None

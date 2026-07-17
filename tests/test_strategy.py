@@ -237,6 +237,32 @@ def test_custom_exit_no_current_res_means_no_target(monkeypatch):
     assert seen["tp2"] is None
 
 
+# ------------------------------------- custom_stoploss : floor SL initial (fix 2026-07-18)
+def test_custom_stoploss_floor_posed_sans_after_fill(monkeypatch):
+    """BUILD_NOTES 17/07 : le floor SL initial doit etre offert a CHAQUE appel — le
+    conditionner a after_fill ne le posait JAMAIS (order_filled ecrit le custom_data APRES
+    l'appel after_fill) => controle A sans stop pendant 8,5 ans."""
+    events = _capture(monkeypatch)
+    s = _inst()
+    s.dp = _DP(pd.DataFrame())                    # aucune bougie cloturee -> branche floor pure
+    trade = _CDTrade()
+    trade.set_custom_data("initial_sl", 94.0)
+    got = s.custom_stoploss("BTC/USDT", trade, 100.0, after_fill=False)
+    assert got == pytest.approx(strat_mod.stoploss_from_absolute(94.0, 100.0))
+    assert not [e for e in events if e[0] == "system"]        # aucune exception avalee
+
+
+def test_custom_stoploss_none_avant_custom_data(monkeypatch):
+    """Avant order_filled (custom_data vide) : None — on garde le stoploss par defaut,
+    jamais un floor a ~0."""
+    events = _capture(monkeypatch)
+    s = _inst()
+    s.dp = _DP(pd.DataFrame())
+    got = s.custom_stoploss("BTC/USDT", _CDTrade(), 100.0, after_fill=True)
+    assert got is None
+    assert not [e for e in events if e[0] == "system"]
+
+
 # --------------------------------------------------- custom_data round-trip
 def test_trade_state_roundtrip():
     s = _inst()

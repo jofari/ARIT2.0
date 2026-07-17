@@ -1,5 +1,23 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-18 — fix contrôle A LIVRÉ + validé sur données réelles (go Jonas)
+Les 2 diffs de la note du 17/07 sont appliqués : (1) `custom_stoploss` offre le floor
+`initial_sl` à CHAQUE appel (plus seulement `after_fill`) — idempotent, freqtrade ne
+resserre que vers le haut ; (2) garde « vie du trade » sur la branche TP_CONTROL_A de
+`check_exit` (miroir G6). +3 tests de régression (203 verts). **Validation smoke**
+(run5, 2021-S1, détail 5m, ARIT_CONTROL_A=1) croisée avec le run A+macro buggé du 13/07
+à conditions identiques : trade sain byte-identique (+6,60 %) · cluster churn 23/04
+7 trades → 1 (+8,89 % au lieu de +7,0 % fragmenté) · le perdant 27/04 sort au stop
+structurel −2,29 % (buggé : passait SOUS son SL sans stop et « gagnait » +1,91 % le
+lendemain — l'illusion du bag-holding en une ligne). SL posé ≈ 2-3,8 % sous l'entrée
+(structurel) au lieu du placeholder −99 %. **PIÈGE découvert au passage** : depuis le
+12-13/07, `data/macro/` (6 fichiers) s'injecte par junction dans TOUTES les lanes → tout
+backtest est silencieusement « +macro ». Le smoke = A+macro (3 entrées vs ~11 attendues
+en A pur — c'est la macro, pas le fix). Pour re-runner le protocole en « A pur » il
+faudra neutraliser la macro explicitement (retirer/renommer data/macro de la lane, ou
+flag dédié — À DÉCIDER avec Jonas avant le re-run). Protocole complet PAS relancé
+(instruction Jonas : fix seul).
+
 ## 2026-07-17 — BUG MAJEUR contrôle A : il a tourné SANS stop-loss (campagne A/B invalidée)
 Découvert en déployant l'outil replay E0 (décision Jonas 17/07). Preuves (zip run2
 15-09-24, 55 trades) : `initial_stop_loss_abs` = −99 % sur TOUS les trades, zéro sortie

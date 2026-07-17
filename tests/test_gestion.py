@@ -302,6 +302,19 @@ def test_control_a_sl_frozen_and_grules_inert(monkeypatch):
     assert gestion.check_exit(trade, row67, dead, tp2=None) is None
 
 
+def test_control_a_ignores_pre_entry_candle(monkeypatch):
+    """Garde "vie du trade" (fix 2026-07-18, BUILD_NOTES 17/07) : un high >= TP porte par une
+    bougie ANTERIEURE a l'entree ne sort pas a t+0 (14 churns mesures campagne 11/07)."""
+    monkeypatch.setattr(params, "CONTROL_A_MODE", True)
+    trade = _Trade(open_rate=100.0, stop_loss=95.0, open_date_utc=_hours(2))
+    st = TradeState(initial_sl=95.0)
+    tp = 100.0 + params.TP1_R * (100.0 - 95.0)
+    row_before = _row(date=_hours(1), high=tp + 10.0)     # cloturee avant l'entree
+    assert gestion.check_exit(trade, row_before, st, tp2=None) is None
+    row_after = _row(date=_hours(2), high=tp)             # 1re bougie de la vie du trade
+    assert gestion.check_exit(trade, row_after, st, tp2=None) == "TP_CONTROL_A"
+
+
 def test_control_a_flag_false_keeps_existing_behavior():
     assert params.CONTROL_A_MODE is False               # defaut = produit B
     trade = _Trade(open_rate=100.0, stop_loss=95.0)

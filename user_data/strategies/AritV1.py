@@ -147,10 +147,14 @@ class AritV1(IStrategy):
     def custom_stoploss(self, pair, trade, current_rate, after_fill, **kwargs):
         row = self._closed_1h_row(pair)
         state = self._trade_state(trade)
-        # SL initial applique a l'entree ; si custom_data pas encore ecrit (avant order_filled),
-        # initial_sl == 0 => None (on garde le stoploss par defaut, jamais un floor a ~0).
+        # Floor = SL initial structurel, offert a CHAQUE appel — PAS seulement after_fill :
+        # l'appel after_fill precede l'ecriture du custom_data par order_filled, donc un floor
+        # conditionne a after_fill n'est JAMAIS pose (bug campagne A/B — controle A sans stop
+        # 8,5 ans, BUILD_NOTES 2026-07-17). Idempotent : freqtrade ne bouge le SL que vers le
+        # haut, le floor est ignore des qu'un G-rule l'a depasse. initial_sl == 0 (custom_data
+        # pas encore ecrit) => None, jamais un floor a ~0.
         floor = None
-        if after_fill and state.initial_sl:
+        if state.initial_sl:
             floor = stoploss_from_absolute(state.initial_sl, current_rate)
         if row is None:
             return floor
