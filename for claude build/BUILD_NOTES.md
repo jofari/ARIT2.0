@@ -1,5 +1,24 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-19 — campagne corrigée A/B pur + rapport edge & G-rules (research/edge_2026-07/)
+Demande Jonas : analyse marché (institutions/whales) + idées d'edge + refonte G rules + rapport
+Discord. Runs post-fix SL, **macro NEUTRALISÉE par renommage de `data/macro` puis RESTAURÉE**
+(méthode validée pour « A pur » : `macro_unavailable` journalisé — tranche le « À DÉCIDER » du
+18/07). Verdicts : **A pur corrigé +0,12 %, PF 1,00, 128 trades, p=0,99 → edge d'entrée NUL**
+(le « +40 % » était bien l'artefact du bug ; seul 2021 est porteur (+65 %) ; la « famine
+2023-2026 » disparaît : 56 épisodes, ≈ flat). **B pur corrigé −17,38 %, PF 0,72, 187 trades ≈ B
+buggé** (le bug ne touchait presque pas B → les ablations du 11/07 restent valides). R-space
+(`research/edge_2026-07/policy_sim.py`, 12 politiques × 123 épisodes) : toute gestion à l'échelle
+1h ≤ 0 (même chandelier 8×ATR) ; TP1+giveback50 = +0,26R mais **+0,00R sans son top trade** →
+aucune gestion ne crée d'edge sur substrat nul (martingale docs/01 confirmée sur 8,5 ans).
+Découverte : le stop initial 03.3 est ~2× trop large pour le profil burst réel (MAE gagnants
+médian −0,25R) → à demi-distance, E ×20 brut à risque constant — chantier ENTRÉE prioritaire.
+Proposition G-set v2 (supprimer G1/G2/G3/G5/G6, garder G4+G7, ajouter G-giveback) + 11 idées
+d'edge taguées (Polymarket = la donnée consensus qui manquait à l'arbre v0 ; domaine DNS-bloqué
+FR/ANJ, lecture contournée via DoH — dépendance d'infra à assumer) : voir RAPPORT.md, envoyé sur
+Discord (embed + pièce jointe). **AUCUNE modif code/spec** — décisions Jonas en attente (G-set
+v2, ordre de chantier §5 du rapport).
+
 ## 2026-07-18 — fix contrôle A LIVRÉ + validé sur données réelles (go Jonas)
 Les 2 diffs de la note du 17/07 sont appliqués : (1) `custom_stoploss` offre le floor
 `initial_sl` à CHAQUE appel (plus seulement `after_fill`) — idempotent, freqtrade ne
