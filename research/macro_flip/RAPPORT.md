@@ -172,6 +172,98 @@ l'intervalle est inexploitable.
    perdantes** (−6 406, −2 024, −2 892, +212) — c'est le drawdown de 24,3 % sur 196 jours.
    Le signal ne fonctionne pas sur la période récente.
 
+## 5 bis. « Améliorer le management pour une V1 » — mesuré, et ça ne marche pas
+
+> Demande de Jonas le 27/07 après lecture des résultats. Testé avec
+> `research/macro_flip/gestion_sim.py` : **22 politiques de sortie × 6 règles de taille**,
+> rejouées bougie par bougie (4h) sur les 12 épisodes, stop touché en intrabar évalué
+> avant tout le reste, funding accru sur le notionnel courant, équité marquée au marché.
+
+### D'abord, une correction importante sur le drawdown
+
+**Le vrai drawdown n'est pas 24,3 %, c'est 49,2 %** (61,8 % en tout-perp).
+
+Le chiffre de freqtrade est calculé sur la courbe des **trades clôturés** : entre deux
+clôtures espacées de 729 jours, il ne voit rien. Marqué au marché bougie par bougie, le
+creux réel est le krach de mai-juillet 2021 traversé en position. **Piège de mesure à
+retenir pour tout backtest à positions longues.**
+
+### Le résultat : rien n'améliore HOLD
+
+Exécution spot (la recommandée), extraits classés par performance :
+
+| Politique de sortie | Perf | DD max | Coupes | **Sans top 2** |
+|---|---|---|---|---|
+| SL 12×ATR | +621,8 % | 49,2 % | 3/12 | +12,1 % |
+| time-stop 90 bougies si perdant | +616,4 % | 49,2 % | 6/12 | +11,2 % |
+| **HOLD (aucune gestion)** | **+579,0 %** | **49,2 %** | **0/12** | **+5,4 %** |
+| BE après +20 % / +50 % | +579,0 % | 49,2 % | 0/12 | +5,4 % |
+| SL 8×ATR | +541,2 % | 49,2 % | 5/12 | −0,5 % |
+| SL 3×ATR | +452,8 % | 49,2 % | 8/12 | −14,2 % |
+| giveback 50 % | +259,3 % | 50,6 % | 4/12 | −1,8 % |
+| chandelier 12×ATR après +50 % | +101,1 % | 30,8 % | 4/12 | +11,4 % |
+| **chandelier 20×ATR** | **+94,6 %** | **18,2 %** | 8/12 | **+37,6 %** |
+| chandelier 12×ATR | +38,9 % | 14,0 % | 11/12 | +1,3 % |
+| chandelier 8×ATR | +16,4 % | 13,6 % | 12/12 | −4,3 % |
+| chandelier 5×ATR | −2,2 % | 8,6 % | 12/12 | −6,9 % |
+
+Trois lectures :
+
+1. **Les seules politiques au-dessus de HOLD (+7 %, +6 %, +3 %) sont dans le bruit** —
+   3 points d'écart sur 12 observations ne veulent rien dire. Et elles ne réduisent
+   **pas du tout** le drawdown (49,2 %, identique à HOLD) : elles ne coupent que des
+   épisodes déjà perdants, sans jamais protéger pendant les gros.
+2. **Toute gestion qui serre détruit le résultat.** Plus le trailing est serré, pire c'est :
+   20×ATR → +94,6 %, 12×ATR → +38,9 %, 8×ATR → +16,4 %, 5×ATR → **−2,2 %**. Le chandelier
+   à 5×ATR coupe les 12 épisodes sur 12 : il transforme un système de tendance en machine
+   à frais.
+3. **Le breakeven ne se déclenche jamais** (perf identique à HOLD au centième) : aucun
+   épisode ne revient sous son prix d'entrée après avoir gagné 20 %.
+
+### Pourquoi c'est structurel, pas un mauvais réglage
+
+**La valeur du signal EST la durée de détention.** 99 % du résultat vient de deux
+tendances de 2 ans ; toute règle qui sort tôt coupe exactement ce qui rapporte. C'est
+l'inverse exact du diagnostic du 17/07 sur les entrées techniques (burst momentum rapide,
+substrat nul) — donc **on ne peut pas recycler les G-rules ici**, elles sont conçues pour
+un profil de trade opposé.
+
+### La taille non plus (6 règles testées, sorties inchangées)
+
+| Règle de taille | Perf | DD max | **Perf/DD** | Fraction moy. |
+|---|---|---|---|---|
+| **fixe 50 % (actuel)** | +579,0 % | 49,2 % | **11,77** | 0,50 |
+| vol-target 35 % (cap 75 %) | +595,1 % | 51,3 % | 11,59 | 0,69 |
+| vol-target 35 % (cap 100 %) | +622,1 % | 54,4 % | 11,43 | 0,78 |
+| proportionnel au score macro | +427,5 % | 47,0 % | 9,09 | 0,40 |
+| score × vol-target 35 % | +186,9 % | 35,7 % | 5,24 | 0,32 |
+
+Le vol-targeting achète du rendement en achetant proportionnellement autant de drawdown :
+le ratio ne bouge pas. **Le 50 % fixe est déjà le meilleur des six.** Et sizer par la force
+du score macro (+2 vs +5) **dégrade** — l'intensité du score ne porte pas d'information.
+
+### La seule piste qui mérite un second regard
+
+**Chandelier 20×ATR** : +94,6 % seulement, mais **DD 18,2 %** et surtout
+**+37,6 % sans les 2 meilleurs épisodes** — sept fois la robustesse de HOLD (+5,4 %).
+C'est la seule règle dont le résultat ne repose pas sur deux coups de chance. En échange
+elle abandonne les 4/5 de la performance. À garder en tête si l'objectif de la V1 est
+« survivable » plutôt que « spectaculaire en backtest » — mais à ce niveau de rendement
+(10,7 %/an), le buy & hold reste devant.
+
+### Conclusion sur le management
+
+**Il n'y a pas de gain de management à aller chercher ici.** Le classement des leviers
+réellement mesurés, par impact décroissant :
+
+| Levier | Gain mesuré | Statut |
+|---|---|---|
+| **Passer les jambes longues en SPOT** | **+267 % → +579 %** | identifié, non implémenté |
+| Augmenter le nombre d'observations (variante NEUTRE : 134 trades) | — | non exploré |
+| Valider les seuils en walk-forward | — | **jamais fait** |
+| Gestion des sorties (22 politiques) | **≈ 0**, dans le bruit | testé, négatif |
+| Règles de taille (6 variantes) | **≈ 0**, le fixe gagne | testé, négatif |
+
 ## 6. Réserves méthodologiques
 
 - **Calibration in-sample** : les seuils de docs/06 §6.2 (±0,5 % DXY / 20 j, ±0,10 pt taux /
@@ -188,23 +280,42 @@ l'intervalle est inexploitable.
   (modèle validé à 0,3 pt près contre freqtrade sur le scénario A). Un vrai run spot
   changerait les chiffres à la marge (frais, slippage).
 - **Une seule paire, un seul marché** : BTC. Aucune validation croisée.
+- **Simulation de gestion (§5 bis)** : `gestion_sim.py` reproduit HOLD à +579 % contre
+  +577 % pour le calcul analytique et +263,5 % (tout-perp) contre +268 % — écart < 2 pt,
+  modèle validé. Deux hypothèses pessimistes assumées : après une sortie anticipée on
+  reste **en cash jusqu'au flip macro suivant** (aucune ré-entrée dans l'épisode), et le
+  stop est testé en intrabar avant toute autre règle. Une politique avec ré-entrée
+  ferait mieux que ce qui est mesuré ici — mais aucune ne s'approche assez de HOLD pour
+  que ça change le classement.
 
 ## 7. Ce que je ferais ensuite (rien n'est lancé sans ton accord)
 
-1. **Le moins cher et le plus utile** : re-tester le même signal en **walk-forward** —
-   calibrer les seuils sur 2020-2022, tester sur 2023-2026. C'est le seul moyen de savoir
-   si le p = 0,095 est du signal ou de la sur-calibration.
-2. **Augmenter n** : appliquer le même signal macro à ETH, SOL, BNB, et à des horizons plus
-   courts (sortie sur NEUTRE = variante déjà codée derrière `ARIT_MACRO_FLAT_NEUTRE=1`).
-   12 observations, ce n'est pas un échantillon.
-3. **Décomposer les 5 composants** : ablation un par un pour voir lequel porte le signal
-   (le rapport du 19/07 soupçonnait déjà le funding d'être contre-productif en long-only).
-4. **Si ça survit** : le signal macro devient un *modulateur d'exposition* (0 % / 50 % /
+Dans cet ordre — le management est volontairement absent, §5 bis montre qu'il n'y a rien
+à y gagner.
+
+1. **Passer les jambes longues en spot.** Seul changement au gain mesuré et important
+   (+267 % → +579 %). Ça implique une config multi-marchés (spot pour les longs, futures
+   pour les shorts) : c'est du travail d'exécution, pas de stratégie. **Le seul chantier
+   V1 que les mesures justifient aujourd'hui.**
+2. **Walk-forward des seuils 06.2** : calibrer sur 2020-2022, tester sur 2023-2026. C'est
+   le seul moyen de savoir si le p = 0,095 est du signal ou de la sur-calibration. Tant que
+   ce n'est pas fait, **aucune V1 ne devrait partir en dry-run**.
+3. **Augmenter n** : le même signal sur ETH, SOL, BNB, et la variante `ARIT_MACRO_FLAT_NEUTRE=1`
+   (134 trades — la seule version avec un échantillon mesurable). 12 observations, ce n'est
+   pas un échantillon, c'est une anecdote.
+4. **Ablation des 5 composants** : lequel porte le signal ? Le rapport du 19/07 soupçonnait
+   déjà le funding d'être contre-productif en long-only, et le §5 bis montre que l'intensité
+   du score ne porte aucune information exploitable pour la taille.
+5. **Si ça survit** : le signal macro devient un *modulateur d'exposition* (0 % / 50 % /
    100 % spot) plutôt qu'un déclencheur de trades — c'est là que sa lenteur est un atout.
 
 ## Reproduire
 
 ```powershell
+# gestion : 22 politiques de sortie, puis 6 regles de taille
+& C:\Users\jofar\venvs\arit\Scripts\python.exe research/macro_flip/gestion_sim.py --spot
+& C:\Users\jofar\venvs\arit\Scripts\python.exe research/macro_flip/gestion_sim.py --spot --taille
+
 # run principal (tout-perp, on garde la position en NEUTRE)
 & C:\Users\jofar\venvs\arit\Scripts\freqtrade.exe backtesting --strategy MacroFlip `
   -c research/macro_flip/config.macro_flip.json --timerange 20200101-20260713 `

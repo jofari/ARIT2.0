@@ -24,6 +24,24 @@ uniforme sur les 7 jours). Réserves : seuils 06.2 jamais validés hors échanti
 stablecoins DefiLlama reconstruite rétroactivement (biais point-in-time résiduel).
 **Aucune décision prise** — suites proposées §7 du RAPPORT (walk-forward d'abord), en
 attente de Jonas.
+**Suite le même jour — « améliorer le management pour une V1 » : MESURÉ, ça ne marche pas.**
+`research/macro_flip/gestion_sim.py` : 22 politiques de sortie × 6 règles de taille rejouées
+bougie par bougie sur les 12 épisodes. (a) **Correction de mesure importante : le vrai
+drawdown est 49,2 % (spot) / 61,8 % (perp), pas 24,3 %** — le chiffre freqtrade est calculé
+sur la courbe des trades CLÔTURÉS, donc aveugle entre deux clôtures espacées de 729 j.
+Piège à retenir pour tout backtest à positions longues. (b) Aucune politique ne bat HOLD de
+façon crédible : les 3 meilleures (SL 12xATR +622 %, time-stop +616 %, SL 5xATR +599 % vs
+HOLD +579 %) sont dans le bruit à n=12 **et ne réduisent pas le DD d'un point**. (c) Tout
+trailing serré détruit : chandelier 20xATR +95 %, 12xATR +39 %, 8xATR +16 %, 5xATR **−2 %**
+(12 coupes sur 12). (d) Le BE ne se déclenche jamais. (e) Taille : le **50 % fixe est déjà
+le meilleur** des 6 (perf/DD 11,77) ; le vol-targeting achète du rendement et autant de DD ;
+sizer par la force du score macro DÉGRADE (l'intensité du score ne porte pas d'info).
+**Raison structurelle : la valeur du signal EST la durée de détention** (99 % du résultat =
+2 tendances de 2 ans) — c'est l'inverse du burst rapide diagnostiqué le 17/07, donc **les
+G-rules ne sont pas recyclables ici**. Seule piste notable : chandelier 20xATR, +95 % mais
+DD 18,2 % et **+37,6 % sans les 2 meilleurs épisodes** (vs +5,4 % pour HOLD) = la seule règle
+dont le résultat ne tient pas à 2 coups de chance. **Classement des leviers réels : spot pour
+les longs (+312 pts) >> n plus grand > walk-forward >> gestion (≈ 0) = taille (≈ 0).**
 
 ## 2026-07-19 — campagne corrigée A/B pur + rapport edge & G-rules (research/edge_2026-07/)
 Demande Jonas : analyse marché (institutions/whales) + idées d'edge + refonte G rules + rapport
