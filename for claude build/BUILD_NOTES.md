@@ -1,5 +1,30 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-07-27 — MacroFlip : le Macro Analyst seul, sans technique ni gestion (research/macro_flip/)
+Expérience Jonas : isoler la couche macro après le verdict « edge d'entrée NUL » du 19/07.
+Règle nue — PORTEUR→long, HOSTILE→short (perp), NEUTRE→on garde ; ni SL ni TP, 50 % de
+l'équité, levier 1x, BTC/USDT:USDT 4h, 2020-01→2026-07 (borne = début des données mark).
+**Aucun code de production touché** (AritV1/arit_lib/docs/config.dry.json intacts) ;
+`user_data/strategies/MacroFlip.py` + `research/macro_flip/` uniquement. Données futures
+téléchargées (5m/4h/mark/funding). **Résultat : +263,5 %, PF 2,80, DD 24,3 %, 12 trades —
+contre un buy & hold à +769 % : perdant contre ne-rien-faire.** Trois découvertes :
+(1) **le funding mange 86 % du profit** (−22 579 USDT, dont −17 193 sur le seul long perp
+de 729 j) — erreur d'EXÉCUTION, pas de signal : mêmes trades avec les jambes longues en
+SPOT ⇒ +577 % (vs +385 % pour un buy & hold à capital égal 50 %) ; **ne jamais porter un
+long multi-mois sur un perpétuel à 1x** ; (2) **tout tient dans 2 trades** (les deux bulls) :
+sans les 2 meilleurs, +5 % sur 6,5 ans ; (3) le short vaut +93 pts vs rester cash, sur
+6 shorts dont 3 gagnants. Significativité : Monte-Carlo directionnel **p = 0,095**
+(percentile 90,5) — pas significatif, MAIS à comparer au p = 0,99 de l'edge d'entrée :
+c'est le premier signal d'ARIT qui n'est pas du bruit manifeste. Bootstrap IC90
+[−2 % ; +7 188 %] = inexploitable (n = 12). **Les 4 dernières positions (déc. 2025 →
+juil. 2026) sont toutes perdantes** = le DD de 24,3 %. Variante `ARIT_MACRO_FLAT_NEUTRE=1`
+(cash en NEUTRE) : 134 trades de 9 j, +69,6 %, PF 1,29 — le churn coûte 194 pts, mais
+c'est la seule version avec un n exploitable. Artefact week-end vérifié et ÉCARTÉ (HOSTILE
+uniforme sur les 7 jours). Réserves : seuils 06.2 jamais validés hors échantillon ; mcap
+stablecoins DefiLlama reconstruite rétroactivement (biais point-in-time résiduel).
+**Aucune décision prise** — suites proposées §7 du RAPPORT (walk-forward d'abord), en
+attente de Jonas.
+
 ## 2026-07-19 — campagne corrigée A/B pur + rapport edge & G-rules (research/edge_2026-07/)
 Demande Jonas : analyse marché (institutions/whales) + idées d'edge + refonte G rules + rapport
 Discord. Runs post-fix SL, **macro NEUTRALISÉE par renommage de `data/macro` puis RESTAURÉE**
