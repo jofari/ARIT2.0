@@ -1,0 +1,54 @@
+{
+  "username": "ARIT recherche",
+  "title": "MacroFlip — le Macro Analyst tout seul (BTC 4h, 2020-2026)",
+  "color": 15769661,
+  "description": "**Verdict : +263,5 % sur 6,5 ans… contre +769 % pour un simple buy & hold.** Tel que demandé (tout en perpétuel), la macro nue perd contre le fait de ne rien faire.\n\nMais la cause n'est pas le signal : c'est le **funding**, qui a mangé **86 % du profit**. Corrigé, ça devient bien plus intéressant — et beaucoup moins concluant qu'il n'y paraît.\n\n*Règle testée : PORTEUR → long · HOSTILE → short (le « put ») · NEUTRE → on garde · ni SL ni TP · 50 % de l'équité · levier 1x.*",
+  "fields": [
+    {
+      "name": "📊 Résultat brut",
+      "value": "+263,5 % · PF 2,80 · DD 24,3 % · **12 trades** · 50 % de gagnants\nBuy & hold sur la même fenêtre : **+769,3 %**",
+      "inline": false
+    },
+    {
+      "name": "💸 Le funding a mangé 86 % du profit",
+      "value": "**−22 579 USDT**, dont **−17 193 sur un seul trade** (le long tenu 729 jours). Le funding est le prix du levier — or on est à 1x, on l'a payé pour rien.\n➜ Leçon : **ne jamais porter un long multi-mois sur un perpétuel.**",
+      "inline": false
+    },
+    {
+      "name": "🔧 Mêmes signaux, longs en SPOT",
+      "value": "```\nTout en perp (backtesté)      +267 %\nLong SPOT + short perp        +577 %  ←\nLong SPOT + cash en HOSTILE   +484 %\nBuy&hold spot 50 % (référence) +385 %\nBuy&hold spot 100 %           +769 %\n```\nÀ capital égal, le signal bat sa référence. Ton « put » vaut **+93 points** vs rester cash.",
+      "inline": false
+    },
+    {
+      "name": "⚠️ Mais tout tient dans 2 trades",
+      "value": "Les 12 positions : **+577 %**\nSans la meilleure : **+92 %**\nSans les 2 meilleures : **+5 %** (en 6,5 ans)\n\nÇa se résume à « être long pendant les deux bulls » — ce que n'importe quel filtre de tendance lent aurait fait.",
+      "inline": false
+    },
+    {
+      "name": "🎲 Est-ce que ça bat le hasard ?",
+      "value": "Monte-Carlo directionnel (20 000 tirages) : percentile 90,5, **p = 0,095** → *pas* significatif au seuil usuel.\nBootstrap IC 90 % : [−2 % ; +7 188 %] — inexploitable avec n = 12.\n\n**À noter quand même :** l'edge d'entrée technique était à p = 0,99 (bruit pur). Celui-ci est à p = 0,095. C'est le premier signal d'ARIT qui n'est pas du bruit manifeste.",
+      "inline": false
+    },
+    {
+      "name": "🔴 Alerte fraîcheur",
+      "value": "Les **4 dernières positions** (déc. 2025 → juil. 2026) sont **toutes perdantes** : −6 406, −2 024, −2 892, +212 USDT. C'est le drawdown de 24,3 % sur 196 jours. Le signal ne marche pas sur la période récente.",
+      "inline": false
+    },
+    {
+      "name": "🔁 Ta règle « garder en NEUTRE » était la bonne",
+      "value": "Variante testée (repasser cash en NEUTRE) : 134 trades de 9 j, +69,6 %, PF 1,29.\nLe churn coûte **194 points**.",
+      "inline": false
+    },
+    {
+      "name": "✅ Vérifications",
+      "value": "Flip sur la même bougie · aucune sortie par SL/ROI/liquidation · point-in-time respecté (jour J n'utilise que ≤ J−1) · artefact week-end écarté (HOSTILE uniforme sur les 7 jours) · **203 tests verts, aucun code de production touché**.",
+      "inline": false
+    },
+    {
+      "name": "➡️ Suite proposée (rien n'est lancé)",
+      "value": "**Walk-forward** : calibrer les seuils sur 2020-2022, tester sur 2023-2026. C'est le seul moyen de savoir si le p = 0,095 est du signal ou de la sur-calibration. Puis : augmenter n (ETH/SOL/BNB), et ablation des 5 composants macro.",
+      "inline": false
+    }
+  ],
+  "footer": "Rapport complet en pièce jointe · commit 5a73273 · research/macro_flip/"
+}
