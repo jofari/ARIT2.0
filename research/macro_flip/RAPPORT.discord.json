@@ -1,54 +1,44 @@
 {
   "username": "ARIT recherche",
-  "title": "MacroFlip — le Macro Analyst tout seul (BTC 4h, 2020-2026)",
-  "color": 15769661,
-  "description": "**Verdict : +263,5 % sur 6,5 ans… contre +769 % pour un simple buy & hold.** Tel que demandé (tout en perpétuel), la macro nue perd contre le fait de ne rien faire.\n\nMais la cause n'est pas le signal : c'est le **funding**, qui a mangé **86 % du profit**. Corrigé, ça devient bien plus intéressant — et beaucoup moins concluant qu'il n'y paraît.\n\n*Règle testée : PORTEUR → long · HOSTILE → short (le « put ») · NEUTRE → on garde · ni SL ni TP · 50 % de l'équité · levier 1x.*",
+  "title": "MacroFlip — « améliorer le management pour une V1 » : mesuré, ça ne marche pas",
+  "color": 15158332,
+  "description": "J'ai testé **22 politiques de sortie × 6 règles de taille** sur les 12 épisodes macro, rejoués bougie par bougie.\n\n**Résultat : aucun gain de management à aller chercher.** Et au passage j'ai trouvé une erreur de mesure importante dans le rapport précédent.\n\n*Rapport complet mis à jour en pièce jointe (§5 bis).*",
   "fields": [
     {
-      "name": "📊 Résultat brut",
-      "value": "+263,5 % · PF 2,80 · DD 24,3 % · **12 trades** · 50 % de gagnants\nBuy & hold sur la même fenêtre : **+769,3 %**",
+      "name": "🚨 D'abord : le vrai drawdown est 49 %, pas 24 %",
+      "value": "Le 24,3 % de freqtrade est calculé sur la courbe des **trades clôturés**. Entre deux clôtures espacées de **729 jours**, il ne voit rien.\n\nMarqué au marché bougie par bougie : **49,2 % en spot, 61,8 % en tout-perp**. Le creux réel, c'est le krach de mai-juillet 2021 traversé en position.\n\n➜ Piège de mesure pour tout backtest à positions longues.",
       "inline": false
     },
     {
-      "name": "💸 Le funding a mangé 86 % du profit",
-      "value": "**−22 579 USDT**, dont **−17 193 sur un seul trade** (le long tenu 729 jours). Le funding est le prix du levier — or on est à 1x, on l'a payé pour rien.\n➜ Leçon : **ne jamais porter un long multi-mois sur un perpétuel.**",
+      "name": "📉 Aucune politique ne bat HOLD",
+      "value": "```\nSL 12xATR            +622 %   DD 49 %\ntime-stop 90 bougies +616 %   DD 49 %\nHOLD (rien)          +579 %   DD 49 %  ←\nSL 8xATR             +541 %   DD 49 %\ngiveback 50 %        +259 %   DD 51 %\nchandelier 20xATR     +95 %   DD 18 %\nchandelier 12xATR      +39 %   DD 14 %\nchandelier 5xATR       -2 %   DD  9 %\n```\nLes 3 au-dessus de HOLD sont **dans le bruit** (3 à 7 pts sur 12 observations) et ne réduisent **pas d'un point** le drawdown : elles ne coupent que des épisodes déjà perdants.",
       "inline": false
     },
     {
-      "name": "🔧 Mêmes signaux, longs en SPOT",
-      "value": "```\nTout en perp (backtesté)      +267 %\nLong SPOT + short perp        +577 %  ←\nLong SPOT + cash en HOSTILE   +484 %\nBuy&hold spot 50 % (référence) +385 %\nBuy&hold spot 100 %           +769 %\n```\nÀ capital égal, le signal bat sa référence. Ton « put » vaut **+93 points** vs rester cash.",
+      "name": "🔪 Plus le trailing serre, pire c'est",
+      "value": "20×ATR → +95 % · 12×ATR → +39 % · 8×ATR → +16 % · 5×ATR → **−2 %** (12 coupes sur 12).\n\nLe breakeven, lui, ne se déclenche **jamais** : aucun épisode ne revient sous son entrée après avoir pris 20 %.",
       "inline": false
     },
     {
-      "name": "⚠️ Mais tout tient dans 2 trades",
-      "value": "Les 12 positions : **+577 %**\nSans la meilleure : **+92 %**\nSans les 2 meilleures : **+5 %** (en 6,5 ans)\n\nÇa se résume à « être long pendant les deux bulls » — ce que n'importe quel filtre de tendance lent aurait fait.",
+      "name": "⚖️ La taille non plus (6 règles testées)",
+      "value": "```\nfixe 50 % (actuel)    perf/DD 11,77  ←\nvol-target 35 % c75   perf/DD 11,59\nvol-target 35 % c100  perf/DD 11,43\nprop. au score macro  perf/DD  9,09\nscore x vol-target    perf/DD  5,24\n```\nLe **50 % fixe est déjà le meilleur des six**. Le vol-targeting achète du rendement et exactement autant de drawdown. Et sizer selon la force du score macro (+2 vs +5) **dégrade** : l'intensité du score ne porte aucune info.",
       "inline": false
     },
     {
-      "name": "🎲 Est-ce que ça bat le hasard ?",
-      "value": "Monte-Carlo directionnel (20 000 tirages) : percentile 90,5, **p = 0,095** → *pas* significatif au seuil usuel.\nBootstrap IC 90 % : [−2 % ; +7 188 %] — inexploitable avec n = 12.\n\n**À noter quand même :** l'edge d'entrée technique était à p = 0,99 (bruit pur). Celui-ci est à p = 0,095. C'est le premier signal d'ARIT qui n'est pas du bruit manifeste.",
+      "name": "🧩 Pourquoi c'est structurel, pas un mauvais réglage",
+      "value": "**La valeur du signal EST la durée de détention.** 99 % du résultat vient de deux tendances de 2 ans — toute règle qui sort tôt coupe exactement ce qui rapporte.\n\nC'est l'**inverse exact** du diagnostic du 17/07 sur les entrées techniques (burst momentum rapide sur substrat nul). ➜ **Les G-rules ne sont pas recyclables ici**, elles sont faites pour un profil de trade opposé.",
       "inline": false
     },
     {
-      "name": "🔴 Alerte fraîcheur",
-      "value": "Les **4 dernières positions** (déc. 2025 → juil. 2026) sont **toutes perdantes** : −6 406, −2 024, −2 892, +212 USDT. C'est le drawdown de 24,3 % sur 196 jours. Le signal ne marche pas sur la période récente.",
+      "name": "👀 La seule piste qui mérite un second regard",
+      "value": "**Chandelier 20×ATR** : +94,6 % seulement, mais DD 18,2 % et surtout **+37,6 % sans les 2 meilleurs épisodes** — contre +5,4 % pour HOLD.\n\nC'est la seule règle dont le résultat ne repose pas sur deux coups de chance. En échange elle abandonne les 4/5 de la performance (10,7 %/an). À retenir si l'objectif V1 est « survivable » plutôt que « spectaculaire en backtest ».",
       "inline": false
     },
     {
-      "name": "🔁 Ta règle « garder en NEUTRE » était la bonne",
-      "value": "Variante testée (repasser cash en NEUTRE) : 134 trades de 9 j, +69,6 %, PF 1,29.\nLe churn coûte **194 points**.",
-      "inline": false
-    },
-    {
-      "name": "✅ Vérifications",
-      "value": "Flip sur la même bougie · aucune sortie par SL/ROI/liquidation · point-in-time respecté (jour J n'utilise que ≤ J−1) · artefact week-end écarté (HOSTILE uniforme sur les 7 jours) · **203 tests verts, aucun code de production touché**.",
-      "inline": false
-    },
-    {
-      "name": "➡️ Suite proposée (rien n'est lancé)",
-      "value": "**Walk-forward** : calibrer les seuils sur 2020-2022, tester sur 2023-2026. C'est le seul moyen de savoir si le p = 0,095 est du signal ou de la sur-calibration. Puis : augmenter n (ETH/SOL/BNB), et ablation des 5 composants macro.",
+      "name": "🎯 Les vrais leviers, classés par impact mesuré",
+      "value": "**1. Passer les jambes longues en SPOT** — +267 % → +579 %. Le seul chantier V1 que les mesures justifient aujourd'hui.\n**2. Augmenter n** — 12 épisodes, c'est une anecdote, pas un échantillon.\n**3. Walk-forward des seuils** — jamais fait. Tant que ce n'est pas fait, aucune V1 ne devrait partir en dry-run.\n**4. Gestion des sorties** — ≈ 0, testé, négatif.\n**5. Règles de taille** — ≈ 0, le fixe gagne.",
       "inline": false
     }
   ],
-  "footer": "Rapport complet en pièce jointe · commit 5a73273 · research/macro_flip/"
+  "footer": "203 tests verts · aucun code de production touché · commit 03e8457 · research/macro_flip/"
 }
