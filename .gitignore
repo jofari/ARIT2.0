@@ -30,3 +30,7 @@ ARIT_PDR_v3/
 ARIT_claudecode_pack/
 ARIT_PDR_v3_README.md
 PROMPT_ARIT_BUILD.md
+
+# Rapports de backtest generes (research/_reporting) : resultats de trading, depot PUBLIC.
+# Le HTML se regenere en une commande, il n'a pas a etre versionne ni publie.
+RAPPORT_TRADES*.html

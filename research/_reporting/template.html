@@ -1,0 +1,610 @@
+<title>__TITLE__</title>
+<style>
+:root{
+  --paper:#f3f5f5; --panel:#ffffff; --ink:#131a1d; --ink-2:#3d4a4f; --muted:#6b7a80;
+  --rule:#dbe2e3; --rule-soft:#e9eeee;
+  --long:#0e6d61; --long-soft:#d3e8e4; --short:#9a3552; --short-soft:#f0dbe1;
+  --flat:#95a2a7; --flat-soft:#e6eaea; --accent:#a8721a; --accent-soft:#f3e6cd;
+  --shadow:0 1px 2px rgba(19,26,29,.06), 0 8px 24px -16px rgba(19,26,29,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#0d1315; --panel:#131b1e; --ink:#e2eaeb; --ink-2:#b3c2c5;
+    --muted:#87979c; --rule:#253236; --rule-soft:#1c2629;
+    --long:#41b5a0; --long-soft:#123230; --short:#d0718c; --short-soft:#3a1f28;
+    --flat:#7d8b90; --flat-soft:#1f2a2d; --accent:#d5a445; --accent-soft:#33280f;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="light"]{
+  --paper:#f3f5f5; --panel:#ffffff; --ink:#131a1d; --ink-2:#3d4a4f; --muted:#6b7a80;
+  --rule:#dbe2e3; --rule-soft:#e9eeee;
+  --long:#0e6d61; --long-soft:#d3e8e4; --short:#9a3552; --short-soft:#f0dbe1;
+  --flat:#95a2a7; --flat-soft:#e6eaea; --accent:#a8721a; --accent-soft:#f3e6cd;
+  --shadow:0 1px 2px rgba(19,26,29,.06), 0 8px 24px -16px rgba(19,26,29,.28);
+}
+:root[data-theme="dark"]{
+  --paper:#0d1315; --panel:#131b1e; --ink:#e2eaeb; --ink-2:#b3c2c5; --muted:#87979c;
+  --rule:#253236; --rule-soft:#1c2629;
+  --long:#41b5a0; --long-soft:#123230; --short:#d0718c; --short-soft:#3a1f28;
+  --flat:#7d8b90; --flat-soft:#1f2a2d; --accent:#d5a445; --accent-soft:#33280f;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1060px; margin:0 auto; padding:0 24px 96px}
+h1,h2,h3,.serif{font-family:"Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif; font-weight:600; text-wrap:balance}
+.num{font-family:"Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace; font-variant-numeric:tabular-nums}
+
+/* ---------- entete ---------- */
+header.masthead{border-bottom:1px solid var(--rule); margin-bottom:40px; padding:56px 0 28px}
+.eyebrow{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 14px}
+h1{font-size:clamp(30px,4.4vw,46px); line-height:1.12; margin:0 0 14px; letter-spacing:-.01em}
+.lede{font-size:18px; color:var(--ink-2); max-width:62ch; margin:0}
+.meta{display:flex; flex-wrap:wrap; gap:8px 28px; margin-top:26px; font-size:13px; color:var(--muted)}
+.meta b{color:var(--ink); font-weight:600}
+
+section{margin:56px 0 0}
+h2{font-size:26px; margin:0 0 6px; letter-spacing:-.01em}
+h2 .n{color:var(--muted); font-size:16px; margin-right:10px; font-family:"Cascadia Mono",Consolas,monospace}
+.sub{color:var(--muted); font-size:14px; margin:0 0 22px; max-width:70ch}
+p{max-width:68ch}
+
+/* ---------- regle du jeu ---------- */
+.rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin:22px 0}
+.rule-card{background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:16px 18px}
+.rule-card .k{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.rule-card .v{font-size:15px; margin-top:6px; color:var(--ink)}
+.tag{display:inline-block; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+     padding:2px 8px; border-radius:2px; font-weight:600}
+.tag.long{background:var(--long-soft); color:var(--long)}
+.tag.short{background:var(--short-soft); color:var(--short)}
+.tag.flat{background:var(--flat-soft); color:var(--flat)}
+
+/* ---------- table seuils ---------- */
+.scroller{overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--rule-soft)}
+thead th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600;
+         border-bottom:1px solid var(--rule); white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.n{text-align:right; font-family:"Cascadia Mono",Consolas,monospace; font-variant-numeric:tabular-nums; white-space:nowrap}
+.pos{color:var(--long)} .neg{color:var(--short)}
+
+/* ---------- index des trades ---------- */
+.index-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:10px; margin-top:18px}
+a.chip{display:block; text-decoration:none; color:inherit; background:var(--panel);
+  border:1px solid var(--rule); border-left:3px solid var(--flat); border-radius:2px; padding:9px 12px}
+a.chip.l{border-left-color:var(--long)} a.chip.s{border-left-color:var(--short)}
+a.chip:hover{border-color:var(--accent)}
+a.chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+a.chip .t{font-size:12px; color:var(--muted)}
+a.chip .p{font-size:15px; font-family:"Cascadia Mono",Consolas,monospace; font-variant-numeric:tabular-nums}
+
+/* ---------- fiche trade ---------- */
+.trade{background:var(--panel); border:1px solid var(--rule); border-radius:3px;
+       margin:22px 0; box-shadow:var(--shadow); scroll-margin-top:16px; overflow:hidden}
+.trade > .head{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 18px;
+       padding:18px 22px; border-bottom:1px solid var(--rule); border-left:4px solid var(--flat)}
+.trade.l > .head{border-left-color:var(--long)} .trade.s > .head{border-left-color:var(--short)}
+.trade .title{font-size:20px; font-family:"Palatino Linotype",Palatino,Georgia,serif; margin:0}
+.trade .dates{color:var(--muted); font-size:13px}
+.trade .pnl{margin-left:auto; font-size:19px; font-family:"Cascadia Mono",Consolas,monospace;
+            font-variant-numeric:tabular-nums; font-weight:600}
+.body{padding:18px 22px 22px}
+.chart-wrap{margin:0 0 6px}
+svg{display:block; width:100%; height:auto; overflow:visible}
+.legend{display:flex; flex-wrap:wrap; gap:6px 18px; font-size:12px; color:var(--muted); margin:2px 0 18px}
+.legend i{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:-1px}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+@media (max-width:760px){ .cols{grid-template-columns:1fr} }
+.ledger{border:1px solid var(--rule); border-radius:2px; overflow:hidden}
+.ledger .lh{padding:9px 13px; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+            color:var(--muted); border-bottom:1px solid var(--rule); background:var(--rule-soft)}
+.ledger table{min-width:0; font-size:13px}
+.ledger td,.ledger th{padding:7px 13px}
+.score{display:inline-block; min-width:26px; text-align:center; border-radius:2px; padding:1px 5px;
+       font-family:"Cascadia Mono",Consolas,monospace; font-size:12px; font-weight:600}
+.score.p{background:var(--long-soft); color:var(--long)}
+.score.z{background:var(--flat-soft); color:var(--flat)}
+.score.m{background:var(--short-soft); color:var(--short)}
+.total-row td{border-top:1px solid var(--rule); font-weight:600; background:var(--rule-soft)}
+.verdict{margin-top:16px; padding:13px 16px; border-left:3px solid var(--accent);
+         background:var(--accent-soft); font-size:14.5px; border-radius:0 2px 2px 0}
+.verdict b{font-weight:600}
+.note{font-size:13px; color:var(--muted); margin-top:12px}
+.foot{margin-top:64px; padding-top:22px; border-top:1px solid var(--rule); font-size:13px; color:var(--muted)}
+code{font-family:"Cascadia Mono",Consolas,monospace; font-size:.9em; background:var(--rule-soft); padding:1px 5px; border-radius:2px}
+</style>
+
+<div class="wrap">
+<header class="masthead">
+  <p class="eyebrow">__EYEBROW__</p>
+  <h1>__H1__</h1>
+  <p class="lede">Chaque position du backtest MacroFlip, avec l'état exact des cinq composants
+  macro le jour de l'entrée et le jour de la sortie — la valeur mesurée, le seuil franchi,
+  le score qui en découle, et la courbe du prix traversée.</p>
+  <div class="meta">
+    __META__
+  </div>
+</header>
+
+<section id="regle">
+  <h2>La règle, en entier</h2>
+  <p class="sub">Il n'y a rien d'autre. Aucun stop, aucun objectif, aucune règle de gestion :
+  la seule chose qui ouvre et ferme une position est le régime macro quotidien.</p>
+  <div class="rules">
+    <div class="rule-card"><div class="k">Régime PORTEUR</div><div class="v"><span class="tag long">Long</span> — on achète, ou on garde le long</div></div>
+    <div class="rule-card"><div class="k">Régime HOSTILE</div><div class="v"><span class="tag short">Short</span> — le « put » : on vend à découvert</div></div>
+    <div class="rule-card"><div class="k">Régime NEUTRE</div><div class="v"><span class="tag flat">Rien</span> — on garde la position en cours</div></div>
+    <div class="rule-card"><div class="k">Sortie</div><div class="v">Uniquement le signal inverse. Le flip se fait sur la même bougie 4h.</div></div>
+  </div>
+  <p>Le régime est la <b>somme des cinq composants</b>, chacun noté −1, 0 ou +1 :
+  <span class="num">somme ≥ +2</span> → PORTEUR, <span class="num">somme ≤ −2</span> → HOSTILE,
+  entre les deux → NEUTRE. Les valeurs du jour J ne reflètent que des données ≤ J−1
+  (décalage point-in-time, zéro look-ahead) — c'est pour ça que la date d'un flip
+  est toujours le lendemain du franchissement réel du seuil.</p>
+
+  <div class="scroller" style="margin-top:18px">
+  <table>
+    <thead><tr><th>Composant</th><th>Ce qui est mesuré</th><th>Seuil +1</th><th>Seuil −1</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td><b>DXY</b></td><td>variation sur 20 jours ouvrés</td><td class="n pos">≤ −0,50 %</td><td class="n neg">≥ +0,50 %</td><td>FRED</td></tr>
+      <tr><td><b>Taux Fed</b></td><td>variation absolue sur 60 jours</td><td class="n pos">≤ −0,10 pt</td><td class="n neg">≥ +0,10 pt</td><td>FRED</td></tr>
+      <tr><td><b>Mcap stablecoins</b></td><td>variation sur 30 jours</td><td class="n pos">≥ +2,0 %</td><td class="n neg">≤ −1,0 %</td><td>DefiLlama</td></tr>
+      <tr><td><b>Funding</b></td><td>moyenne 7 j, BTC+ETH, par 8 h</td><td class="n pos">&lt; 0 %</td><td class="n neg">&gt; +0,05 %</td><td>Binance</td></tr>
+      <tr><td><b>Fear &amp; Greed</b></td><td>indice du jour</td><td class="n pos">≥ 45</td><td class="n neg">&lt; 25</td><td>alternative.me</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Un composant dont la donnée a plus de 48 h est forcé à 0 ; si trois composants
+  ou plus sont périmés le même jour, le régime bascule d'office en HOSTILE (fail-safe).
+  Seuils définis dans <code>docs/06 §6.2</code>, valeurs dans <code>arit_lib/params.py</code>.</p>
+</section>
+
+<section id="vue">
+  <h2>__H2_OVERVIEW__</h2>
+  <p class="sub">Prix BTC en échelle logarithmique. Le fond indique le régime macro du jour ;
+  les barres du bas sont les 12 positions, longues au-dessus, courtes en dessous.</p>
+  <div class="trade"><div class="body">
+    <div class="chart-wrap" id="overview"></div>
+    <div class="legend">
+      <span><i style="background:var(--long-soft)"></i>régime PORTEUR</span>
+      <span><i style="background:var(--flat-soft)"></i>régime NEUTRE</span>
+      <span><i style="background:var(--short-soft)"></i>régime HOSTILE</span>
+      <span><i style="background:var(--ink)"></i>BTC (log)</span>
+    </div>
+  </div></div>
+</section>
+
+<section id="capital">
+  <h2>Le capital, jour par jour</h2>
+  <p class="sub">La même période, mais c'est <b>ton compte</b> qui est tracé : capital réévalué
+  chaque jour position ouverte comprise, pas seulement aux clôtures. La zone sombre est
+  l'écart au plus haut atteint — le drawdown réellement traversé.</p>
+  <div class="trade"><div class="body">
+    <div class="chart-wrap" id="equity"></div>
+    <div class="legend" id="equity-legend"></div>
+    <div class="scroller" id="equity-stats" style="margin-top:6px"></div>
+    <p class="note">Le funding, que freqtrade ne donne qu'en total par trade, est réparti au
+    prorata des jours de détention. Ça déplace la courbe de quelques dizaines d'USDT au jour
+    le jour sur les longues positions, jamais le résultat d'un trade ni la forme du creux.</p>
+  </div></div>
+</section>
+
+<section id="index">
+  <h2>__H2_INDEX__</h2>
+  <p class="sub">Rendement de la position sur la mise engagée. Cliquer pour aller à la fiche.</p>
+  <div class="index-grid" id="index-grid"></div>
+</section>
+
+<section id="fiches">
+  <h2>Fiche par fiche</h2>
+  <p class="sub">Pour chaque position : le prix traversé, l'état jour par jour des cinq composants
+  pendant toute la détention, puis le détail chiffré de la décision d'entrée et de celle de sortie.</p>
+  <div id="fiches"></div>
+</section>
+
+<section id="lecture">
+  <h2>Ce que la lecture trade par trade apprend</h2>
+  <div id="lecture-body"></div>
+</section>
+
+<p class="foot">Données : <code>research/macro_flip/trades_hold_neutre.csv</code> (les 12 trades du run principal)
+et <code>arit_lib.macro_regime</code> rejoué sur <code>user_data/data/macro/</code> pour les composants.
+Le PnL inclut le funding, qui est indiqué séparément sur chaque fiche.
+Rapport source complet : <code>research/macro_flip/RAPPORT.md</code>.</p>
+</div>
+
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>
+const DATA = JSON.parse(document.getElementById('payload').textContent);
+const ROWS = DATA.rows, TRADES = DATA.trades;
+const IDX = new Map(ROWS.map((r,i)=>[r.d,i]));
+const NS = 'http://www.w3.org/2000/svg';
+
+const sgn = (v,d,suf)=>(v>=0?'+':'−')+Math.abs(v).toFixed(d).replace('.',',')+suf;
+const COMPS = [
+  {name:'DXY',        fmt:v=>sgn(v*100,2,' %'),   th:'≤ −0,50 % → +1 · ≥ +0,50 % → −1', what:'var. 20 j'},
+  {name:'Taux Fed',   fmt:v=>sgn(v,2,' pt'),      th:'≤ −0,10 → +1 · ≥ +0,10 → −1',     what:'var. 60 j'},
+  {name:'Stablecoins',fmt:v=>sgn(v*100,2,' %'),   th:'≥ +2 % → +1 · ≤ −1 % → −1',       what:'var. 30 j'},
+  {name:'Funding',    fmt:v=>sgn(v*100,4,' %'),   th:'< 0 → +1 · > 0,05 % → −1',        what:'moy. 7 j'},
+  {name:'Fear & Greed',fmt:v=>v.toFixed(0),       th:'≥ 45 → +1 · < 25 → −1',           what:'indice'},
+];
+const REG_FILL = {PORTEUR:'var(--long-soft)', NEUTRE:'var(--flat-soft)', HOSTILE:'var(--short-soft)'};
+const SC_FILL  = {'1':'var(--long)', '0':'var(--flat-soft)', '-1':'var(--short)'};
+
+const el = (t,a={},kids=[])=>{const n=document.createElementNS(NS,t);
+  for(const k in a) n.setAttribute(k,a[k]); kids.forEach(c=>n.appendChild(c)); return n;};
+const fmtD = s=>{const [y,m,d]=s.split('-'); return d+'/'+m+'/'+y;};
+const fmtU = v=>(v>=0?'+':'−')+Math.abs(v).toLocaleString('fr-FR',{maximumFractionDigits:0})+' USDT';
+const fmtP = v=>v.toLocaleString('fr-FR',{maximumFractionDigits:0});
+
+/* --- bandes de regime : agrege les jours consecutifs de meme regime --- */
+function bands(slice){
+  const out=[]; let cur=null;
+  slice.forEach((r,i)=>{ if(!cur||cur.r!==r.r){ if(cur) out.push(cur); cur={r:r.r,a:i,b:i}; } else cur.b=i; });
+  if(cur) out.push(cur); return out;
+}
+
+/* --- graphe prix + bandes de regime --- */
+function priceChart(slice, opts){
+  const W=1000, H=opts.h||220, PL=46, PR=10, PT=8, PB=opts.axis===false?8:22;
+  const iw=W-PL-PR, ih=H-PT-PB;
+  const pts=slice.map(r=>r.c).filter(v=>v!=null);
+  let lo=Math.min(...pts), hi=Math.max(...pts);
+  const log=opts.log!==false;
+  const tr=v=>log?Math.log10(v):v;
+  let a=tr(lo), b=tr(hi); const pad=(b-a)*0.08||1; a-=pad; b+=pad;
+  const x=i=>PL+iw*(slice.length<2?0.5:i/(slice.length-1));
+  const y=v=>PT+ih*(1-(tr(v)-a)/(b-a));
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':opts.label||'prix'});
+
+  bands(slice).forEach(bd=>{
+    const x0=x(bd.a)-(bd.a?0:0), x1=x(bd.b);
+    svg.appendChild(el('rect',{x:x0, y:PT, width:Math.max(x1-x0, iw/slice.length), height:ih,
+      fill:REG_FILL[bd.r], opacity:.85}));
+  });
+  // grille + axe prix
+  const ticks=4;
+  for(let i=0;i<=ticks;i++){
+    const vv=a+(b-a)*i/ticks, price=log?Math.pow(10,vv):vv, yy=PT+ih*(1-i/ticks);
+    svg.appendChild(el('line',{x1:PL,x2:W-PR,y1:yy,y2:yy,stroke:'var(--rule)','stroke-width':1,opacity:.6}));
+    const t=el('text',{x:PL-8,y:yy+4,'text-anchor':'end',fill:'var(--muted)','font-size':11,
+      'font-family':'Cascadia Mono,Consolas,monospace'}); t.textContent=fmtP(price); svg.appendChild(t);
+  }
+  // courbe
+  let d='';
+  slice.forEach((r,i)=>{ if(r.c==null) return; d+=(d?'L':'M')+x(i).toFixed(1)+' '+y(r.c).toFixed(1); });
+  svg.appendChild(el('path',{d, fill:'none', stroke:'var(--ink)','stroke-width':1.6,
+    'stroke-linejoin':'round','stroke-linecap':'round'}));
+  // axe temps
+  if(opts.axis!==false){
+    const n=Math.min(6, slice.length);
+    for(let i=0;i<n;i++){
+      const k=Math.round(i*(slice.length-1)/(n-1));
+      const t=el('text',{x:x(k),y:H-6,'text-anchor':i===0?'start':(i===n-1?'end':'middle'),
+        fill:'var(--muted)','font-size':11,'font-family':'Cascadia Mono,Consolas,monospace'});
+      t.textContent=slice[k].d.slice(0,7); svg.appendChild(t);
+    }
+  }
+  return {svg,x,y,PL,PR,PT,PB,iw,ih,W,H};
+}
+
+/* --- vue d'ensemble --- */
+function overview(){
+  const slice=ROWS.filter(r=>r.d>='2019-12-15');
+  const H=300, ch=priceChart(slice,{h:H,label:'BTC 2020-2026 avec régimes macro'});
+  const {svg,x,PT,ih}=ch;
+  TRADES.forEach(t=>{
+    const seek=d=>{const k=slice.findIndex(r=>r.d===d); return k<0?slice.length-1:k;};
+    const i0=seek(t.open), i1=seek(t.close);
+    const up=!t.short, yy=PT+ih+ (up?4:11);
+    svg.appendChild(el('rect',{x:x(i0), y:yy, width:Math.max(x(i1)-x(i0),2), height:5, rx:1,
+      fill:up?'var(--long)':'var(--short)'}));
+    const lb=el('text',{x:(x(i0)+x(i1))/2, y:up?yy-2:yy+13,'text-anchor':'middle','font-size':10,
+      fill:'var(--muted)','font-family':'Cascadia Mono,Consolas,monospace'});
+    lb.textContent='#'+t.no; svg.appendChild(lb);
+  });
+  svg.setAttribute('viewBox',`0 0 1000 ${H+22}`);
+  document.getElementById('overview').appendChild(svg);
+}
+
+/* --- bandeau composants jour par jour --- */
+function compStrip(slice){
+  const W=1000, RH=15, PL=46, PR=10, gap=3, H=COMPS.length*(RH+gap);
+  const iw=W-PL-PR, cw=iw/slice.length;
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'scores des composants jour par jour'});
+  COMPS.forEach((c,ci)=>{
+    const y=ci*(RH+gap);
+    const lab=el('text',{x:PL-8,y:y+RH-4,'text-anchor':'end','font-size':10,fill:'var(--muted)'});
+    lab.textContent=c.name; svg.appendChild(lab);
+    let run=null;
+    const flush=()=>{ if(!run) return;
+      svg.appendChild(el('rect',{x:PL+run.a*cw, y, width:Math.max((run.b-run.a+1)*cw,1), height:RH,
+        fill:SC_FILL[String(run.v)], opacity:run.v===0?1:.9})); run=null; };
+    slice.forEach((r,i)=>{ const v=r.s[ci];
+      if(run&&run.v===v){ run.b=i; } else { flush(); run={v,a:i,b:i}; } });
+    flush();
+  });
+  return svg;
+}
+
+/* --- ledger d'une decision --- */
+function ledger(title, row, dateStr, note){
+  const wrap=document.createElement('div'); wrap.className='ledger';
+  const total=row.t;
+  wrap.innerHTML=`<div class="lh">${title} · ${fmtD(dateStr)}</div>
+  <div class="scroller" style="border:none;border-radius:0">
+  <table><thead><tr><th>Composant</th><th>Mesure</th><th style="text-align:right">Valeur</th><th style="text-align:center">Score</th></tr></thead>
+  <tbody>${COMPS.map((c,i)=>{
+    const v=row.m[i], s=row.s[i];
+    const cls=s>0?'p':(s<0?'m':'z');
+    return `<tr><td>${c.name}</td><td style="color:var(--muted);font-size:12px">${c.what}</td>
+      <td class="n">${v==null?'—':c.fmt(v)}</td>
+      <td style="text-align:center"><span class="score ${cls}">${s>0?'+1':(s<0?'−1':'0')}</span></td></tr>`;
+  }).join('')}
+  <tr class="total-row"><td colspan="2">Somme → régime</td>
+    <td class="n">${total>0?'+':''}${total}</td>
+    <td style="text-align:center"><span class="tag ${row.r==='PORTEUR'?'long':(row.r==='HOSTILE'?'short':'flat')}">${row.r}</span></td></tr>
+  </tbody></table></div>`;
+  if(note){ const n=document.createElement('div'); n.className='note'; n.style.padding='0 13px 11px';
+    n.style.marginTop='0'; n.innerHTML=note; wrap.appendChild(n); }
+  return wrap;
+}
+
+/* --- ce qui a bascule entre deux etats --- */
+function movers(prev, now){
+  const ch=[];
+  COMPS.forEach((c,i)=>{ if(prev.s[i]!==now.s[i]) ch.push(`<b>${c.name}</b> ${prev.s[i]>0?'+1':(prev.s[i]<0?'−1':'0')} → ${now.s[i]>0?'+1':(now.s[i]<0?'−1':'0')}`); });
+  return ch;
+}
+
+/* --- fiches --- */
+function fiches(){
+  const host=document.getElementById('fiches');
+  const grid=document.getElementById('index-grid');
+  TRADES.forEach((t,k)=>{
+    const long=!t.short;
+    // le dernier jour de donnees macro (2026-07-12) precede la cloture forcee du run
+    const near=d=>IDX.has(d)?IDX.get(d):ROWS.length-1;
+    const i0=near(t.open), i1=near(t.close);
+    const pad=Math.max(8, Math.round((i1-i0)*0.12));
+    const slice=ROWS.slice(Math.max(0,i0-pad), Math.min(ROWS.length,i1+pad+1));
+    const at=d=>{const k=slice.findIndex(r=>r.d===d); return k<0?slice.length-1:k;};
+    const s0=at(t.open), s1=at(t.close);
+
+    const card=document.createElement('div');
+    card.className='trade '+(long?'l':'s'); card.id='t'+t.no;
+    const pnlCls=t.pnl>=0?'pos':'neg';
+    card.innerHTML=`<div class="head">
+      <h3 class="title">#${t.no} · <span class="tag ${long?'long':'short'}">${long?'Long':'Short'}</span>
+        <span style="color:var(--muted);font-weight:400">${t.tag}</span></h3>
+      <span class="dates num">${fmtD(t.open)} → ${fmtD(t.close)} · ${t.days} j</span>
+      <span class="pnl ${pnlCls}">${fmtU(t.pnl)}</span>
+    </div><div class="body"></div>`;
+    const body=card.querySelector('.body');
+
+    // graphe prix
+    const ch=priceChart(slice,{h:210,label:`prix BTC pendant la position ${t.no}`});
+    const {svg,x,y,PT,ih}=ch;
+    [[s0,t.open_rate,'entrée'],[s1,t.close_rate,'sortie']].forEach(([si,rate,lab],j)=>{
+      const col=long?'var(--long)':'var(--short)';
+      svg.appendChild(el('line',{x1:x(si),x2:x(si),y1:PT,y2:PT+ih,stroke:col,'stroke-width':1.2,
+        'stroke-dasharray':'4 3',opacity:.9}));
+      svg.appendChild(el('circle',{cx:x(si),cy:y(rate),r:4.5,fill:'var(--panel)',stroke:col,'stroke-width':2}));
+      const tx=el('text',{x:x(si)+(j?-7:7),y:PT+11,'text-anchor':j?'end':'start','font-size':11,
+        fill:col,'font-weight':600}); tx.textContent=lab+' '+fmtP(rate); svg.appendChild(tx);
+    });
+    const cw=document.createElement('div'); cw.className='chart-wrap'; cw.appendChild(svg); body.appendChild(cw);
+
+    // bandeau composants
+    const strip=document.createElement('div'); strip.className='chart-wrap';
+    strip.appendChild(compStrip(slice)); body.appendChild(strip);
+    const lg=document.createElement('div'); lg.className='legend';
+    lg.innerHTML=`<span><i style="background:var(--long)"></i>composant à +1</span>
+      <span><i style="background:var(--flat-soft);border:1px solid var(--rule)"></i>à 0</span>
+      <span><i style="background:var(--short)"></i>à −1</span>
+      <span>fond du graphe = régime du jour · pointillés = entrée et sortie</span>`;
+    body.appendChild(lg);
+
+    // ledgers
+    const cols=document.createElement('div'); cols.className='cols';
+    const rowIn=ROWS[i0], rowOut=ROWS[i1];
+    const dOut=rowOut.d;
+    const prevIn=ROWS[IDX.get(t.regime_since)-1] || rowIn;
+    const inMov=movers(prevIn, ROWS[IDX.get(t.regime_since)]);
+    const prevOut=ROWS[i1-1];
+    const outMov=movers(prevOut, rowOut);
+
+    const noteIn = t.no===1
+      ? `Le régime est <b>PORTEUR</b> sans interruption depuis le ${fmtD(t.regime_since)} : la position
+         est simplement ouverte au premier jour du backtest.`
+      : `Bascule en <b>${rowIn.r}</b> le ${fmtD(t.regime_since)}${inMov.length?' — ce qui a bougé : '+inMov.join(', '):''}.`;
+    const noteOut = t.exit_reason==='force_exit'
+      ? `Pas de signal inverse : la position est encore ouverte le dernier jour des données
+         et fermée d'office par le backtest (<code>force_exit</code>).`
+      : `Bascule en <b>${rowOut.r}</b>${outMov.length?' — ce qui a bougé : '+outMov.join(', '):''}. Le flip
+         ferme la position et ouvre la position inverse sur la même bougie.`;
+
+    cols.appendChild(ledger('Décision d\'entrée', rowIn, t.open, noteIn));
+    cols.appendChild(ledger('Décision de sortie', rowOut, dOut, noteOut));
+    body.appendChild(cols);
+
+    // verdict chiffre
+    const gross=t.pnl-t.funding;
+    const v=document.createElement('div'); v.className='verdict';
+    v.innerHTML=`Capital <b class="num">${fmtP(t.equity_in)} → ${fmtP(t.equity_out)} USDT</b> ·
+      mise <b class="num">${fmtP(t.stake)} USDT</b> ·
+      prix <b class="num">${fmtP(t.open_rate)} → ${fmtP(t.close_rate)}</b>
+      (${((t.close_rate/t.open_rate-1)*100).toFixed(1).replace('.',',')} % sur le sous-jacent) ·
+      résultat <b class="num">${(t.ratio*100).toFixed(1).replace('.',',')} %</b> sur la mise ·
+      dont funding <b class="num ${t.funding>=0?'pos':'neg'}">${fmtU(t.funding)}</b>
+      (${Math.abs(t.funding/Math.abs(gross)*100).toFixed(0)} % du résultat brut).`;
+    body.appendChild(v);
+
+    host.appendChild(card);
+
+    const a=document.createElement('a');
+    a.className='chip '+(long?'l':'s'); a.href='#t'+t.no;
+    a.innerHTML=`<div class="t">#${t.no} · ${long?'Long':'Short'} · ${t.days} j</div>
+      <div class="p ${t.pnl>=0?'pos':'neg'}">${(t.ratio*100).toFixed(1).replace('.',',')} %</div>`;
+    grid.appendChild(a);
+  });
+}
+
+/* --- courbe de capital + drawdown marque au marche --- */
+function equityView(){
+  const slice=ROWS.filter(r=>r.e!=null);
+  if(!slice.length) return;
+  const W=1000,H=320,PL=62,PR=12,PT=10,PB=24, iw=W-PL-PR, ih=H-PT-PB;
+  const vals=slice.map(r=>r.e);
+  const hi=Math.max(...vals), lo=Math.min(...vals);
+  const top=hi*1.06, bot=Math.max(0, lo-(hi-lo)*0.08);
+  const x=i=>PL+iw*i/(slice.length-1);
+  const y=v=>PT+ih*(1-(v-bot)/(top-bot));
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'capital jour par jour'});
+
+  bands(slice).forEach(bd=>{
+    const x0=x(bd.a), x1=x(bd.b);
+    svg.appendChild(el('rect',{x:x0,y:PT,width:Math.max(x1-x0,iw/slice.length),height:ih,
+      fill:REG_FILL[bd.r],opacity:.55}));
+  });
+
+  // pic glissant + drawdown
+  let peak=-Infinity, worst={dd:0,i:0,peakV:0,v:0};
+  const peaks=slice.map((r,i)=>{ peak=Math.max(peak,r.e);
+    const dd=(peak-r.e)/peak; if(dd>worst.dd) worst={dd,i,peakV:peak,v:r.e};
+    return peak; });
+
+  // aire entre le pic et le capital = ce qui a ete rendu au marche
+  let area='M'+x(0).toFixed(1)+' '+y(peaks[0]).toFixed(1);
+  peaks.forEach((p,i)=>{ area+='L'+x(i).toFixed(1)+' '+y(p).toFixed(1); });
+  for(let i=slice.length-1;i>=0;i--) area+='L'+x(i).toFixed(1)+' '+y(slice[i].e).toFixed(1);
+  svg.appendChild(el('path',{d:area+'Z',fill:'var(--short)',opacity:.16}));
+
+  // ligne de depart
+  const start=slice[0].e;
+  svg.appendChild(el('line',{x1:PL,x2:W-PR,y1:y(start),y2:y(start),stroke:'var(--muted)',
+    'stroke-width':1,'stroke-dasharray':'2 4',opacity:.8}));
+
+  // graduations capital
+  for(let i=0;i<=4;i++){
+    const v=bot+(top-bot)*i/4, yy=y(v);
+    svg.appendChild(el('line',{x1:PL,x2:W-PR,y1:yy,y2:yy,stroke:'var(--rule)','stroke-width':1,opacity:.5}));
+    const t=el('text',{x:PL-8,y:yy+4,'text-anchor':'end',fill:'var(--muted)','font-size':11,
+      'font-family':'Cascadia Mono,Consolas,monospace'}); t.textContent=fmtP(v); svg.appendChild(t);
+  }
+
+  // courbe du capital
+  let d='';
+  slice.forEach((r,i)=>{ d+=(d?'L':'M')+x(i).toFixed(1)+' '+y(r.e).toFixed(1); });
+  svg.appendChild(el('path',{d,fill:'none',stroke:'var(--ink)','stroke-width':1.8,
+    'stroke-linejoin':'round'}));
+
+  // creux le plus profond
+  svg.appendChild(el('line',{x1:x(worst.i),x2:x(worst.i),y1:y(worst.peakV),y2:y(worst.v),
+    stroke:'var(--short)','stroke-width':1.6}));
+  svg.appendChild(el('circle',{cx:x(worst.i),cy:y(worst.v),r:4,fill:'var(--panel)',
+    stroke:'var(--short)','stroke-width':2}));
+  const wl=el('text',{x:x(worst.i)+(worst.i>slice.length*0.7?-9:9),y:y(worst.v)+16,
+    'text-anchor':worst.i>slice.length*0.7?'end':'start','font-size':11,fill:'var(--short)',
+    'font-weight':600});
+  wl.textContent='creux max −'+(worst.dd*100).toFixed(1).replace('.',',')+' %';
+  svg.appendChild(wl);
+
+  // point final
+  const last=slice.length-1;
+  svg.appendChild(el('circle',{cx:x(last),cy:y(slice[last].e),r:4,fill:'var(--ink)'}));
+
+  // entrees / sorties de position
+  TRADES.forEach(t=>{
+    const k=slice.findIndex(r=>r.d===t.open); if(k<0) return;
+    svg.appendChild(el('rect',{x:x(k)-1,y:PT+ih-4,width:2,height:4,
+      fill:t.short?'var(--short)':'var(--long)'}));
+  });
+
+  // axe temps
+  for(let i=0;i<6;i++){
+    const k=Math.round(i*(slice.length-1)/5);
+    const t=el('text',{x:x(k),y:H-6,'text-anchor':i===0?'start':(i===5?'end':'middle'),
+      fill:'var(--muted)','font-size':11,'font-family':'Cascadia Mono,Consolas,monospace'});
+    t.textContent=slice[k].d.slice(0,7); svg.appendChild(t);
+  }
+  document.getElementById('equity').appendChild(svg);
+
+  document.getElementById('equity-legend').innerHTML=
+    `<span><i style="background:var(--ink)"></i>capital marqué au marché</span>
+     <span><i style="background:var(--short);opacity:.35"></i>écart au plus haut (drawdown)</span>
+     <span><i style="background:var(--long)"></i>entrée longue</span>
+     <span><i style="background:var(--short)"></i>entrée courte</span>
+     <span>pointillés = capital de départ</span>`;
+
+  // le drawdown vu par les seules clotures, pour comparaison
+  let cPeak=-Infinity, cWorst=0, eq=start;
+  TRADES.forEach(t=>{ eq+=t.pnl; cPeak=Math.max(cPeak,eq); cWorst=Math.max(cWorst,(cPeak-eq)/cPeak); });
+  // la duree se compte a partir de la 1re position, pas du debut de la fenetre affichee
+  const end=slice[last].e, yrs=(new Date(slice[last].d)-new Date(TRADES[0].open))/(365.25*864e5);
+  const cagr=(Math.pow(end/start,1/yrs)-1)*100;
+  document.getElementById('equity-stats').innerHTML=
+   `<table><thead><tr><th>Capital</th><th style="text-align:right">Valeur</th><th>Lecture</th></tr></thead><tbody>
+    <tr><td>Départ → arrivée</td><td class="n">${fmtP(start)} → ${fmtP(end)} USDT</td>
+        <td>${((end/start-1)*100).toFixed(1).replace('.',',')} % sur ${yrs.toFixed(1).replace('.',',')} ans, soit ${cagr.toFixed(1).replace('.',',')} % par an</td></tr>
+    <tr><td>Plus haut atteint</td><td class="n">${fmtP(Math.max(...vals))} USDT</td>
+        <td>le ${fmtD(slice[vals.indexOf(Math.max(...vals))].d)}</td></tr>
+    <tr><td><b>Creux le plus profond, marqué au marché</b></td>
+        <td class="n neg">−${(worst.dd*100).toFixed(1).replace('.',',')} %</td>
+        <td>traversé position ouverte, le ${fmtD(slice[worst.i].d)} — c'est ce que tu aurais vu sur ton compte</td></tr>
+    <tr><td>Le même creux, vu des seules clôtures</td>
+        <td class="n">−${(cWorst*100).toFixed(1).replace('.',',')} %</td>
+        <td>ce que compte freqtrade : entre deux clôtures espacées de deux ans, il ne voit rien</td></tr>
+   </tbody></table>`;
+}
+
+overview();
+equityView();
+fiches();
+
+/* --- lecture d'ensemble, calculee sur les donnees --- */
+(function(){
+  const host=document.getElementById('lecture-body');
+  const win=TRADES.filter(t=>t.pnl>0), lose=TRADES.filter(t=>t.pnl<=0);
+  const fund=TRADES.reduce((a,t)=>a+t.funding,0);
+  const pnl=TRADES.reduce((a,t)=>a+t.pnl,0);
+  // duree moyenne gagnants / perdants
+  const avg=arr=>arr.reduce((a,t)=>a+t.days,0)/arr.length;
+  const longs=TRADES.filter(t=>!t.short), shorts=TRADES.filter(t=>t.short);
+  const sPnl=shorts.reduce((a,t)=>a+t.pnl,0), lPnl=longs.reduce((a,t)=>a+t.pnl,0);
+  host.innerHTML=`
+  <div class="scroller"><table>
+    <thead><tr><th>Lecture</th><th style="text-align:right">Chiffre</th><th>Ce que ça dit</th></tr></thead>
+    <tbody>
+    <tr><td>Durée moyenne des gagnants vs perdants</td>
+        <td class="n">${avg(win).toFixed(0)} j vs ${avg(lose).toFixed(0)} j</td>
+        <td>Les positions gagnantes sont tenues ${(avg(win)/avg(lose)).toFixed(1)}× plus longtemps. La valeur du signal <b>est</b> la durée.</td></tr>
+    <tr><td>Funding payé sur l'ensemble</td>
+        <td class="n neg">${fmtU(fund)}</td>
+        <td>Soit ${Math.abs(fund/pnl*100).toFixed(0)} % du profit net. Presque tout vient des deux longs de plus de deux ans, tenus en perpétuel.</td></tr>
+    <tr><td>PnL des 6 longs</td><td class="n ${lPnl>=0?'pos':'neg'}">${fmtU(lPnl)}</td>
+        <td>Deux positions font tout le travail : #3 et #7.</td></tr>
+    <tr><td>PnL des 6 shorts</td><td class="n ${sPnl>=0?'pos':'neg'}">${fmtU(sPnl)}</td>
+        <td>Le « put » n'est pas gratuit mais reste marginal, et repose sur le COVID et le bear 2022.</td></tr>
+    <tr><td>Positions depuis décembre 2025</td>
+        <td class="n neg">${TRADES.filter(t=>t.open>='2025-11-01'&&t.pnl<0).length} perdantes sur ${TRADES.filter(t=>t.open>='2025-11-01').length}</td>
+        <td>Le signal ne fonctionne plus sur la période récente — c'est le drawdown en cours à la fin du backtest.</td></tr>
+    </tbody></table></div>
+  <p style="margin-top:20px">Une chose saute aux yeux fiche après fiche : <b>ce sont presque toujours les
+  mêmes composants qui font basculer le régime</b>. Le DXY et le Fear &amp; Greed oscillent sans arrêt autour de
+  leur seuil et créent le bruit ; les taux Fed et la mcap stablecoins bougent lentement et décident des grands
+  virages. Les entrées qui ont produit les deux gros gains (#3 en avril 2020, #7 en novembre 2023) sont
+  toutes deux des bascules portées par un composant lent, pas par le bruit rapide.</p>
+  <p>Deuxième chose : plusieurs sorties se font sur un franchissement de seuil <b>d'un seul point</b> —
+  une somme qui passe de −1 à −2 parce que le Fear &amp; Greed a perdu deux points. Aucune hystérésis n'est
+  prévue : le régime est une simple somme comparée à un seuil fixe. C'est la piste la plus concrète que ce
+  document fait apparaître, et elle n'est pas dans le rapport d'origine.</p>`;
+})();
+</script>
