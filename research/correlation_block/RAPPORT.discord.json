@@ -1,0 +1,49 @@
+{
+  "username": "ARIT recherche",
+  "title": "Bloc corrélation macro + revue de protocole — 30/07/2026",
+  "color": 16098851,
+  "description": "Session en deux temps : recherche d'améliorations ARIT à partir du second cerveau, puis conception du bloc corrélation demandé.\n\n**Tout est en proposition. Rien n'est fusionné, rien n'est commité.**\n\n`arit_lib/`, `docs/`, `params.py`, `contracts.py` : **intouchés**. Suite produit re-vérifiée à **203 passed**.",
+  "fields": [
+    {
+      "name": "🔴 Le point le plus important",
+      "value": "**L'objectif « p < 0,05 » de la campagne A' est hors de portée.** En reconstruisant σ depuis tes chiffres (1,23R sur le contrôle A, 1,89R à demi-distance), l'effet attendu **net de frais** (+0,157R) donne **p = 0,35** à n = 128. Il faudrait **~390 à ~890 trades**.\n\nLe critère échouera *même si la réparation du stop marche parfaitement*. À remplacer avant de lancer, par : taille d'effet + walk-forward + survie hors top-2."
+    },
+    {
+      "name": "🟠 Le chantier 1 doit être scindé",
+      "value": "« stops fractionnaires **+** filtres de régime » dans le même run = non attribuable. Pire : sur un substrat à espérance nulle, **tout filtre qui réduit l'exposition paraît positif par construction**.\n\nC'est probablement ce qu'est déjà le résultat « véto HOSTILE : −19,1 % → −7,0 % » — non pas invalidé, **non mesuré**.\n\n→ **1a** géométrie du stop seule (produit A'), puis **1b** chaque filtre contre A'."
+    },
+    {
+      "name": "🟡 La distance de stop n'est pas caractérisée",
+      "value": "Les frais en R varient comme 1/k. En **net** : k=1 → −0,072 · k=0,5 → **+0,158** · k=0,33 → +0,042. Maximum intérieur et pointu, et **aucun point mesuré entre 0,5 et 1,0**.\n\nÀ balayer de 0,3 à 1,0 par pas de 0,05, en net. Le replay 5m existe déjà.\n\nÀ noter : le ×20 vient du **R/R doublé à cible inchangée**, pas du stop serré en soi."
+    },
+    {
+      "name": "🟢 Deux idées d'edge ajoutées",
+      "value": "**Proxy gamma gratuit** — la donnée GEX est payante, mais le pinning se dénoue à l'expiration : le calendrier Deribit suffit. L'idée n°5 passe de « V2+ payante » à « 1b gratuite ».\n\n**Stop statistique vs stop visible** — le stop structurel n'est pas seulement 2× trop large, il est posé sur le niveau que les chasseurs de liquidité visent. Variante : quantile du MAE en ATR."
+    },
+    {
+      "name": "🔵 Le bloc corrélation (ta demande)",
+      "value": "Livré dans `research/correlation_block/` — module + **15 tests verts** + RAPPORT.md.\n\n**Pas un 6ᵉ composant du score** : un terme additif est symétrique par construction (il donnerait +1 quand le SPX monte, or le BTC ne suit pas les actions à la hausse) et décalerait les seuils ±2 des 5 composants existants.\n\n→ **véto c6** (le SPX casse sa structure) **armé par un méta-gate c7** (ρ décide si les indicateurs actions sont pertinents aujourd'hui)."
+    },
+    {
+      "name": "⚠️ Deux pièges trouvés dans le code",
+      "value": "**1.** `DTWEXBGS` (DXY) est déjà **5/7**, `DFF` est 7/7. Avec `MACRO_STALE_FAILSAFE = 3`, ajouter SPX **et** NDX ferait basculer le régime en **HOSTILE à chaque férié US**. → SPX seul, fenêtre de fraîcheur dédiée 120 h.\n\n**2.** ρ calculé sur calendrier 7/7 est **déflaté de ~33 %** (mesuré). Un couplage réel à 0,75 s'afficherait à 0,50 — pile sur le seuil d'armement."
+    },
+    {
+      "name": "✏️ Correction que je te dois",
+      "value": "Je t'avais annoncé **~15 %** de déflation de ρ (raisonnement analytique). **C'est faux, c'est ~33 %** — j'avais ignoré le désalignement de fenêtre (le lundi, le BTC rend 24 h quand le SPX rend tout le week-end). Simulation reproductible dans les tests. Le chiffre corrigé est consigné partout."
+    },
+    {
+      "name": "❓ Une décision t'attend",
+      "value": "Dans `evaluate()`, sur **donnée périmée** : j'ai retenu **fail-open** (pour ne pas rendre le filtre infalsifiable en ablation — on ne pourrait plus séparer la valeur du filtre de celle du trou de données).\n\nL'alternative **fail-safe** se défend, cohérente avec la doctrine « la sécurité prime » de `regime_now`. **À trancher explicitement.**"
+    },
+    {
+      "name": "📚 Second cerveau",
+      "value": "**10 notes créées** (puissance statistique, biais du substrat nul, frais et distance de stop, stop statistique vs visible, proxy gamma, saturation d'un signal binaire, core-satellite, véto ou terme additif, fraîcheur 5/7-7/7, ρ sur calendrier) + le bloc corrélation.\n\n**9 notes enrichies**, index et log à jour."
+    },
+    {
+      "name": "🚨 Incident vault",
+      "value": "Le scan de fin de session a trouvé **`python.md` à 0 octet** — 3ᵉ perte en 3 semaines (synchro OneDrive). Le vault **n'est pas versionné** : la note a dû être **reconstruite**, pas restaurée. Les « pièges de Python 3.14 » sont perdus.\n\n**Un `git init` sur le vault rendrait ces pertes triviales à annuler.** À trancher."
+    }
+  ],
+  "footer": "Proposition — rien n'est appliqué ni poussé. Rappel : le webhook Discord exposé en clair (edge_2026-07 §6) est toujours à régénérer."
+}
