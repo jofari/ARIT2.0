@@ -21,9 +21,12 @@ TIMEOUT = 30
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}"
 LLAMA_STABLES = "https://stablecoins.llama.fi/stablecoincharts/all"
 BINANCE_FUNDING = "https://fapi.binance.com/fapi/v1/fundingRate"
+BINANCE_KLINES = "https://api.binance.com/api/v3/klines"
 ALTERNATIVE_FNG = "https://api.alternative.me/fng/?limit=0&format=json"
 FUNDING_PAGE = 1000          # max API
 FUNDING_START_MS = 1568102400000  # 2019-09-10, debut des perps Binance
+KLINES_PAGE = 1000                # max API
+BTC_START_MS = 1502928000000      # 2017-08-17, 1re bougie BTCUSDT Binance
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("macro")
@@ -68,6 +71,28 @@ def dl_funding(symbol: str) -> None:
     log.info("funding %s : %d points (8h)", symbol, len(rows))
 
 
+def dl_btc_daily() -> None:
+    """Binance spot — cloture 1d BTCUSDT, pour rho(BTC, actions) du bloc c7 (06 §6.2.1).
+
+    Serie SEPAREE des 5 composants (elle n'entre dans aucune somme) et separee aussi des
+    donnees OHLCV freqtrade : macro_regime ne lit que son propre repertoire (module pur).
+    """
+    rows, start = [], BTC_START_MS
+    while True:
+        page = _get(BINANCE_KLINES,
+                    params={"symbol": "BTCUSDT", "interval": "1d",
+                            "startTime": start, "limit": KLINES_PAGE}).json()
+        if not page:
+            break
+        rows.extend(page)
+        start = page[-1][0] + 1
+        if len(page) < KLINES_PAGE:
+            break
+        time.sleep(0.3)  # politesse rate-limit
+    (OUT_DIR / "btc_daily.json").write_text(json.dumps(rows), encoding="utf-8")
+    log.info("btc_daily : %d bougies 1d", len(rows))
+
+
 def dl_fng() -> None:
     """alternative.me — Fear & Greed, historique complet (2018-02+)."""
     data = _get(ALTERNATIVE_FNG).json()
@@ -84,6 +109,7 @@ JOBS = {
     # "serie pas encore demarree" => score 0, SANS exception ni log. `NASDAQ100` remonte a 1986
     # (historique stable) et est le meilleur comparable du BTC.
     "nasdaq100": lambda: dl_fred("NASDAQ100", "nasdaq100"),
+    "btc_daily": dl_btc_daily,   # 06.2 c7 — cloture 1d BTC pour rho(BTC, actions)
     "stablecoins": dl_stablecoins,
     "funding": lambda: (dl_funding("BTCUSDT"), dl_funding("ETHUSDT")),
     "fng": dl_fng,

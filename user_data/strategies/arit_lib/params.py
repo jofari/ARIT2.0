@@ -161,6 +161,16 @@ MACRO_STALE_FAILSAFE = 3          # 06.2 — >= 3 composants stale => HOSTILE
 MACRO_NEUTRE_CONV_BUMP = 0.05     # 06.2 / 04.2 — NEUTRE : seuil de conviction +0,05
 MACRO_REGIMES = ("PORTEUR", "NEUTRE", "HOSTILE")  # 06.2
 
+# ------------- 06.2.1 Bloc correlation actions c6/c7 (decision Jonas 2026-08-03 A4, docs/06)
+# HORS de la somme des 5 composants : veto booleen, journalise a part, ablatable seul.
+MACRO_EQUITY_BREAK_WINDOW_D = 20   # 06.2 c6 — plus-bas de cloture sur 20 j ouvres
+MACRO_CORR_WINDOW_FAST_D = 30      # 06.2 c7 — rho court (sessions US)
+MACRO_CORR_WINDOW_SLOW_D = 90      # 06.2 c7 — rho long, confirmation
+MACRO_CORR_ARM_ABOVE = 0.50        # 06.2 c7 — hysteresis : armement du veto
+MACRO_CORR_DISARM_BELOW = 0.30     # 06.2 c7 — hysteresis : desarmement
+MACRO_EQUITY_STALE_HOURS = 120     # 06.2 c6 — serie 5/7 : 48 h ne suffit pas (feries US -> 96 h)
+MACRO_CORR_STATES = ("COUPLE", "TRANSITION", "DECOUPLE")  # 06.2 c7
+
 # ----------------------------------------------- 07 Execution & config freqtrade
 # NB : les valeurs marquees "miroir config" ont pour source RUNTIME user_data/config.dry.json ;
 # elles vivent ici comme reference contractuelle du PDR (le code ne les lit pas).

@@ -1,7 +1,21 @@
-# Bloc « corrélation / sentiment du risque » dans la couche macro — PROPOSITION
+# Bloc « corrélation / sentiment du risque » dans la couche macro — ✅ FUSIONNÉ
 
 **Date** : 2026-07-30 · **Demande de Jonas** : ajouter la corrélation comme indicateur pris en
-compte dans la macro. **Statut** : proposition, **non fusionnée**.
+compte dans la macro.
+
+> **Statut : FUSIONNÉ le 2026-08-03** (décision Jonas A4). Le module et ses tests vivent
+> désormais dans `user_data/strategies/arit_lib/macro_regime.py` et `tests/test_macro_regime.py` ;
+> les constantes dans `params.py` (bloc 06.2.1), les noms dans `contracts.py`, la spec dans
+> `docs/06 §6.2.1`. Les fichiers `macro_correlation_bloc.py` / `test_correlation_bloc.py` de ce
+> dossier ont été supprimés (ils faisaient doublon). Ce rapport reste comme trace du raisonnement.
+>
+> **Deux écarts par rapport à la proposition ci-dessous, tous deux décidés le 03/08 :**
+> 1. **fail-safe** au lieu de fail-open sur donnée périmée (§5) — mais avec une distinction que
+>    la proposition n'avait pas : série *jamais démarrée* ⇒ le bloc est inopérant et ne bloque
+>    rien (sinon tout backtest lancé sans `nasdaq100.csv` sortirait **zéro entrée**) ; série
+>    *démarrée puis morte* ⇒ véto actif, raison `equity_veto_stale`, épisode journalisé.
+> 2. **NASDAQ100** au lieu de SP500 (décision A3) — la série FRED `SP500` est une fenêtre
+>    glissante de 10 ans, cf. §7 point 3 ci-dessous, qui l'avait signalé.
 
 ## 0. Ce qui a été touché
 

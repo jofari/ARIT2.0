@@ -211,9 +211,17 @@ class AritV1(IStrategy):
     def _macro_daily(self):  # regimes macro quotidiens point-in-time (backtest) : charge+cache 1x
         if not hasattr(self, "_macro_cache"):
             d = Path(self.config.get("user_data_dir", "user_data")) / contracts.MACRO_DATA_DIR
-            self._macro_cache = macro_regime.daily_regimes(macro_regime.load_history(d))
-            if self._macro_cache.empty:                      # fichiers absents => macro neutre (n6)
+            daily = macro_regime.daily_regimes(macro_regime.load_history(d))
+            if daily.empty:                                  # fichiers absents => macro neutre (n6)
                 journal.write("system", journal.ev_system("macro_unavailable", {"dir": str(d)}))
+            else:                                            # bloc correlation c6/c7 (06 §6.2.1)
+                veto = macro_regime.daily_equity_veto(*macro_regime.load_equity_inputs(d), daily)
+                daily = daily.join(veto[[contracts.EQUITY_VETO_COL,
+                                         contracts.EQUITY_VETO_REASON_COL]])
+                stale = macro_regime.stale_episodes(veto)     # fail-safe jamais silencieux (A4)
+                if stale:
+                    journal.write("system", journal.ev_system("equity_veto_stale", stale))
+            self._macro_cache = daily
         return self._macro_cache
     def _trade_state(self, trade):
         data = {k: trade.get_custom_data(k) for k in contracts.CUSTOM_DATA_KEYS}

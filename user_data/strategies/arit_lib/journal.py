@@ -229,6 +229,12 @@ def ev_evaluation(row, explain_dict) -> dict:
             "close_vs_ema": _coerce(_get(explain_dict, "close_vs_ema")),
             "fear_greed": _coerce(_get(explain_dict, "fear_greed")),
             "macro_stale": bool(_get(explain_dict, "macro_stale", False)),
+            # schema v2 (03/08, A4/A5) : l'etat macro et le veto actions sur CHAQUE evaluation.
+            # C'est ce qui rend la porte macro ablatable a posteriori (PORTEUR-seul vs
+            # non-HOSTILE derives par filtrage d'un seul run) — docs/08 §8.1.
+            contracts.MACRO_REGIME_COL: _get(row, contracts.MACRO_REGIME_COL),
+            contracts.EQUITY_VETO_COL: bool(_get(row, contracts.EQUITY_VETO_COL, False)),
+            contracts.EQUITY_VETO_REASON_COL: _get(row, contracts.EQUITY_VETO_REASON_COL),
         },
         "scores": {
             "structure": _coerce(_get(row, "s_structure")),

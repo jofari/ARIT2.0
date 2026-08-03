@@ -97,6 +97,11 @@ def _classify_macro(df: pd.DataFrame) -> pd.DataFrame:
     regime = _regime_series(df, neutral)                    # technique seule (RISK_OFF neutralise)
     macro_col = df[contracts.MACRO_REGIME_COL]
     regime = regime.mask(macro_col == _HOSTILE, "RISK_OFF")  # veto macro (absorbe F&G<25)
+    # Bloc correlation c6/c7 (docs/06 §6.2.1, A4 du 03/08) : veto SEPARE de la somme des 5.
+    # Colonne absente (donnees macro sans indice actions) => bloc inoperant, rien ne change.
+    if contracts.EQUITY_VETO_COL in df.columns:
+        equity_veto = df[contracts.EQUITY_VETO_COL].fillna(False).astype(bool)
+        regime = regime.mask(equity_veto, "RISK_OFF")
     is_trend = regime == "TREND"
     porteur = macro_col == _PORTEUR
     mult = pd.Series(params.MULT_RISK_OFF, index=df.index, dtype=float)  # RANGE/RISK_OFF => x0
@@ -111,25 +116,30 @@ def _classify_macro(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def attach_macro_regime(df: pd.DataFrame, daily: pd.DataFrame) -> pd.DataFrame:
-    """Pose contracts.MACRO_REGIME_COL sur les bougies (jointure point-in-time par jour).
+    """Pose les colonnes macro quotidiennes sur les bougies (jointure point-in-time par jour).
 
-    `daily` = sortie macro_regime.daily_regimes (index DatetimeIndex, deja decale +1 j).
-    Chaque bougie prend le regime du dernier jour <= sa date (merge_asof backward, day
+    `daily` = sortie macro_regime.daily_regimes (+ daily_equity_veto), index DatetimeIndex,
+    deja decale +1 j. Colonnes posees si presentes : contracts.MACRO_REGIME_COL,
+    EQUITY_VETO_COL, EQUITY_VETO_REASON_COL (docs/11 §11.3).
+    Chaque bougie prend la valeur du dernier jour <= sa date (merge_asof backward, day
     floor) : aucun look-ahead (le regime du jour J est calcule sur <= J-1). `daily` vide
-    => colonne non posee, classify() retombe sur le neutre (retrocompatibilite totale).
+    => colonnes non posees, classify() retombe sur le neutre (retrocompatibilite totale).
     """
     if daily is None or len(daily) == 0 or contracts.MACRO_REGIME_COL not in daily.columns:
         return df
+    wanted = [col for col in (contracts.MACRO_REGIME_COL, contracts.EQUITY_VETO_COL,
+                              contracts.EQUITY_VETO_REASON_COL) if col in daily.columns]
     # Unites homogenes obligatoires : les feather freqtrade sont en datetime64[ms],
     # les index pandas natifs en [ns] — merge_asof refuse le melange (lecon 13/07).
-    right = pd.DataFrame({
-        "date": pd.to_datetime(daily.index, utc=True).floor("D").as_unit("us"),
-        contracts.MACRO_REGIME_COL: daily[contracts.MACRO_REGIME_COL].to_numpy(),
-    }).sort_values("date").reset_index(drop=True)
+    right = pd.DataFrame({"date": pd.to_datetime(daily.index, utc=True).floor("D").as_unit("us")})
+    for col in wanted:
+        right[col] = daily[col].to_numpy()
+    right = right.sort_values("date").reset_index(drop=True)
     left = df.copy()
     left["date"] = pd.to_datetime(left["date"], utc=True).dt.as_unit("us")
     ordered = left.sort_values("date")
     merged = pd.merge_asof(ordered[["date"]], right, on="date", direction="backward")
     merged.index = ordered.index
-    df[contracts.MACRO_REGIME_COL] = merged[contracts.MACRO_REGIME_COL].reindex(df.index).to_numpy()
+    for col in wanted:
+        df[col] = merged[col].reindex(df.index).to_numpy()
     return df

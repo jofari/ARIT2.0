@@ -80,6 +80,11 @@ def explain(row: pd.Series) -> dict:
         "close_vs_ema": close_vs_ema,
         "fear_greed": _py(row.get("fear_greed")),
         "macro_stale": _py(row.get("macro_stale")),
+        # schema journal v2 (03/08, A4/A5) : etat macro + veto actions sur chaque evaluation,
+        # ce qui rend la porte macro ablatable a posteriori (docs/08 §8.1).
+        contracts.MACRO_REGIME_COL: _py(row.get(contracts.MACRO_REGIME_COL)),
+        contracts.EQUITY_VETO_COL: _py(row.get(contracts.EQUITY_VETO_COL)),
+        contracts.EQUITY_VETO_REASON_COL: _py(row.get(contracts.EQUITY_VETO_REASON_COL)),
     }
     return {
         "regime": _py(row.get("regime")),

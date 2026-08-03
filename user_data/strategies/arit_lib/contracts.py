@@ -27,6 +27,23 @@ MACRO_REGIME_COL = "macro_regime"          # colonne df + cle journal/evaluation
 MACRO_SCORE_KEYS = ("dxy", "taux", "stablecoins", "funding", "fear_greed")  # 06.2
 MACRO_DATA_DIR = "data/macro"              # series historiques (scripts/download_macro.py)
 
+# Bloc correlation actions c6/c7 (docs/06 §6.2.1, decision Jonas 2026-08-03 A4).
+# HORS de MACRO_SCORE_KEYS : ce n'est PAS un 6e composant de la somme, c'est un veto
+# booleen journalise a part et ablatable seul.
+EQUITY_VETO_COL = "equity_veto"                    # colonne df (bool) + cle journal
+EQUITY_VETO_REASON_COL = "equity_veto_reason"      # colonne df (str) + cle journal
+EQUITY_FILE = "nasdaq100.csv"    # 06.2 c6 — FRED NASDAQ100 (A3 : PAS SP500, fenetre 10 ans)
+BTC_DAILY_FILE = "btc_daily.json"  # 06.2 c7 — cloture 1d BTC, pour rho(BTC, actions)
+
+# Raisons du veto actions (06.2 §6.2.1). Chaines STABLES et sans interpolation :
+# elles sont COMPTEES telles quelles dans l'ablation (interdit n6).
+EQUITY_VETO_BINDING = "equity_risk_off"                # bloque, et bloque SEUL
+EQUITY_VETO_REDUNDANT = "equity_risk_off_redundant"    # bloque, macro deja HOSTILE
+EQUITY_VETO_STALE = "equity_veto_stale"                # serie DEMARREE puis perimee => fail-safe
+EQUITY_PASS_DECOUPLED = "equity_decoupled"             # rho bas -> veto desarme
+EQUITY_PASS_NO_BREAK = "equity_no_break"               # arme, mais pas de cassure
+EQUITY_PASS_NOT_STARTED = "equity_not_started"         # serie JAMAIS demarree => bloc inoperant
+
 # Produites par regimes.py (11.3) — noms francais contractuels, ne pas angliciser.
 REGIME_COLUMNS = ("regime", "seuil", "multiplicateur")
 
@@ -85,7 +102,10 @@ VETO_INTENT_SUFFIX = ".intent"             # 11.6 — <signal_id>.intent, mtime 
 VETO_FLAG_SUFFIX = ".flag"                 # 11.3 — <signal_id>.flag : discord_bot pose, risk lit
 
 # --------------------------------------------------- Journal JSONL (PDR 08.1)
-SCHEMA_VERSION = 1  # M06 — toute nouvelle cle => PDR 08.1 d'abord, version += 1
+# M06 — toute nouvelle cle => PDR 08.1 d'abord, version += 1.
+# v2 (2026-08-03, decisions A4/A5) : regime_inputs gagne macro_regime + equity_veto
+# + equity_veto_reason (docs/08 §8.1). C'est ce qui rend la porte macro ablatable a posteriori.
+SCHEMA_VERSION = 2
 
 # Champs obligatoires par type (PDR 08.1). Cles canoniques du build (le PDR les
 # decrit en francais ; les cles JSON sont fixees ICI, une fois pour toutes).
@@ -111,7 +131,8 @@ JOURNAL_REQUIRED_FIELDS = {
 }
 
 # regime_inputs de `evaluation` (PDR 08.1 / 04.5) :
-REGIME_INPUT_KEYS = ("adx4h", "ema50_4h", "ema200_4h", "close_vs_ema", "fear_greed", "macro_stale")
+REGIME_INPUT_KEYS = ("adx4h", "ema50_4h", "ema200_4h", "close_vs_ema", "fear_greed", "macro_stale",
+                     MACRO_REGIME_COL, EQUITY_VETO_COL, EQUITY_VETO_REASON_COL)  # v2, 03/08
 # scores de `evaluation` (PDR 08.1) :
 SCORE_KEYS = ("structure", "momentum", "sr", "patterns", "volume")
 

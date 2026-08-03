@@ -207,3 +207,39 @@ def test_attach_macro_regime_empty_daily_is_noop():
     candles = pd.DataFrame({"date": pd.date_range("2024-01-03", periods=3, freq="1h", tz="UTC")})
     out = regimes.attach_macro_regime(candles.copy(), pd.DataFrame())
     assert contracts.MACRO_REGIME_COL not in out.columns    # retrocompat : colonne non posee
+
+
+# ------------------------- Bloc correlation actions c6/c7 (docs/06 §6.2.1, A4 du 03/08)
+def test_equity_veto_force_risk_off_meme_en_macro_porteur():
+    """Le veto actions est SEPARE de la somme des 5 composants : il bloque meme un PORTEUR."""
+    df = _df_macro(30, 110, 100, 115, "PORTEUR")
+    df[contracts.EQUITY_VETO_COL] = [True]
+    out = regimes.classify(df)
+    assert out["regime"].iloc[0] == "RISK_OFF"
+    assert out["multiplicateur"].iloc[0] == params.MULT_RISK_OFF
+
+
+def test_equity_veto_faux_ne_change_rien():
+    df = _df_macro(30, 110, 100, 115, "PORTEUR")
+    df[contracts.EQUITY_VETO_COL] = [False]
+    out = regimes.classify(df)
+    assert out["regime"].iloc[0] == "TREND"
+    assert out["multiplicateur"].iloc[0] == params.MULT_FULL
+
+
+def test_equity_veto_colonne_absente_est_retrocompatible():
+    """Backtest sans indice actions : le bloc est inoperant, la decision est inchangee."""
+    out = regimes.classify(_df_macro(30, 110, 100, 115, "PORTEUR"))
+    assert out["regime"].iloc[0] == "TREND"
+
+
+def test_attach_pose_aussi_les_colonnes_du_bloc_correlation():
+    daily = pd.DataFrame(
+        {contracts.MACRO_REGIME_COL: ["NEUTRE"],
+         contracts.EQUITY_VETO_COL: [True],
+         contracts.EQUITY_VETO_REASON_COL: [contracts.EQUITY_VETO_BINDING]},
+        index=pd.to_datetime(["2024-01-01"], utc=True))
+    df = pd.DataFrame({"date": pd.date_range("2024-01-02", periods=2, freq="1h", tz="UTC")})
+    out = regimes.attach_macro_regime(df, daily)
+    assert out[contracts.EQUITY_VETO_COL].all()
+    assert (out[contracts.EQUITY_VETO_REASON_COL] == contracts.EQUITY_VETO_BINDING).all()

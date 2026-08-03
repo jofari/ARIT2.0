@@ -4,7 +4,8 @@
 
 ## 8.1 Journal JSONL (`user_data/logs/decisions/YYYY-MM-DD.jsonl`)
 Une ligne par événement. Types et champs obligatoires :
-- **`evaluation`** (chaque clôture 4h, par paire) : `ts_utc, pair, regime, regime_inputs{adx4h, ema50_4h, ema200_4h, close_vs_ema, fear_greed, macro_stale}, scores{structure, momentum, sr, patterns, volume}, cdl_features{...toutes les CDL*...}, conviction, seuil, rr_dispo, decision("signal"|"no_signal"), raison`.
+- **`evaluation`** (chaque clôture 4h, par paire) : `ts_utc, pair, regime, regime_inputs{adx4h, ema50_4h, ema200_4h, close_vs_ema, fear_greed, macro_stale, macro_regime, equity_veto, equity_veto_reason}, scores{structure, momentum, sr, patterns, volume}, cdl_features{...toutes les CDL*...}, conviction, seuil, rr_dispo, decision("signal"|"no_signal"), raison`.
+  **`schema_version = 2`** depuis le 2026-08-03 (décisions A4/A5) : `regime_inputs` gagne trois clés — `macro_regime` (PORTEUR|NEUTRE|HOSTILE, déclaré dans les contrats depuis le 12/07 mais jamais réellement écrit) et le couple `equity_veto`/`equity_veto_reason` du bloc corrélation (docs/06 §6.2.1). Ce sont ces clés qui rendent la porte macro **ablatable a posteriori** : un seul run permet de dériver « PORTEUR seul » et « non-HOSTILE » par filtrage, au lieu de figer le choix dans le code.
   Portée : **live/dry-run uniquement** — en backtest (populate vectorisé), `gate_check` + `entry`/`exit` suffisent, les `no_signal` ne sont pas journalisés (décision Jonas 2026-07-08, review M07).
 - **`gate_check`** (si signal) : chaque garde-fou de 03.2 avec `pass|fail` + valeur mesurée (spread, résiduel_total, budget_semaine, entrées_semaine, slots, fenêtre_news). Décision finale `enter|skip` + gate fautif.
 - **`entry`** : prix, quantité, risque %, stake, SL_initial, TP1, TP2, conviction, régime.

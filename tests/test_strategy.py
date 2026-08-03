@@ -307,9 +307,20 @@ def test_journal_evaluation_skipped_when_not_new_4h(monkeypatch):
 
 
 # ----------------------------------- Macro Analyst V1.1 : pose de la colonne en backtest
-def _fake_macro(monkeypatch, daily):
-    fake = type("M", (), {"load_history": staticmethod(lambda d: None),
-                          "daily_regimes": staticmethod(lambda h: daily)})
+def _fake_macro(monkeypatch, daily, veto=None):
+    """Stub du module macro_regime. `veto` = frame du bloc correlation c6/c7 (06 §6.2.1) ;
+    None => bloc non configure, donc jamais bloquant (fail-safe A4 : started, pas fresh)."""
+    if veto is None:
+        veto = pd.DataFrame({contracts.EQUITY_VETO_COL: False,
+                             contracts.EQUITY_VETO_REASON_COL: contracts.EQUITY_PASS_NOT_STARTED,
+                             "stale_days": 0}, index=daily.index)
+    fake = type("M", (), {
+        "load_history": staticmethod(lambda d: None),
+        "daily_regimes": staticmethod(lambda h: daily),
+        "load_equity_inputs": staticmethod(lambda d: (pd.Series(dtype="float64"),
+                                                      pd.Series(dtype="float64"))),
+        "daily_equity_veto": staticmethod(lambda e, b, r: veto),
+        "stale_episodes": staticmethod(lambda v: None)})
     monkeypatch.setattr(strat_mod, "macro_regime", fake)
 
 

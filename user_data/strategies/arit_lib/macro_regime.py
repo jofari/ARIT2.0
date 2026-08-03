@@ -252,6 +252,243 @@ def daily_regimes(history: pd.DataFrame) -> pd.DataFrame:
     return shifted
 
 
+# =========================================== 06.2.1 bloc correlation actions (c6/c7)
+# Fusionne depuis research/correlation_block/ le 2026-08-03 (decision Jonas A4), en
+# FAIL-SAFE (la proposition d'origine etait en fail-open).
+#
+# POURQUOI PAS UN 6e COMPOSANT DE SCORE (docs/06 §6.2.1) : le regime est une SOMME de 5
+# composants dans {-1,0,+1} avec PORTEUR >= +2 / HOSTILE <= -2. Un 6e terme additif
+# (1) deplacerait SILENCIEUSEMENT le sens des seuils (+-2 sur 5 -> +-2 sur 6), donc
+# recalibrerait les 5 composants existants sans les avoir touches ; (2) serait SYMETRIQUE
+# par construction alors que le BTC suit les actions a la BAISSE et pas a la hausse ;
+# (3) reproduirait un motif deja mesure 3 fois ici — un signal utile en VETO detruit de la
+# valeur en TERME ADDITIF. => veto booleen, journalise a part, ablatable seul.
+#
+# c6  risk-off actions : l'indice casse sa structure a la baisse -> veto longs.
+# c7  regime de correlation (META) : rho(BTC, indice) decide si c6 est ARME.
+
+
+def _read_btc_daily(path: Path) -> pd.Series:
+    """Klines Binance 1d [[openTime ms, o, h, l, c, ...], ...] -> Series close daily UTC."""
+    with open(path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    idx = pd.to_datetime([int(r[0]) for r in raw], unit="ms", utc=True).normalize()
+    s = pd.Series([float(r[4]) for r in raw], index=idx)
+    return s[~s.index.duplicated(keep="last")].dropna().sort_index()
+
+
+def load_equity_inputs(macro_dir) -> tuple[pd.Series, pd.Series]:
+    """(indice actions sessions US, cloture 1d BTC) depuis macro_dir. Absent/illisible => vide.
+
+    Volontairement SEPARE de load_history : ces series ne sont PAS des composants de la
+    somme (docs/06 §6.2.1), elles ne doivent jamais entrer dans MACRO_SCORE_KEYS.
+    """
+    base = Path(macro_dir)
+    empty = pd.Series(dtype="float64")
+
+    def _try(loader) -> pd.Series:
+        try:
+            s = loader()
+        except (OSError, ValueError, KeyError, IndexError, TypeError, json.JSONDecodeError):
+            return empty
+        return s if s is not None and not s.empty else empty
+
+    equity = _try(lambda: _read_fred_csv(base / contracts.EQUITY_FILE))
+    btc = _try(lambda: _read_btc_daily(base / contracts.BTC_DAILY_FILE))
+    return equity, btc
+
+
+def equity_structural_break(equity: pd.Series, window: int | None = None) -> pd.Series:
+    """True quand l'indice cloture sous son plus-bas de cloture des `window` j ouvres.
+
+    `shift(1)` exclut le jour courant de son propre plancher : la cassure est un EVENEMENT,
+    pas une tautologie. Index = sessions US uniquement (le passage au 7/7 est le role de
+    _align_to_calendar).
+
+    ASYMETRIQUE PAR CONSTRUCTION : aucune sortie haussiere n'existe. Le symetrique (l'indice
+    casse un plus-haut => +1) est explicitement ECARTE — la correlation coute dans un sens et
+    ne rapporte pas dans l'autre (docs/06 §6.2.1).
+    """
+    window = params.MACRO_EQUITY_BREAK_WINDOW_D if window is None else window
+    floor_ = equity.shift(1).rolling(window).min()
+    return (equity < floor_).fillna(False)
+
+
+def btc_equity_correlation(btc_daily_close: pd.Series, equity: pd.Series,
+                           window: int) -> pd.Series:
+    """rho de Pearson des rendements log BTC/actions, calcule SUR LES SESSIONS US.
+
+    PIEGE EVITE : calculer rho sur un calendrier 7/7 avec un indice forward-fille injecte
+    ~2 jours de rendement NUL par semaine cote actions ET desaligne les fenetres (le lundi,
+    le BTC rend 1 jour quand l'indice rend le week-end entier). Effet mesure par simulation :
+    rho calendaire ~= 0,66 x rho sessions (-33 %) — un vrai couplage a 0,75 s'afficherait a
+    0,50, pile sur le seuil d'armement, donc un veto qui clignote ou ne s'arme jamais.
+    (Chiffre de simulation ; a re-deriver sur l'historique reel BTC/NASDAQ100.)
+
+    Le rendement BTC vendredi->lundi couvre le week-end : c'est la bonne fenetre, elle
+    correspond a celle de l'indice sur le meme intervalle.
+    """
+    sessions = equity.index
+    btc_on_sessions = btc_daily_close.reindex(sessions).ffill()
+    r_btc = np.log(btc_on_sessions).diff()
+    r_equity = np.log(equity).diff()
+    return r_btc.rolling(window).corr(r_equity)
+
+
+def correlation_state(rho_fast: pd.Series, rho_slow: pd.Series) -> pd.Series:
+    """rho -> {COUPLE, TRANSITION, DECOUPLE} avec hysteresis (params.MACRO_CORR_STATES).
+
+    Sans hysteresis, un rho qui oscille autour d'un seuil unique fait clignoter le veto d'un
+    jour a l'autre. Bande morte : on ARME au-dessus de MACRO_CORR_ARM_ABOVE (confirme par le
+    rho long), on ne DESARME qu'en repassant sous MACRO_CORR_DISARM_BELOW, et on garde l'etat
+    precedent entre les deux. Avant tout etat etabli => TRANSITION, donc veto desarme : le
+    warm-up ne bloque aucune entree.
+    """
+    coupled, transition, decoupled = params.MACRO_CORR_STATES
+    arm = (rho_fast >= params.MACRO_CORR_ARM_ABOVE) & (rho_slow >= params.MACRO_CORR_DISARM_BELOW)
+    disarm = rho_fast < params.MACRO_CORR_DISARM_BELOW
+
+    state = pd.Series(np.nan, index=rho_fast.index, dtype="object")
+    state[arm] = coupled
+    state[disarm] = decoupled
+    return state.ffill().fillna(transition)
+
+
+def _align_to_calendar(sessions_series: pd.Series, full_index: pd.DatetimeIndex,
+                       stale_hours: int | None = None) -> pd.DataFrame:
+    """Sessions US -> calendrier 7/7. -> DataFrame(value, started, fresh).
+
+    `value` est forward-fillee depuis la derniere session ; `started` dit qu'il existe au
+    moins une observation <= D ; `fresh` dit que cette derniere observation a moins de
+    `stale_hours`. Les TROIS colonnes sont necessaires : evaluate_equity_veto doit separer
+    "pas de cassure" (fresh), "on ne sait plus" (started sans fresh => fail-safe) et
+    "bloc jamais configure" (pas started => inoperant, cf. docs/06 §6.2.1).
+
+    ⚠️ Fenetre DEDIEE et pas MACRO_STALE_HOURS (48 h) : l'indice est une serie 5/7 ; un ferie
+    US colle a un week-end laisse jusqu'a 96 h sans observation, le composant tomberait stale
+    ~10 fois par an pour une raison purement calendaire.
+    """
+    stale_hours = params.MACRO_EQUITY_STALE_HOURS if stale_hours is None else stale_hours
+    obs_dates = pd.Series(sessions_series.index, index=sessions_series.index)
+    union = full_index.union(sessions_series.index)
+
+    value = sessions_series.reindex(union).ffill().reindex(full_index)
+    last_obs = obs_dates.reindex(union).ffill().reindex(full_index)
+    age_h = (pd.Series(full_index, index=full_index) - last_obs) / pd.Timedelta(hours=1)
+    started = last_obs.notna()
+    fresh = started & (age_h <= stale_hours)
+    return pd.DataFrame({"value": value, "started": started, "fresh": fresh})
+
+
+def evaluate_equity_veto(equity_break: bool, corr_state: str, macro_regime: str,
+                         data_fresh: bool, data_started: bool = True) -> tuple[bool, str]:
+    """Compose c6 + c7 -> (bloquer_nouveaux_longs, raison journalisable). docs/06 §6.2.1.
+
+    Les arbitrages, et leur justification :
+
+    1. SERIE JAMAIS DEMARREE => le bloc est INOPERANT, il ne veto pas. Un fail-safe sur
+       "jamais configure" bloquerait 100 % des entrees de tout backtest : ce n'est pas de la
+       securite, c'est une panne. Meme distinction started/fresh que les 5 composants.
+    2. DONNEE DEMARREE PUIS PERIMEE => FAIL-SAFE, veto actif (decision Jonas 03/08, A4 —
+       revise le fail-open propose le 30/07). Contrepartie assumee et documentee : un filtre
+       qui bloque sur donnee absente devient plus difficile a isoler en ablation, d'ou la
+       raison DISTINCTE EQUITY_VETO_STALE, comptee a part.
+    3. ARMEMENT SUR COUPLE SEUL. TRANSITION est la bande morte de l'hysteresis, c'est-a-dire
+       "on ne sait pas". Armer sur l'incertitude rendrait le meta-gate inutile (veto actif
+       presque tout le temps) et couterait des entrees valides. Le veto doit etre precis.
+    4. BINDING vs REDUNDANT. Quand la macro est deja HOSTILE, l'entree est bloquee en amont :
+       le veto actions n'ajoute rien ce jour-la. Compter les deux cas separement donne
+       directement l'apport MARGINAL du filtre (= nombre de BINDING), seule quantite
+       decisionnelle. Sans cette distinction, l'ablation surestime le filtre de tous ses
+       blocages non-liants.
+    """
+    if not data_started:
+        return False, contracts.EQUITY_PASS_NOT_STARTED
+    if not data_fresh:
+        return True, contracts.EQUITY_VETO_STALE
+    if corr_state != params.MACRO_CORR_STATES[0]:  # pas COUPLE
+        return False, contracts.EQUITY_PASS_DECOUPLED
+    if not equity_break:
+        return False, contracts.EQUITY_PASS_NO_BREAK
+    if macro_regime == params.MACRO_REGIMES[2]:  # HOSTILE
+        return True, contracts.EQUITY_VETO_REDUNDANT
+    return True, contracts.EQUITY_VETO_BINDING
+
+
+def daily_equity_veto(equity: pd.Series, btc_daily: pd.Series,
+                      regimes_daily: pd.DataFrame) -> pd.DataFrame:
+    """-> DataFrame daily : EQUITY_VETO_COL (bool), EQUITY_VETO_REASON_COL (str), stale_days.
+
+    Index = celui de `regimes_daily` (sortie de daily_regimes, deja decalee +1 j).
+    POINT-IN-TIME : le veto est calcule same-day puis decale de +1 jour, exactement comme
+    les 5 composants — aucune valeur du jour J n'est lisible avant J+1 00:00 UTC.
+    `stale_days` = nombre de jours CONSECUTIFS de veto stale, pour que l'appelant journalise
+    un `system` au premier jour de blocage (un flux mort ne doit pas arreter le bot en silence).
+    """
+    cols = [contracts.EQUITY_VETO_COL, contracts.EQUITY_VETO_REASON_COL, "stale_days"]
+    if regimes_daily is None or len(regimes_daily) == 0:
+        return pd.DataFrame(columns=cols)
+    idx = regimes_daily.index
+
+    if equity.empty or btc_daily.empty:  # bloc non configure => inoperant, jamais bloquant
+        return pd.DataFrame({contracts.EQUITY_VETO_COL: False,
+                             contracts.EQUITY_VETO_REASON_COL: contracts.EQUITY_PASS_NOT_STARTED,
+                             "stale_days": 0}, index=idx)
+
+    brk_sessions = equity_structural_break(equity)
+    rho_fast = btc_equity_correlation(btc_daily, equity, params.MACRO_CORR_WINDOW_FAST_D)
+    rho_slow = btc_equity_correlation(btc_daily, equity, params.MACRO_CORR_WINDOW_SLOW_D)
+    state_sessions = correlation_state(rho_fast, rho_slow)
+
+    brk = _align_to_calendar(brk_sessions.astype("float64"), idx)
+    state = _align_to_calendar(state_sessions, idx)
+    regime_col = regimes_daily[contracts.MACRO_REGIME_COL]
+
+    decided = [
+        evaluate_equity_veto(
+            bool(brk["value"].iat[i] == 1.0),
+            state["value"].iat[i],
+            regime_col.iat[i],
+            bool(brk["fresh"].iat[i]),
+            bool(brk["started"].iat[i]),
+        )
+        for i in range(len(idx))
+    ]
+    same_day = pd.DataFrame(
+        {contracts.EQUITY_VETO_COL: [d[0] for d in decided],
+         contracts.EQUITY_VETO_REASON_COL: [d[1] for d in decided]}, index=idx)
+
+    # Point-in-time (+1 j) : identique a daily_regimes. Le 1er jour n'a pas d'anteriorite.
+    out = same_day.shift(1)
+    out[contracts.EQUITY_VETO_COL] = out[contracts.EQUITY_VETO_COL].fillna(False).astype(bool)
+    out[contracts.EQUITY_VETO_REASON_COL] = out[contracts.EQUITY_VETO_REASON_COL].fillna(
+        contracts.EQUITY_PASS_NOT_STARTED)
+
+    is_stale = out[contracts.EQUITY_VETO_REASON_COL] == contracts.EQUITY_VETO_STALE
+    # Compteur de jours CONSECUTIFS : cumcount par serie ininterrompue de jours stale.
+    groups = (~is_stale).cumsum()
+    out["stale_days"] = is_stale.groupby(groups).cumsum().astype("int64")
+    return out
+
+
+def stale_episodes(veto: pd.DataFrame) -> dict | None:
+    """Resume des episodes de veto stale, ou None s'il n'y en a aucun. -> detail journalisable.
+
+    Le fail-safe A4 transforme un flux actions mort en arret de TOUTES les entrees. Sans ce
+    resume il le ferait en silence : c'est la contrepartie explicite du choix fail-safe
+    (docs/06 §6.2.1). Pur — la strategie ne fait que le passer au journal.
+    """
+    if veto is None or len(veto) == 0 or "stale_days" not in veto.columns:
+        return None
+    stale = veto[veto[contracts.EQUITY_VETO_REASON_COL] == contracts.EQUITY_VETO_STALE]
+    if stale.empty:
+        return None
+    starts = stale[stale["stale_days"] == 1]
+    return {"episodes": int(len(starts)), "jours_max": int(stale["stale_days"].max()),
+            "jours_total": int(len(stale)),
+            "premier": str(starts.index[0]) if len(starts) else None}
+
+
 def regime_now(macro_state: dict) -> tuple[str, dict]:
     """Live : macro_state.json etendu (scores deja calcules) -> (regime, scores).
 
