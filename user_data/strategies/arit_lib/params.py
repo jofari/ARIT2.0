@@ -110,6 +110,12 @@ SR_RR_FULL = 2.0                  # PDR 05.2 — s_sr = 1,0 si RR_dispo >= 2,0
 ADX_PERIOD = 14                   # PDR 05.3
 EMA_FAST = 50                     # PDR 05.3
 EMA_SLOW = 200                    # PDR 05.3
+# Warm-up freqtrade (decision Jonas 2026-08-03 A1, mesure scripts/README.md) : EMA_SLOW=200
+# faussait l'ema200_1d de 9,55 %. 999 = plus petit palier a ecart nul sur 3 fenetres x 2 paires,
+# et dernier tenant en UN appel OHLCV (limite Binance 1000/appel). Plafond dur : 5 x 999.
+# ⚠️ 999 bougies 1d ~= 2,7 ans : un backtest demarrant en 2018 n'a pas son warm-up complet
+# (donnees Binance depuis 2017-08-17) — limite de DONNEES, pas de config.
+STARTUP_CANDLES = 999
 RSI_PERIOD = 14                   # PDR 05.3
 MACD_FAST, MACD_SLOW, MACD_SIGNAL = 12, 26, 9  # PDR 05.3
 ATR_PERIOD = 14                   # PDR 05.3

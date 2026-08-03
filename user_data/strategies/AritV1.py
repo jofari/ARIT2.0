@@ -44,7 +44,7 @@ class AritV1(IStrategy):
     use_custom_stoploss = True
     stoploss = -0.99                             # plancher ; vrai SL = custom + exchange
     process_only_new_candles = True              # docs/11 par.11.2
-    startup_candle_count = params.EMA_SLOW       # warm-up EMA200 (PDR 05.3)
+    startup_candle_count = params.STARTUP_CANDLES  # warm-up EMA200 1d (A1 03/08, cf. params)
     def __init__(self, config=None):
         super().__init__(config)
         self._pending: dict = {}

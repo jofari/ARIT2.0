@@ -87,8 +87,8 @@ Tests : `tests/test_check_bias.py` (parsing des tableaux rich + verdicts, sans l
   | 1500-4800 | 0,000 % | 0,000 % | 0,000 % | 0,000 % | 2 à 5 |
   | ≥ 5000 | — | — | — | — | **refusé par freqtrade** |
 
-  **Recommandation swing : `startup_candle_count = 999`** (proposition, non appliquée —
-  `params.py` est sous gouvernance PDR). C'est le plus petit palier où l'écart est nul sur les
+  **`startup_candle_count = 999`** — ✅ **APPLIQUÉ le 2026-08-03** (décision Jonas A1) :
+  `params.STARTUP_CANDLES`, consommé par `AritV1.py`. C'est le plus petit palier où l'écart est nul sur les
   3 fenêtres, et le dernier qui tient en **un seul appel OHLCV** (limite Binance = 1000
   bougies/appel) : au-delà, freqtrade avertit « Using N calls » à chaque démarrage du bot,
   sans aucun gain de précision. Plafond dur : `5 × 999 = 4999` bougies, au-delà freqtrade
