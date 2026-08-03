@@ -51,9 +51,9 @@ dans `{0 · 0,3 · 0,5 · 0,7 · 1,0}` (`params.SCORE_VALUES`) :
 ## Les 2 invariants à ne jamais casser
 
 1. **Zéro look-ahead / zéro repaint.** Tout pivot décisionnel est confirmé 2 bougies plus tard
-   (`PIVOT_CONFIRM_SHIFT`). Les colonnes brutes `pivot_high` / `pivot_low` **repeignent par
-   construction** et ne doivent JAMAIS servir à décider — elles n'existent que pour construire
-   les versions confirmées `*_conf_*`.
+   (`PIVOT_CONFIRM_SHIFT`). Les fractals bruts **repeignent par construction** : depuis le
+   2026-08-03 (décision A2) ils restent **locaux à `find_pivots`** et ne sont plus posés sur le
+   DataFrame — seules les versions confirmées `*_conf_*` en sortent.
 2. **NaN de warm-up ⇒ score 0**, jamais une exception, jamais un remplissage arbitraire.
 
 ## État actuel / limites connues

@@ -8,7 +8,7 @@
 ```python
 def compute_all(df: DataFrame) -> DataFrame                 # orchestre tout, ordre fixe ci-dessous
 def add_indicators(df, suffix="") -> DataFrame              # EMA/RSI/MACD/ATR/ADX/vol_sma
-def find_pivots(df, n=2, suffix="") -> DataFrame            # pivot_high/low + *_conf (confirmés à +2)
+def find_pivots(df, n=2, suffix="") -> DataFrame            # *_conf SEULEMENT (confirmés à +2 ; bruts locaux, A2 03/08)
 def track_structure(df) -> DataFrame                        # last_ph, last_hl, HH/HL, bos_bull, bos_fresh, choch_bear
 def sr_levels(df, window=180, tol_atr=0.5) -> DataFrame     # nearest_res/sup, res_touches (sur 4h)
 def rr_available(df) -> DataFrame                           # rr_dispo (05.2)

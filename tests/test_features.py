@@ -96,7 +96,9 @@ def test_pivot_confirme_exactement_a_plus_2():
     rows[20] = (100.0, 101.0, 97.0, 100.2)   # pivot low
     df = _df_ohlc(rows)
     out = features.find_pivots(df)
-    assert bool(out["pivot_high"].iloc[10])
+    # A2 (03/08) : les fractals BRUTS ne sortent plus du tout — ils repeignent.
+    assert "pivot_high" not in out.columns
+    assert "pivot_low" not in out.columns
     assert not out["pivot_high_conf"].iloc[:12].any()   # rien avant +2
     assert bool(out["pivot_high_conf"].iloc[12])        # exactement a +2
     assert not out["pivot_low_conf"].iloc[:22].any()

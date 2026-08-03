@@ -4,8 +4,8 @@ Fonctions PURES : DataFrame in -> DataFrame out. pandas/numpy/talib uniquement �
 aucun I/O, aucun reseau, aucun import freqtrade (BUILD_NOTES T1).
 Priorite absolue (M01) : zero look-ahead, zero repaint — tout pivot decisionnel
 est confirme n bougies plus tard (params.PIVOT_CONFIRM_SHIFT pour N=PIVOT_N) ;
-les pivots BRUTS (pivot_high/pivot_low) repeignent PAR CONSTRUCTION et ne servent
-JAMAIS a decider (M01).
+les fractals BRUTS repeignent PAR CONSTRUCTION, ils restent donc LOCAUX a
+find_pivots et ne sont jamais poses sur le DataFrame (A2, 2026-08-03).
 
 Deux etages (BUILD_NOTES design suffix) :
 - frame 4h/1d NATIF (informatives, appelees par M07) : add_indicators,
@@ -114,9 +114,13 @@ def add_indicators(df: pd.DataFrame, suffix: str = "") -> pd.DataFrame:
 def find_pivots(df: pd.DataFrame, n: int = params.PIVOT_N, suffix: str = "") -> pd.DataFrame:
     """PDR 05.1 — fractals N=n (strictement superieur/inferieur aux n voisins).
 
-    `pivot_high`/`pivot_low` : BRUTS, repeignent (voisins futurs) — JAMAIS
-    decisionnels (M01). `pivot_high_conf`/`pivot_low_conf` : confirmes n bougies
-    apres (= params.PIVOT_CONFIRM_SHIFT pour N=PIVOT_N), utilisables au temps t.
+    Seules les colonnes CONFIRMEES sortent : `pivot_high_conf`/`pivot_low_conf`,
+    confirmees n bougies apres (= params.PIVOT_CONFIRM_SHIFT pour N=PIVOT_N), donc
+    utilisables au temps t. Les fractals BRUTS restent des variables LOCALES (ph/pl) :
+    ils repeignent par construction (ils regardent les n voisins FUTURS) et n'ont
+    jamais ete decisionnels (M01) ni contractuels (contracts.py ne liste que les
+    `_conf_4h`). Les poser sur le df faisait sortir `lookahead-analysis` en
+    has_bias=Yes sur un faux positif — decision Jonas 2026-08-03 (A2).
     """
     df = df.copy()
     high, low = df["high"], df["low"]
@@ -125,8 +129,6 @@ def find_pivots(df: pd.DataFrame, n: int = params.PIVOT_N, suffix: str = "") -> 
     for k in range(1, n + 1):
         ph = ph & (high > high.shift(k)) & (high > high.shift(-k))
         pl = pl & (low < low.shift(k)) & (low < low.shift(-k))
-    df[f"pivot_high{suffix}"] = ph
-    df[f"pivot_low{suffix}"] = pl
     df[f"pivot_high_conf{suffix}"] = ph.shift(n, fill_value=False)
     df[f"pivot_low_conf{suffix}"] = pl.shift(n, fill_value=False)
     return df
