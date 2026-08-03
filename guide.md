@@ -9,6 +9,9 @@
 
 ## 1. Vue en 30 secondes
 
+> Version détaillée en deux diagrammes mermaid (structure + état complets, et le processus exact
+> d'une prise de trade) : **[`modules/ARCHITECTURE.md`](modules/ARCHITECTURE.md)**.
+
 ARIT = **4 programmes séparés** qui communiquent par fichiers :
 
 ```
@@ -29,7 +32,8 @@ ARIT = **4 programmes séparés** qui communiquent par fichiers :
 | `user_data/` | Tout ce que freqtrade utilise/produit : stratégie, **code des modules**, config, données, **résultats de backtest**, journaux | tu veux le code, un backtest, un journal |
 | `services/` | Les 3 programmes annexes (macro, Discord, watchdog) — hors freqtrade | tu touches au macro/Discord/watchdog |
 | `modules/` | **La carte des modules** : 1 fiche par module conceptuel (macro, technical, cio, risk, quant, backtest) → vers le vrai code. Aucun code dedans. | tu cherches « où vit le module X ? » |
-| `tests/` | Les 200 tests pytest (1 fichier par module) | tu veux vérifier que rien n'est cassé |
+| `tests/` | Les 231 tests pytest (1 fichier par module) | tu veux vérifier que rien n'est cassé |
+| `scripts/` | Utilitaires lancés à la main, hors runtime : checks de biais, téléchargement macro, rapport Discord ([README](scripts/README.md)) | tu veux vérifier un biais, rapatrier la macro |
 | `for claude build/` | Ressources du BUILD : prompt, pack, PLAN.md (checklist), BUILD_NOTES.md (pièges), RAPPORT_BUILD.md (bilan) | tu veux l'historique/état du chantier |
 | `backtest_lanes/` | Lanes isolées des backtests parallèles (`run1..runN` : état/résultats propres à chaque run, junctions vers data/strategies) — jetable, hors git | tu cherches les résultats bruts d'un run du protocole |
 | ⚠️ | `for claude build/ARIT_PDR_v3/` = **vieille copie INCOMPLÈTE** (11 fichiers, sans modules/). La vraie spec = `docs/` à la racine. | |
@@ -84,6 +88,24 @@ Les 2 fichiers « contrats » (jamais de logique) : `arit_lib/params.py` = TOUTE
 Le protocole de validation (A/B, ablation G1-G7, seuils PF/DD) : `docs/09_validation_deploy.md`.
 Ce qui a déjà tourné : uniquement le **smoke** du 08/07 (BTC 30 j, 0 trade, critère = pas d'exception).
 
+### 4bis. Checks de biais AVANT de croire un backtest
+
+`scripts/check_bias.py` enveloppe les deux vérificateurs natifs de freqtrade et écrit un rapport
+dans `analysis/out/bias/` (log brut + `.md` + `.json`) :
+
+| Check | Ce qu'il prouve | Verdict |
+|---|---|---|
+| `lookahead-analysis` | rejoue la stratégie sur des fenêtres tronquées : un signal passé ne doit pas changer quand on ajoute du futur → **preuve mécanique de l'interdit n°3** (jusqu'ici garanti seulement par relecture : `shift(2)`, `process_only_new_candles`, bougies closes) | FAIL = look-ahead |
+| `recursive-analysis` | recalcule les indicateurs avec 199/499/999/1999 bougies de warm-up + celui de la stratégie : si les valeurs bougent, `startup_candle_count` (= `EMA_SLOW`) est trop court et le backtest est faux **sans le dire** | FAIL ≥ 0,1 % d'écart |
+
+```powershell
+& C:\Users\jofar\venvs\arit\Scripts\python.exe scripts\check_bias.py            # les deux
+& C:\Users\jofar\venvs\arit\Scripts\python.exe scripts\check_bias.py --only recursive -p BTC/USDT
+```
+
+Codes de sortie : `0` tout PASS · `1` au moins un FAIL · `2` indéterminé (trop peu de signaux
+ou erreur outil — jamais compté comme un succès). Détails et options : `scripts/README.md`.
+
 ## 5. « Où sont les 10 agents ? » (Macro Analyst, CIO, Backtester…)
 
 **Ils existent, mais pas sous forme d'agents IA.** L'interdit n°1 du PDR = AUCUN LLM dans le
@@ -124,6 +146,6 @@ projet a été construit (open source vs créé de zéro, module par module), et
 
 - **« Pourquoi le bot a fait ça ? »** → `user_data/logs/decisions/YYYY-MM-DD.jsonl` (1 ligne = 1 décision, format `docs/08`).
 - **« C'est quoi cette constante ? »** → `user_data/strategies/arit_lib/params.py` (le commentaire cite le PDR).
-- **« Ça marche encore ? »** → `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 200 passed).
+- **« Ça marche encore ? »** → `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 231 passed).
 - **« Où en est le chantier ? »** → `for claude build/PLAN.md` (état) · `RAPPORT_BUILD.md` (bilan + questions) · `BUILD_NOTES.md` (pièges Windows/freqtrade et leurs patchs).
 - **Secrets** : `.env` (jamais commité) — modèle dans `.env.example`.

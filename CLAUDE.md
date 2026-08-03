@@ -15,5 +15,5 @@
   arit_lib · AritV1.py < 250 lignes, zéro métier, zéro réseau dans les callbacks · tout en UTC ·
   backtest TOUJOURS `--timeframe-detail 5m` · réponses à Jonas en français.
 - venv : `C:\Users\jofar\venvs\arit` (ne pas réinstaller `aiodns` — voir BUILD_NOTES).
-  Tests : `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 200 passed).
+  Tests : `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 231 passed).
 - Git : remote `https://github.com/jofari/ARIT2.0.git`, branche `main`, **push après chaque commit**.

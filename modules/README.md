@@ -8,6 +8,10 @@
 > `from arit_lib import ...` dans `AritV1.py` et dans les tests. Déplacer `arit_lib/` ici
 > casserait le bot et les 200 tests. Le code reste où freqtrade l'attend ; cette carte dit où.
 
+> **Deux schémas mermaid pour tout voir d'un coup** → [`ARCHITECTURE.md`](ARCHITECTURE.md) :
+> (1) structure et état complets — sources, process, modules, fichiers ; (2) le processus exact
+> d'une prise de trade, de la clôture 1 h au trade journalisé.
+
 ## Les 5 modules conceptuels
 
 | Fiche | Ce que ça répond | Code réel |

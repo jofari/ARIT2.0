@@ -1,6 +1,9 @@
 # Secrets
 .env
 
+# Reglages Claude Code locaux (chemins machine, depot PUBLIC)
+.claude/settings.local.json
+
 # Runtime / donnees
 backtest_lanes/
 analysis/out/
