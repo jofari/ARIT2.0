@@ -1,0 +1,49 @@
+{
+  "username": "ARIT recherche",
+  "title": "État des chantiers ARIT — 31 juillet 2026",
+  "color": 15844367,
+  "description": "Inventaire de **tout ce qui est ouvert** : décisions en attente, chantiers de mesure, dettes techniques, et ce qui bloque le dry-run.\n\n**En une phrase** : le bot est construit, testé et instrumenté, mais il n'a **aucun edge démontré**, son hypothèse fondatrice est falsifiée depuis le 19/07, et il n'a **jamais tourné en dry-run**.\n\nDétail complet en pièce jointe.",
+  "fields": [
+    {
+      "name": "🖊️ A — 8 décisions en attente de ta signature (le vrai goulot)",
+      "value": "Aucune ne demande plus de 10 minutes, toutes bloquent quelque chose :\n\n`A1` **startup_candle_count 200 → 999** (mesuré)\n`A2` retirer les pivots bruts (rend l'audit vert)\n`A3` bloc corrélation : SP500 → NASDAQ100 (sinon casse dans ~13 mois)\n`A4` fusionner ou non le bloc corrélation — en attente depuis le 30/07\n`A5` **véto macro HOSTILE seul** : B passe de −19,1 % à −7,0 %, DD 24,9 % → 10,6 % — en attente depuis le **17/07**\n`A6` sizing : risque constant au lieu de risque par conviction\n`A7` **choisir l'hypothèse d'edge** (géométrie / durée / régime)\n`A8` G-set v2 — à re-mesurer après réparation de l'entrée",
+      "inline": false
+    },
+    {
+      "name": "📏 B — Vague 1 : remesurer sans rien ajouter (coût quasi nul)",
+      "value": "`B1` modèle nul de franchissement de barrière → l'edge devient mesurable sur **70 915 bougies** au lieu de 128 trades\n`B2` MDE + budget de tests, appliqués **rétroactivement** aux rapports de juillet\n`B3` lire `wallet_stats` des zips existants (profondeur **et durée** du DD, sans re-run)\n`B4` posterior bayésien → Kelly → risque de ruine\n`B5` sceller le hold-out 2025-01 → 2026-07\n`B6` registre d'expériences + préenregistrement\n`B7` dépendance de queue des 4 paires\n\n➜ *La vague qui **ferme** des chantiers au lieu d'en ouvrir.*",
+      "inline": false
+    },
+    {
+      "name": "🔬 B — Vague 2 : élargir l'échantillon et auditer",
+      "value": "`B8` récupérer les **signaux rejetés** → passage si **N ≥ 400**, abandon de la branche technique si N < 250\n`B9` audit d'information des 5 scores → abandon si tous les IC < 0,04\n`B10` dé-biaiser le score de volume de l'heure\n`B11` volatilité conditionnelle (doit battre l'ATR14 en QLIKE)\n`B12` **stops fractionnaires 5m, frais inclus** → mort si le signe change entre 6 et 15 bps\n`B13` walk-forward ancré",
+      "inline": false
+    },
+    {
+      "name": "📦 B — Vague 3 : seulement alors, ajouter de la donnée",
+      "value": "Une à la fois, chacune préenregistrée :\n\n`B14` klines Binance complètes (taker buy + nb de trades, **~5 Mo**)\n`B15` basis spot-perp\n`B16` net liquidity **en remplacement** du taux Fed\n`B17` spread de crédit high yield",
+      "inline": false
+    },
+    {
+      "name": "🔧 C — 9 dettes techniques (des choses qui ne marchent pas)",
+      "value": "`C1` **FINNHUB_KEY vide** → calendrier éco non fonctionnel, la porte « news » est inerte ou bloquante\n`C2` **porte spread inerte** — `spread_state.py` validé le 09/07, jamais codé\n`C3` Bollinger « à câbler » depuis le 09/07\n`C4` force des S/R par nb de touches : jamais implémentée\n`C5` fraîcheur du signal 4h : non appliquée\n`C6` protections freqtrade jamais implémentées\n`C7` ⚠️ **webhook Discord à régénérer** (a transité en clair)\n`C8` `Untitled-1.py` parasite\n`C9` hyperopt et plotting **inutilisables** dans le venv",
+      "inline": false
+    },
+    {
+      "name": "🌍 D — Branche macro : 4 chantiers, aucun lancé",
+      "value": "`D1` **passer les jambes longues en spot** → **+267 % → +579 %**, seul levier déjà mesuré et jamais appliqué\n`D2` walk-forward des 5 seuils macro — prérequis explicite au dry-run\n`D3` ablation des 5 composants (lequel porte le signal ?)\n`D4` augmenter n — p = 0,095 sur **12 trades** est indéfendable",
+      "inline": false
+    },
+    {
+      "name": "🚧 E — Ce qui bloque le dry-run, dans l'ordre",
+      "value": "**1.** Aucune hypothèse d'edge signée → un dry-run sans critère de succès\n**2.** Walk-forward jamais fait (identifié comme prérequis dans 2 rapports)\n**3.** Drawdown mal borné : le gate ne contraint que la profondeur, alors que B passe **2 812 jours sous l'eau**\n**4.** Gate matériel : capital réel ⇒ machine allumée en permanence, un laptop ne suffit pas\n**5.** Webhook à régénérer avant le canari",
+      "inline": false
+    },
+    {
+      "name": "✅ Ce qui est fini et n'a plus besoin de rien",
+      "value": "• Le bot : 230 tests verts, ruff propre, 4 process, journal de chaque décision\n• **Zéro look-ahead décisionnel prouvé mécaniquement** (0/67 signaux) — l'interdit n°3 n'est plus une promesse\n• Les 2 checks de biais câblés et testés (28 tests)\n• Le diagnostic : edge nul, gestion destructrice, macro = seul signal non-bruit — **solide, à ne pas refaire**\n• Deux schémas d'architecture à jour",
+      "inline": false
+    }
+  ],
+  "footer": "research/pistes_2026-07-31/CHANTIERS.md — rien n'est appliqué, tout attend une décision"
+}

@@ -1,0 +1,64 @@
+{
+  "username": "ARIT recherche",
+  "title": "Pistes d'amélioration ARIT — données, processus, mathématiques",
+  "color": 3066993,
+  "description": "Balayage complet de ce qu'ARIT **n'utilise pas** : données macro, features techniques, outillage freqtrade, méthodes stochastiques.\n\n6 agents en parallèle (inventaire repo · vault Obsidian · macro · technique · processus · maths), puis consolidation et **re-vérification manuelle des chiffres qui portent une décision** — un agent s'est déjà fait corriger (§7.1).\n\n**Rien n'a été appliqué.** Rapport complet en pièce jointe.",
+  "fields": [
+    {
+      "name": "🎯 Le verdict de 8,5 ans était dérivable en une ligne",
+      "value": "Avec TP +1,5R et SL −1R, la proba de toucher le TP en premier **sous pur hasard** vaut `b/(a+b) = 40,0 %`. ARIT mesure **40,7 %**.\n\nCorrigé de la dérive réelle du BTC, le nul monte à 42,2 % → l'edge d'entrée n'est pas nul, il est **légèrement négatif**.\n\n➜ ARIT n'a jamais eu de **modèle nul**. Le test de permutation randomise le *signe*, jamais la *géométrie*.",
+      "inline": false
+    },
+    {
+      "name": "✅ Mais le même calcul sauve le chantier prioritaire",
+      "value": "Demi-stop (TP +6 % / SL −2 %) : nul à **26,4 %**, observé **33,3 %** → z = 1,74, p = 0,041.\n\n**C'est la seule déviation positive au hasard de tout le diagnostic de juillet.** Le ×20 d'espérance n'est donc pas un artefact de redéfinition du R.",
+      "inline": false
+    },
+    {
+      "name": "🚫 La recherche de juillet a dépassé son budget statistique",
+      "value": "~40 politiques comparées sur les mêmes 123 épisodes.\n\nEspérance du **maximum de 40 essais sous H₀** : SR ≈ **0,161**.\nMeilleure politique trouvée : SR ≈ **0,07**.\n\n➜ Le « gagnant » est **deux fois sous le bruit de sélection**. Le dossier « trouver une meilleure politique de sortie » est mathématiquement clos.",
+      "inline": false
+    },
+    {
+      "name": "💸 Le sizing est au-delà du point de croissance nulle",
+      "value": "Kelly brut `f* = E[R]/E[R²]` = **1,16 %** · bayésien rétréci = **0,46 %**.\n\n`params.py` : plancher **1 %**, cap **3 %** = 2,6 × Kelly, au-delà de `2f* = 2,32 %` où la croissance s'annule.\n\n➜ **Aucun régime de risque autorisé n'est sous-Kelly.** Seul défaut qui coûte dès le 1er jour de dry-run.",
+      "inline": false
+    },
+    {
+      "name": "📦 Le bot jette gratuitement le tiers de ses données",
+      "value": "Les feathers freqtrade ont **6 colonnes**. Les klines Binance en ont **12** — dont le **volume acheteur agressif** et le **nombre de trades**, même appel, gratuits, depuis 2017-08.\n\nCoût pour tout récupérer : **~5 Mo** en 4h.\n\n➜ ARIT trade depuis 8,5 ans sans jamais savoir *qui* casse la résistance.",
+      "inline": false
+    },
+    {
+      "name": "⏳ Le vrai chiffre du drawdown, c'est sa durée",
+      "value": "Vérifié à la main : le drawdown max du produit B dure **2 812 jours — 7,7 ans sous l'eau**. Jamais mentionné nulle part.\n\n`wallet_stats` (sharpe, sortino, calmar, durée du DD) est **déjà dans chaque zip** de backtest, personne ne le lit.\n\nLe gate docs/09 ne contraint que la **profondeur**.",
+      "inline": false
+    },
+    {
+      "name": "🎲 Trois slots ne sont pas trois paris",
+      "value": "BTC/ETH/SOL/BNB corrèlent > 0,8 avec une dépendance de queue élevée → `MAX_OPEN_TRADES = 3` ≈ **1,2 pari indépendant**.\n\nEt `CB_DAY_EQUITY_DROP_PCT` = `RESIDUAL_RISK_MAX_PCT` = **6 %** : le circuit breaker journalier est calibré pour se déclencher exactement quand le budget de risque se matérialise.\n\nBonus : le CB séquentiel (2 pertes) se déclenche **34,8 % du temps en pur bruit**.",
+      "inline": false
+    },
+    {
+      "name": "💣 Deux bombes à retardement silencieuses",
+      "value": "**1.** La série FRED `SP500` du bloc corrélation ne garde que **10 ans glissants** → dans ~13 mois elle commencera après le début du backtest, **sans qu'aucun test n'échoue**. Basculer sur `NASDAQ100` (1986+).\n\n**2.** `MACRO_STALE_FAILSAFE = 3` : ajouter 2 séries en jours ouvrés suffit à basculer en **HOSTILE à chaque férié US**, silencieusement.",
+      "inline": false
+    },
+    {
+      "name": "🧭 Le plan proposé — mesurer avant d'ajouter",
+      "value": "**Vague 1 (aucune donnée nouvelle)** : modèle nul · MDE et budget de tests · lire `wallet_stats` · Kelly · sceller un hold-out · registre d'expériences.\n\n**Vague 2** : récupérer les **signaux rejetés** (N : 128 → 400+) · auditer l'information des 5 scores · dé-biaiser `s_volume` de l'heure · volatilité conditionnelle · walk-forward.\n\n**Vague 3 seulement alors** : klines complètes → basis spot-perp → net liquidity → HY OAS.",
+      "inline": false
+    },
+    {
+      "name": "❓ La question que personne n'a posée",
+      "value": "*De combien mon signal déplace-t-il la probabilité de toucher le TP avant le SL, par rapport à une diffusion nulle calibrée sur la volatilité du moment ?*\n\nDéfinir l'edge comme **Δp = p_obs − p_null**, pas comme un PnL. Ça déplace la mesure de **128 trades vers 70 915 bougies** (×550).\n\nEt son corollaire : `g = E[ln(1+fR)]/E[T]` est la **seule unité commune** entre la branche technique (R/trade) et la branche macro (% sur 199 j). Aucune donnée nouvelle requise.",
+      "inline": false
+    },
+    {
+      "name": "⚠️ docs/01 est falsifié depuis le 19/07",
+      "value": "L'hypothèse d'edge **signée** prévoit : « si B ≤ A : hypothèse invalidée, retour recherche, pas de rationalisation ». B = −17,4 %, A = +0,12 %.\n\nLe projet tourne aujourd'hui **sans hypothèse d'edge valide**. 3 candidates falsifiables proposées dans le rapport (géométrie / durée / régime).",
+      "inline": false
+    }
+  ],
+  "footer": "research/pistes_2026-07-31/RAPPORT.md — proposition, rien n'est appliqué"
+}
