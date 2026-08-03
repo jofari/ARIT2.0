@@ -78,6 +78,12 @@ def dl_fng() -> None:
 JOBS = {
     "dxy": lambda: dl_fred("DTWEXBGS", "dxy"),
     "taux": lambda: dl_fred("DFF", "taux_fed"),
+    # 06.2 c6 (bloc correlation) — NASDAQ100 et PAS SP500 (decision Jonas 2026-08-03, A3) :
+    # la serie FRED `SP500` est une FENETRE GLISSANTE DE 10 ANS. Un re-run dans ~13 mois
+    # ferait disparaitre le debut de la periode de backtest, que macro_regime traiterait comme
+    # "serie pas encore demarree" => score 0, SANS exception ni log. `NASDAQ100` remonte a 1986
+    # (historique stable) et est le meilleur comparable du BTC.
+    "nasdaq100": lambda: dl_fred("NASDAQ100", "nasdaq100"),
     "stablecoins": dl_stablecoins,
     "funding": lambda: (dl_funding("BTCUSDT"), dl_funding("ETHUSDT")),
     "fng": dl_fng,

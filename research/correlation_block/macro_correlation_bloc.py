@@ -17,8 +17,8 @@ poserait 3 problemes :
    HOSTILE deviendrait mecaniquement plus facile a atteindre, ce qui recalibre
    les 5 composants existants sans les avoir touches.
 2. Un score dans {-1, 0, +1} est SYMETRIQUE par construction. Or la mesure dit
-   que le BTC suit les actions a la BAISSE mais pas a la hausse : un +1 quand le
-   SPX monte est precisement ce qu'il ne faut pas coder.
+   que le BTC suit les actions a la BAISSE mais pas a la hausse : un +1 quand
+   l'indice monte est precisement ce qu'il ne faut pas coder.
 3. Motif deja mesure 3 fois sur ce projet (funding en score, sizing par la force
    du score, penalite continue de regime) : un signal utile en VETO detruit de la
    valeur en TERME ADDITIF.
@@ -28,10 +28,10 @@ poserait 3 problemes :
 
 ARCHITECTURE
 ------------
-c6  risk-off actions  : le SPX casse sa structure a la baisse -> veto longs.
-c7  regime de correlation (META) : rho(BTC, SPX) decide si c6 est ARME.
+c6  risk-off actions  : le NASDAQ100 casse sa structure a la baisse -> veto longs.
+c7  regime de correlation (META) : rho(BTC, NASDAQ100) decide si c6 est ARME.
     rho eleve  => le BTC se traite comme un actif de risque, le veto a du sens.
-    rho faible => le BTC suit ses propres drivers, bloquer sur le SPX = bruit.
+    rho faible => le BTC suit ses propres drivers, bloquer sur l'indice = bruit.
 
 Point-in-time : identique au reste du module (decalage +1 jour applique par
 `daily_regimes`). Aucune valeur du jour J n'est lisible avant J+1 00:00 UTC.
@@ -47,8 +47,10 @@ from arit_lib import params
 # -------------------------------------------------------------------- constantes
 # A DEPLACER dans params.py avant fusion (interdit n4 : zero valeur magique hors
 # params.py). Chaque valeur porte sa source, convention params.py.
-MACRO_SPX_FILE = "sp500.csv"          # 06.2 c6 — FRED SP500, meme parser que dxy
-MACRO_SPX_BREAK_WINDOW_D = 20         # 06.2 c6 — plus-bas de cloture sur 20 j ouvres
+MACRO_EQUITY_FILE = "nasdaq100.csv"   # 06.2 c6 — FRED NASDAQ100, meme parser que dxy.
+                                      # PAS SP500 (A3, 03/08) : serie FRED a fenetre glissante
+                                      # de 10 ans => perte SILENCIEUSE du debut du backtest.
+MACRO_EQUITY_BREAK_WINDOW_D = 20      # 06.2 c6 — plus-bas de cloture sur 20 j ouvres
 MACRO_CORR_WINDOW_FAST_D = 30         # 06.2 c7 — rho court (sessions US)
 MACRO_CORR_WINDOW_SLOW_D = 90         # 06.2 c7 — rho long, confirmation
 MACRO_CORR_ARM_ABOVE = 0.50           # 06.2 c7 — hysteresis : armement du veto
@@ -72,30 +74,30 @@ EQUITY_PASS_STALE = "equity_stale"                     # donnee absente -> fail-
 
 
 # --------------------------------------------------------------------- c6 : risk-off
-def equity_structural_break(spx: pd.Series,
-                            window: int = MACRO_SPX_BREAK_WINDOW_D) -> pd.Series:
-    """True quand le SPX cloture sous son plus-bas de cloture des `window` j ouvres.
+def equity_structural_break(equity: pd.Series,
+                            window: int = MACRO_EQUITY_BREAK_WINDOW_D) -> pd.Series:
+    """True quand l'indice actions cloture sous son plus-bas de cloture des `window` j ouvres.
 
     `shift(1)` exclut le jour courant de son propre plancher : la cassure est un
     evenement, pas une tautologie. Index = sessions US uniquement (le passage au
     calendrier 7/7 est le role de `align_to_calendar`).
 
     ASYMETRIQUE PAR CONSTRUCTION : aucune sortie "haussiere" n'existe. Le symetrique
-    (SPX casse un plus-haut => +1) est explicitement ECARTE — la correlation coute
+    (l'indice casse un plus-haut => +1) est explicitement ECARTE — la correlation coute
     dans un sens et ne rapporte pas dans l'autre (RAPPORT §2).
     """
-    floor_ = spx.shift(1).rolling(window).min()
-    return (spx < floor_).fillna(False)
+    floor_ = equity.shift(1).rolling(window).min()
+    return (equity < floor_).fillna(False)
 
 
 # ------------------------------------------------------------------- c7 : correlation
-def btc_equity_correlation(btc_daily_close: pd.Series, spx: pd.Series,
+def btc_equity_correlation(btc_daily_close: pd.Series, equity: pd.Series,
                            window: int) -> pd.Series:
-    """rho de Pearson des rendements log BTC/SPX, calcule SUR LES SESSIONS US.
+    """rho de Pearson des rendements log BTC/actions, calcule SUR LES SESSIONS US.
 
-    PIEGE EVITE : calculer rho sur un calendrier 7/7 avec un SPX forward-fille
-    injecte ~2 jours de rendement NUL par semaine cote SPX, ET desaligne les
-    fenetres (le lundi, le BTC rend 1 jour quand le SPX rend le week-end entier).
+    PIEGE EVITE : calculer rho sur un calendrier 7/7 avec un indice forward-fille
+    injecte ~2 jours de rendement NUL par semaine cote actions, ET desaligne les
+    fenetres (le lundi, le BTC rend 1 jour quand l'indice rend le week-end entier).
 
     Effet MESURE par simulation (test `test_rho_calendaire_est_deflate...`,
     modele : facteur de risque latent 7/7, SPX ferme le week-end et pricant
@@ -103,16 +105,16 @@ def btc_equity_correlation(btc_daily_close: pd.Series, spx: pd.Series,
     sessions, soit environ -33 %. Un vrai couplage a 0,75 s'afficherait a 0,50 —
     pile sur le seuil d'armement, donc un veto qui clignote ou ne s'arme jamais.
     (Chiffre de simulation, pas de mesure sur donnees reelles : a re-derivier sur
-    l'historique BTC/SPX avant fusion.)
+    l'historique BTC/NASDAQ100 avant fusion.)
 
     Le rendement BTC vendredi->lundi couvre le week-end : c'est la bonne fenetre,
-    elle correspond a celle du SPX sur le meme intervalle.
+    elle correspond a celle de l'indice sur le meme intervalle.
     """
-    sessions = spx.index
+    sessions = equity.index
     btc_on_sessions = btc_daily_close.reindex(sessions).ffill()
     r_btc = np.log(btc_on_sessions).diff()
-    r_spx = np.log(spx).diff()
-    return r_btc.rolling(window).corr(r_spx)
+    r_equity = np.log(equity).diff()
+    return r_btc.rolling(window).corr(r_equity)
 
 
 def correlation_state(rho_fast: pd.Series, rho_slow: pd.Series) -> pd.Series:
@@ -142,14 +144,14 @@ def align_to_calendar(sessions_series: pd.Series, full_index: pd.DatetimeIndex,
     derniere session a moins de `stale_hours`. Les deux colonnes sont necessaires :
     `evaluate` doit distinguer "pas de cassure" de "on ne sait pas".
 
-    ⚠️ Pourquoi une fenetre DEDIEE et pas MACRO_STALE_HOURS (48 h) : le SPX est une
-    serie 5/7. Un ferie US colle a un week-end laisse jusqu'a 96 h sans observation
+    ⚠️ Pourquoi une fenetre DEDIEE et pas MACRO_STALE_HOURS (48 h) : l'indice actions est
+    une serie 5/7. Un ferie US colle a un week-end laisse jusqu'a 96 h sans observation
     -> le composant tomberait stale ~10 fois par an pour une raison purement
     calendaire. Or `dxy` (DTWEXBGS) est DEJA 5/7 et tombe stale les memes jours :
     avec MACRO_STALE_FAILSAFE = 3, ajouter UNE serie 5/7 fait passer le compteur de
     1 a 2. Il ne reste qu'un cran de marge avant que chaque ferie US ne bascule le
-    regime en HOSTILE par fail-safe — raison pour laquelle ce bloc n'ajoute QUE le
-    SPX, et pas SPX + NDX (RAPPORT §3).
+    regime en HOSTILE par fail-safe — raison pour laquelle ce bloc n'ajoute QU'UN
+    indice actions, et pas deux (RAPPORT §3).
     """
     obs_dates = pd.Series(sessions_series.index, index=sessions_series.index)
     value = sessions_series.reindex(full_index.union(sessions_series.index)).ffill()
