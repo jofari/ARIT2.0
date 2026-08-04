@@ -15,11 +15,25 @@ FEATURE_COLUMNS = (
     "last_ph_4h", "last_hl_4h", "last_hl_1h",
     "bos_bull_4h", "bos_fresh_4h", "choch_bear_4h", "choch_bear_1h",
     "choch_bear_event_1h",  # 11.3 / 03.4 G6 — EVENEMENT de cassure (decision Jonas 10/07)
+    # A2 (decision Jonas 2026-08-03) — MIROIRS BAISSIERS : le bot est long ET short.
+    # Meme construction que leurs jumeaux haussiers, meme anti-repaint (pivots confirmes).
+    "last_pl_4h", "last_lh_4h", "last_lh_1h",
+    "bos_bear_4h", "bos_fresh_bear_4h", "choch_bull_4h", "choch_bull_1h",
+    "choch_bull_event_1h",   # 03.4 G6 cote short : la structure se retourne A LA HAUSSE
+    "ll_lh_intact_4h",       # miroir de hh_hl_intact (s_structure_short 0,7)
+    # C3 (decision Jonas 2026-08-03) : Bollinger(20,2) 1h CALCULEES ET JOURNALISEES, jamais
+    # decisionnelles en V1 (docs/05 par.5.3). Accumule la donnee pour un test futur sur barres.
+    "bb_upper_1h", "bb_mid_1h", "bb_lower_1h",
     "nearest_res_4h", "nearest_sup_4h", "res_touches_4h",
-    "rr_dispo",
+    "rr_dispo", "rr_dispo_short",   # A2 — RR vers le support pour le short (05.2 miroir)
     "s_structure", "s_momentum", "s_sr", "s_patterns", "s_volume",
+    # A2 — jeu de scores BAISSIER. Meme bareme discret (SCORE_VALUES), meme poids
+    # (POIDS est indexe sans suffixe) : seule la polarite des predicats change.
+    "s_structure_short", "s_momentum_short", "s_sr_short",
+    "s_patterns_short", "s_volume_short",
     "new_4h",
 )
+SHORT_SUFFIX = "_short"   # A2 — suffixe contractuel des colonnes miroir baissieres
 CDL_PREFIX = "cdl_"  # 11.3 / PDR 05.4 idee 9 — ~60 colonnes talib CDL*, journalisees only
 
 # Macro Analyst V1.1 (docs/06 §6.2, valide Jonas 2026-07-12) :
@@ -45,10 +59,26 @@ EQUITY_PASS_NO_BREAK = "equity_no_break"               # arme, mais pas de cassu
 EQUITY_PASS_NOT_STARTED = "equity_not_started"         # serie JAMAIS demarree => bloc inoperant
 
 # Produites par regimes.py (11.3) — noms francais contractuels, ne pas angliciser.
-REGIME_COLUMNS = ("regime", "seuil", "multiplicateur")
+# A2 : `trend_dir` (+1 haussier / -1 baissier / 0 indecis) separe l'ETAT du marche
+# (regime) de son SENS. Sans cette separation, un marche en tendance BAISSIERE tombait
+# dans le fallback RANGE et le short etait structurellement impossible.
+REGIME_COLUMNS = ("regime", "seuil", "multiplicateur", "trend_dir", "multiplicateur_short")
+TREND_DIR_COL = "trend_dir"
 
 # Produites par cio.py (11.3).
-CIO_COLUMNS = ("conviction", "signal_long")
+# A2 : `conviction_short` et `signal_short` sont les jumeaux baissiers. `direction_macro`
+# trace CE QUE LA MACRO AUTORISE sur chaque bougie (hypothese v4 : la macro donne la
+# DIRECTION, la technique donne le timing — docs/01).
+CIO_COLUMNS = ("conviction", "signal_long", "conviction_short", "signal_short",
+               "direction_macro")
+
+# A2 — directions autorisees par la macro (docs/01 v4, docs/06 §6.2).
+# PORTEUR => long seul · HOSTILE => short seul · NEUTRE => les deux, seuil releve (A5).
+DIR_LONG = "long"
+DIR_SHORT = "short"
+DIR_BOTH = "both"
+DIR_NONE = "none"
+DIRECTIONS = (DIR_LONG, DIR_SHORT, DIR_BOTH, DIR_NONE)
 
 # ------------------------------------------- custom_data par trade (11.3)
 CUSTOM_DATA_KEYS = (
@@ -56,7 +86,20 @@ CUSTOM_DATA_KEYS = (
     "mae_r", "mfe_r", "last_candle_ts", "entry_conviction", "entry_regime",
     "signal_id",
     "tp2",  # 11.3 / PDR 03.3 — TP2 INITIAL (audit) ; la sortie recalcule (decision Jonas 09/07)
+    "is_short",  # 11.3 / A2 — sens de la position, FIGE a l'entree. Toute la geometrie
+                 # (R, SL, TP, MAE/MFE) en depend : c'est l'etat le plus critique du trade.
 )
+
+
+def direction_sign(is_short) -> int:
+    """+1 long / -1 short — LE facteur qui symetrise toute la geometrie (A2, docs/03 §3.7).
+
+    Convention unique du projet, a utiliser partout plutot que des `if is_short` disperses :
+        risque  = d x (entree - SL_initial)      > 0 dans les deux sens
+        R(prix) = d x (prix - entree) / risque
+        prix(R) = entree + d x R x risque
+    """
+    return -1 if bool(is_short) else 1
 
 
 @dataclass
@@ -78,6 +121,13 @@ class TradeState:
     entry_regime: str = ""
     signal_id: str = ""
     tp2: float = 0.0  # PDR 03.3 — TP2 initial (audit) ; sortie = resistance courante (Jonas 09/07)
+    is_short: bool = False  # A2 — fige a l'entree. Defaut False = retrocompat totale des
+                            # trades ouverts avant le 04/08 (relus en long, comme avant).
+
+    @property
+    def sign(self) -> int:
+        """+1 long / -1 short (A2) — evite de re-deriver le sens dans chaque G-rule."""
+        return direction_sign(self.is_short)
 
     def as_dict(self) -> dict:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -91,6 +141,9 @@ class TradeState:
 # ------------------------------------------ Fichiers d'etat (11.3, M04)
 # Chemins RELATIFS a user_data/ — resolus par l'appelant (live et backtest).
 MACRO_STATE_FILE = "macro_state.json"                    # 11.3 / PDR 06.3
+# C1 (decision Jonas 2026-08-03) — calendrier economique en DEUX sources.
+CALENDAR_STATIC_FILE = "calendar/economic_calendar.json"  # PRIMAIRE : versionne, zero reseau
+CALENDAR_FF_CACHE_FILE = "calendar/forexfactory_week.json"  # SECONDAIRE : cache, fetch hebdo
 DAY_EQUITY_FILE = "state/day_equity.json"                # 11.3 — {"date","equity"}
 HEARTBEAT_FILE = "state/heartbeat"                       # 11.3 — mtime = heartbeat
 VETO_DIR = "veto"                                        # 11.3 — <signal_id>.flag
@@ -105,7 +158,11 @@ VETO_FLAG_SUFFIX = ".flag"                 # 11.3 — <signal_id>.flag : discord
 # M06 — toute nouvelle cle => PDR 08.1 d'abord, version += 1.
 # v2 (2026-08-03, decisions A4/A5) : regime_inputs gagne macro_regime + equity_veto
 # + equity_veto_reason (docs/08 §8.1). C'est ce qui rend la porte macro ablatable a posteriori.
-SCHEMA_VERSION = 2
+# v3 (2026-08-04, decision A2) : le bot est long ET short. `entry` porte `direction`,
+# regime_inputs porte `direction_macro`. Sans ca, aucun journal anterieur n'est comparable
+# a un journal post-short et le Test 1 de docs/01 (la macro donne-t-elle la direction ?)
+# n'est pas mesurable : c'est LA colonne dont depend l'hypothese v4.
+SCHEMA_VERSION = 3
 
 # Champs obligatoires par type (PDR 08.1). Cles canoniques du build (le PDR les
 # decrit en francais ; les cles JSON sont fixees ICI, une fois pour toutes).
@@ -121,6 +178,7 @@ JOURNAL_REQUIRED_FIELDS = {
     "entry": (
         "ts_utc", "pair", "signal_id", "price", "qty", "risk_pct", "stake",
         "sl_initial", "tp1", "tp2", "conviction", "regime",
+        "direction",   # v3 / A2 — "long" | "short"
     ),
     "gestion": ("ts_utc", "pair", "signal_id", "rule", "before", "after", "profit_r"),
     "exit": (
@@ -132,7 +190,8 @@ JOURNAL_REQUIRED_FIELDS = {
 
 # regime_inputs de `evaluation` (PDR 08.1 / 04.5) :
 REGIME_INPUT_KEYS = ("adx4h", "ema50_4h", "ema200_4h", "close_vs_ema", "fear_greed", "macro_stale",
-                     MACRO_REGIME_COL, EQUITY_VETO_COL, EQUITY_VETO_REASON_COL)  # v2, 03/08
+                     MACRO_REGIME_COL, EQUITY_VETO_COL, EQUITY_VETO_REASON_COL,  # v2, 03/08
+                     "direction_macro")                                          # v3, 04/08 (A2)
 # scores de `evaluation` (PDR 08.1) :
 SCORE_KEYS = ("structure", "momentum", "sr", "patterns", "volume")
 
@@ -152,14 +211,27 @@ SKIP_ZERO_STOP_DISTANCE = "skip_zero_stop_distance"  # M04.4 — entry == sl_ini
 
 
 # ----------------------------------------------------------- signal_id (M06)
+def spot_pair(pair: str) -> str:
+    """"BTC/USDT:USDT" -> "BTC/USDT" (A2). Les paires FUTURES freqtrade portent un suffixe
+    de reglement ; les tables indexees par paire (slippage 03.6, whitelist) restent en
+    notation spot. Une paire spot traverse inchangee."""
+    return pair.split(":")[0] if pair else pair
+
+
 def make_signal_id(pair: str, ts_4h: datetime) -> str:
     """Cle de correlation evaluation -> gate_check -> entry -> gestion -> exit.
 
     Format PDR M06 : "{pair}-{ts_4h}". Normalise pour servir de nom de fichier
     veto flag sous Windows ("/" et ":" interdits ; les points sont permis).
     Format acte par Jonas 2026-07-09 : BTCUSDT-2026.07.06.T120000Z.
+
+    ⚠️ A2 : le ":" des paires futures etait annonce comme normalise par cette docstring
+    mais ne l'etait PAS. Sous "BTC/USDT:USDT" le signal_id contenait un ":", donc la
+    creation du fichier `veto/<signal_id>.intent` levait OSError sous Windows — bug latent
+    active par le passage en futures. Passer par spot_pair() le corrige ET garde les
+    signal_id comparables entre un run spot et un run futures.
     """
     if ts_4h.tzinfo is None:
         ts_4h = ts_4h.replace(tzinfo=timezone.utc)
     stamp = ts_4h.astimezone(timezone.utc).strftime("%Y.%m.%d.T%H%M%SZ")
-    return f"{pair.replace('/', '')}-{stamp}"
+    return f"{spot_pair(pair).replace('/', '')}-{stamp}"

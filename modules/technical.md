@@ -58,7 +58,8 @@ dans `{0 · 0,3 · 0,5 · 0,7 · 1,0}` (`params.SCORE_VALUES`) :
 
 ## État actuel / limites connues
 
-- `SR_FORCE_TOUCHES_DIV = 4` (force = min(touches/4, 1), PDR 05.2) : **jamais implémenté**.
+- ~~`SR_FORCE_TOUCHES_DIV = 4`~~ (force = min(touches/4, 1), PDR 05.2) : **ANNULÉ le 2026-08-03**
+  (C4, décision Jonas). Constante retirée de `params.py` — ne sera pas implémenté en V1.
   `res_touches_4h` est bien calculé mais le nombre de touches ne pondère pas `s_sr`.
 - `BBANDS_PERIOD` / `BBANDS_STD` : constantes présentes, **rien de câblé** (décision Jonas 09/07 :
   journalisées, pas utilisées en V1).

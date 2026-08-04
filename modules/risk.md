@@ -116,6 +116,7 @@ Ce n'est **pas** de l'hyperopt : les valeurs G restent figées, on ne fait qu'ac
 - **`COOLDOWN_POST_EXIT_CANDLES = 2`** (PDR 07.1, `CooldownPeriod`) : la constante existe, mais
   **les Protections freqtrade ne sont pas implémentées** — ni dans la config, ni dans `AritV1`.
   Les circuit breakers `03.5` (CB jour / CB séquentiel) sont bien là, eux.
-- **`SIGNAL_FRESH_1H_CANDLES = 3`** (PDR 11.6, fraîcheur du signal 4h) : **non appliquée**.
+- ~~**`SIGNAL_FRESH_1H_CANDLES = 3`**~~ (PDR 11.6, fraîcheur du signal 4h) : **ANNULÉE le
+  2026-08-03** (C5, décision Jonas). Constante retirée de `params.py` — pas appliquée en V1.
 - **G2 n'a pas de déclencheur en R** (contrairement à G1/G3) : il trail depuis l'entrée. C'est
   conforme au PDR, mais c'est la règle qui coupe le plus tôt — candidate n°1 à l'ablation.

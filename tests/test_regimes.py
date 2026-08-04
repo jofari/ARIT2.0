@@ -105,7 +105,9 @@ def test_classify_only_touches_three_columns_across_regime_change():
     df["preexisting"] = 7
     before = set(df.columns)
     df = regimes.classify(df, _macro(fear_greed=60))
-    assert set(df.columns) - before == {"regime", "seuil", "multiplicateur"}
+    # A2 : le contrat passe de 3 a 5 colonnes (trend_dir + multiplicateur_short) —
+    # l'invariant reel est « classify ne cree QUE contracts.REGIME_COLUMNS ».
+    assert set(df.columns) - before == set(contracts.REGIME_COLUMNS)
     assert df["regime"].iloc[0] == "TREND"
 
     frozen = set(df.columns)
@@ -124,12 +126,46 @@ def _df_macro(adx, ema50, ema200, close_4h, macro, n=1):
     return df
 
 
-def test_macro_column_hostile_forces_risk_off():
-    # Technique = TREND, mais macro HOSTILE => RISK_OFF (04 §4.1 crit.1, absorbe F&G<25).
+def test_macro_column_hostile_ne_force_plus_risk_off():
+    """A2 (04/08) : HOSTILE ne veut plus dire « rien a faire » mais « short autorise ».
+
+    Le regime technique n'est donc plus ecrase. Le blocage du LONG en HOSTILE est
+    desormais porte par `direction_macro` (cio) — cf. test_hostile_bloque_toujours_le_long
+    dans test_cio.py, qui verifie l'equivalence cote long.
+    """
     out = regimes.classify(_df_macro(30, 110, 100, 115, "HOSTILE"))
+    assert out["regime"].iloc[0] == "TREND"                  # avant A2 : "RISK_OFF"
+    assert out["seuil"].iloc[0] == params.SEUIL_TREND
+    # Le short n'a PAS le multiplicateur plein ici : la technique est haussiere (trend_dir
+    # = +1), c'est cio qui refusera le short. Accord macro+technique => plein, sinon reduit.
+    assert out["multiplicateur"].iloc[0] == params.MULT_REDUCED     # long : macro contre lui
+    assert out["multiplicateur_short"].iloc[0] == params.MULT_FULL  # short : macro pour lui
+    assert out[contracts.TREND_DIR_COL].iloc[0] == 1
+
+
+def test_veto_actions_force_toujours_risk_off():
+    """Le veto c6/c7 (A4) reste un fail-safe de correlation, PAS un avis directionnel :
+    il coupe les deux sens, contrairement a HOSTILE."""
+    df = _df_macro(30, 110, 100, 115, "HOSTILE")
+    df[contracts.EQUITY_VETO_COL] = [True]
+    out = regimes.classify(df)
     assert out["regime"].iloc[0] == "RISK_OFF"
     assert out["multiplicateur"].iloc[0] == params.MULT_RISK_OFF
+    assert out["multiplicateur_short"].iloc[0] == params.MULT_RISK_OFF
     assert np.isnan(out["seuil"].iloc[0])
+
+
+def test_tendance_baissiere_devient_trend_et_pas_range():
+    """A2 : avant, une tendance baissiere tombait dans le fallback RANGE — le short etait
+    structurellement impossible. Elle est maintenant TREND avec trend_dir = -1."""
+    out = regimes.classify(_df_macro(30, 100, 110, 95, "HOSTILE"))  # e50 < e200, close < e50
+    assert out["regime"].iloc[0] == "TREND"
+    assert out[contracts.TREND_DIR_COL].iloc[0] == -1
+    assert out["multiplicateur_short"].iloc[0] == params.MULT_FULL
+    # EMAs et prix qui se contredisent => 0 => on retombe bien dans RANGE, comme avant.
+    mixed = regimes.classify(_df_macro(30, 110, 100, 95, "PORTEUR"))  # e50 > e200 mais close < e50
+    assert mixed[contracts.TREND_DIR_COL].iloc[0] == 0
+    assert mixed["regime"].iloc[0] == "RANGE"
 
 
 def test_macro_column_porteur_full_multiplier():

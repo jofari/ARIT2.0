@@ -29,6 +29,7 @@ SUFFIX_1H = f"_{params.TIMEFRAME_BASE}"
 # Pattern custom PDR 05.4 (pin bar bullish) — journalise avec les CDL* (idee 9),
 # d'ou le prefixe contractuel contracts.CDL_PREFIX.
 PINBAR_COL = contracts.CDL_PREFIX + "pinbar_bull"
+PINBAR_BEAR_COL = contracts.CDL_PREFIX + "pinbar_bear"   # A2 — miroir baissier (05.4)
 
 # Scores discrets contractuels (PDR 04.4) — seules valeurs autorisees.
 _S0, _S03, _S05, _S07, _S1 = params.SCORE_VALUES
@@ -49,6 +50,14 @@ def _bool(s: pd.Series) -> pd.Series:
 def _cdl_col(talib_name: str) -> str:
     """"CDLENGULFING" -> "cdl_engulfing" (BUILD_NOTES 5)."""
     return contracts.CDL_PREFIX + talib_name[len("CDL"):].lower()
+
+
+def _event(state: pd.Series) -> pd.Series:
+    """Etat persistant -> EVENEMENT de bascule faux->vrai (03.4 G6, decision Jonas 10/07).
+
+    shift(1) = passe seul => aucun look-ahead ; warm-up => False (fill_value).
+    """
+    return state & ~state.shift(1, fill_value=False)
 
 
 def _prev_4h(s: pd.Series, new_4h: pd.Series) -> pd.Series:
@@ -78,11 +87,26 @@ def compute_all(df: pd.DataFrame) -> pd.DataFrame:
     tmp = track_structure(find_pivots(tmp))
     df["last_hl" + SUFFIX_1H] = tmp["last_hl"]
     df["choch_bear" + SUFFIX_1H] = tmp["choch_bear"]
+    df["last_lh" + SUFFIX_1H] = tmp["last_lh"]        # A2 — ancre du trailing G2 short
+    df["choch_bull" + SUFFIX_1H] = tmp["choch_bull"]  # A2 — miroir de l'etat CHoCH
     # G6 = EVENEMENT de cassure (decision Jonas 2026-07-10, docs/03 par.3.4) : la bougie ou
     # l'etat choch_bear_1h PASSE de faux a vrai en cloture. L'etat persistant reste journalise
     # (choch_bear_1h). shift(1) = passe seul => aucun look-ahead ; warm-up => False (fill_value).
     choch_state = df["choch_bear" + SUFFIX_1H]
-    df["choch_bear_event" + SUFFIX_1H] = choch_state & ~choch_state.shift(1, fill_value=False)
+    df["choch_bear_event" + SUFFIX_1H] = _event(choch_state)
+    # A2 — G6 cote SHORT : l'evenement adverse d'une position vendeuse est le CHoCH HAUSSIER.
+    df["choch_bull_event" + SUFFIX_1H] = _event(df["choch_bull" + SUFFIX_1H])
+    # C3 (decision Jonas 2026-08-03) — Bollinger(20,2) sur 1h. CALCULEES ET JOURNALISEES,
+    # JAMAIS decisionnelles en V1 : docs/05 par.5.3 l'exige, et les cabler dans un score
+    # consommerait un essai de plus sur un budget de tests deja depasse. Elles accumulent
+    # la donnee pour etre testables plus tard sur les barres, pas sur 128 trades.
+    bb_up, bb_mid, bb_low = talib.BBANDS(
+        _f64(df["close"]), timeperiod=params.BBANDS_PERIOD,
+        nbdevup=params.BBANDS_STD, nbdevdn=params.BBANDS_STD,
+    )
+    df["bb_upper" + SUFFIX_1H] = bb_up
+    df["bb_mid" + SUFFIX_1H] = bb_mid
+    df["bb_lower" + SUFFIX_1H] = bb_low
     # PDR 11.2 — nouvelle bougie 4h. Garde NaT : avant la premiere bougie 4h
     # mergee il n'y a PAS de nouvelle donnee 4h (warm-up du merge).
     date4 = df["date" + SUFFIX_4H]
@@ -151,29 +175,42 @@ def track_structure(df: pd.DataFrame) -> pd.DataFrame:
     last_ph = ph_price.ffill()
     last_pl = pl_price.ffill()  # dernier pivot low TOUTE etiquette (interne)
     df["last_ph"] = last_ph
+    df["last_pl"] = last_pl                   # A2 — dernier pivot low confirme (BOS baissier)
     # Etiquettes : HH si nouveau pivot high > precedent, HL si pivot low > precedent
     # (premier pivot : pas d'etiquette => False, structure neutre).
     is_hh = ph_price > last_ph.shift(1)
     is_hl = pl_price > last_pl.shift(1)
+    # A2 — miroirs : LL si nouveau pivot low < precedent, LH si pivot high < precedent.
+    # Strictement l'inverse des deux lignes ci-dessus, meme anti-repaint (prix connu a +n).
+    is_ll = pl_price < last_pl.shift(1)
+    is_lh = ph_price < last_ph.shift(1)
     df["last_hl"] = pl_price.where(is_hl).ffill()
+    df["last_lh"] = ph_price.where(is_lh).ffill()   # A2 — ancre du SL short (03.3 miroir)
     hh_state = _bool(is_hh.where(conf_h).ffill())
     hl_state = _bool(is_hl.where(conf_l).ffill())
     df["hh_hl_intact"] = hh_state & hl_state  # 05.1 : "sequence HH/HL intacte"
+    ll_state = _bool(is_ll.where(conf_l).ffill())
+    lh_state = _bool(is_lh.where(conf_h).ffill())
+    df["ll_lh_intact"] = ll_state & lh_state  # A2 — "sequence LL/LH intacte" (miroir)
     # BOS haussier : cassure du dernier PH confirme + displacement (corps >= 1xATR).
     body = (df["close"] - df["open"]).abs()
-    df["bos_bull"] = (df["close"] > last_ph) & (
-        body >= params.BOS_DISPLACEMENT_ATR * df["atr"]
-    )
+    displacement = body >= params.BOS_DISPLACEMENT_ATR * df["atr"]
+    df["bos_bull"] = (df["close"] > last_ph) & displacement
+    # A2 — BOS baissier : cassure du dernier PL confirme, MEME exigence de displacement.
+    df["bos_bear"] = (df["close"] < last_pl) & displacement
     # Fraicheur : BOS "frais" pendant BOS_FRESH_CANDLES_4H bougies (05.1).
-    df["bos_fresh"] = (
-        df["bos_bull"]
-        .astype(float)
-        .rolling(params.BOS_FRESH_CANDLES_4H, min_periods=1)
-        .max()
-        > 0
-    )
+    df["bos_fresh"] = _fresh(df["bos_bull"])
+    df["bos_fresh_bear"] = _fresh(df["bos_bear"])   # A2 — miroir
     df["choch_bear"] = df["close"] < df["last_hl"]
+    df["choch_bull"] = df["close"] > df["last_lh"]  # A2 — structure qui se retourne A LA HAUSSE
     return df
+
+
+def _fresh(flag: pd.Series) -> pd.Series:
+    """PDR 05.1 — evenement "frais" pendant BOS_FRESH_CANDLES_4H bougies."""
+    return (flag.astype(float)
+            .rolling(params.BOS_FRESH_CANDLES_4H, min_periods=1)
+            .max() > 0)
 
 
 def _clusters(prices: np.ndarray, tol: float) -> list[tuple[float, int]]:
@@ -237,21 +274,33 @@ def sr_levels(
 def rr_available(df: pd.DataFrame) -> pd.DataFrame:
     """PDR 05.2 / BUILD_NOTES 3 — rr_dispo sur le df 1h merge, MEME SL que 03.3.
 
-    sl_est = last_hl_4h - SL_HL_ATR_BUFFER x atr_4h ; fallback
-    close - SL_FALLBACK_ATR_MULT x atr_4h si HL inexploitable (NaN ou HL >= close).
-    rr_dispo = (nearest_res_4h - close) / (close - sl_est) ; denominateur <= 0 ou
-    resistance absente => NaN (=> s_sr = 0, jamais d'infini).
+    LONG  : sl_est = last_hl_4h - SL_HL_ATR_BUFFER x atr_4h ; fallback
+            close - SL_FALLBACK_ATR_MULT x atr_4h si HL inexploitable (NaN ou HL >= close).
+            rr_dispo = (nearest_res_4h - close) / (close - sl_est).
+    SHORT (A2) : miroir strict — sl_est = last_lh_4h + buffer x atr_4h ; fallback
+            close + SL_FALLBACK_ATR_MULT x atr_4h si LH inexploitable (NaN ou LH <= close).
+            rr_dispo_short = (close - nearest_sup_4h) / (sl_est - close).
+    Denominateur <= 0 ou niveau cible absent => NaN (=> s_sr = 0, jamais d'infini).
     """
     df = df.copy()
     close = df["close"]
-    hl = df["last_hl" + SUFFIX_4H]
     atr4 = df["atr" + SUFFIX_4H]
+    hl = df["last_hl" + SUFFIX_4H]
     sl_est = (hl - params.SL_HL_ATR_BUFFER * atr4).where(
         hl.notna() & (hl < close),
         close - params.SL_FALLBACK_ATR_MULT * atr4,
     )
     risk = close - sl_est
     df["rr_dispo"] = (df["nearest_res" + SUFFIX_4H] - close) / risk.where(risk > 0)
+
+    lh = df["last_lh" + SUFFIX_4H]
+    sl_est_s = (lh + params.SL_HL_ATR_BUFFER * atr4).where(
+        lh.notna() & (lh > close),
+        close + params.SL_FALLBACK_ATR_MULT * atr4,
+    )
+    risk_s = sl_est_s - close
+    df["rr_dispo" + contracts.SHORT_SUFFIX] = (
+        (close - df["nearest_sup" + SUFFIX_4H]) / risk_s.where(risk_s > 0))
     return df
 
 
@@ -271,13 +320,93 @@ def candle_patterns(df: pd.DataFrame) -> pd.DataFrame:
     top_third = hi - (hi - lo) * params.PIN_BAR_CLOSE_TOP_FRACTION
     is_pin = (lower_wick >= params.PIN_BAR_WICK_BODY_RATIO * body) & (cl >= top_third)
     cols[PINBAR_COL] = np.where(is_pin, params.CDL_BULLISH, 0)
+    # A2 — pin bar BEARISH, miroir strict : meche HAUTE >= 2 x corps ET cloture dans le
+    # tiers BAS. Sortie -100/0, convention talib des patterns baissiers.
+    upper_wick = hi - np.maximum(op, cl)
+    bottom_third = lo + (hi - lo) * params.PIN_BAR_CLOSE_BOTTOM_FRACTION
+    is_pin_bear = (upper_wick >= params.PIN_BAR_WICK_BODY_RATIO * body) & (cl <= bottom_third)
+    cols[PINBAR_BEAR_COL] = np.where(is_pin_bear, params.CDL_BEARISH, 0)
     return pd.concat([df, pd.DataFrame(cols, index=df.index)], axis=1)
+
+
+def _score_structure(df, bos, bos_fresh, choch, intact, trend_ctx, warm):
+    """PDR 05.1 — bareme s_structure, INDEPENDANT du sens : le sens vit dans les series
+    passees en argument (BOS haussier + HH/HL pour le long, BOS baissier + LL/LH pour le
+    short). Ordre BOS-frais/CHoCH pilote par l'A/B Jonas 09/07 (BUILD_NOTES)."""
+    # "dernier evenement = CHoCH adverse" : CHoCH plus recent que le dernier BOS.
+    pos = pd.Series(np.arange(len(df), dtype=float), index=df.index)
+    last_bos = pos.where(bos).ffill()
+    last_choch = pos.where(choch).ffill()
+    choch_last = last_choch.notna() & (last_choch > last_bos.fillna(-1.0))
+    bos_cond = (bos_fresh & trend_ctx, _S1)   # 05.1 : 1,0 — BOS frais ET contexte de tendance
+    choch_cond = (choch_last, _S0)            # 05.1 : 0 — dernier evenement = CHoCH adverse
+    ranked = [choch_cond, bos_cond] if params.S_STRUCTURE_CHOCH_PRIORITY else [bos_cond, choch_cond]
+    return np.select(
+        [
+            warm,                       # M01 invariant 3 : warm-up => 0
+            ranked[0][0],
+            ranked[1][0],
+            intact & ~bos_fresh,        # 05.1 : 0,7 — sequence intacte, continuation
+        ],
+        [_S0, ranked[0][1], ranked[1][1], _S07],
+        default=_S03,                   # 05.1 : 0,3 — structure neutre
+    )
+
+
+def _score_momentum(band, soft_band, aligned, amplifying):
+    """PDR 05.3 — bareme s_momentum. `band`/`soft_band` = bandes RSI (haussieres ou leur
+    miroir A2) ; `aligned` = histogramme MACD dans le sens du trade ; `amplifying` = il
+    s'amplifie vs la bougie 4h precedente.
+
+    ⚠️ Asymetrie VOULUE du PDR, conservee telle quelle : le score PLEIN exige
+    l'amplification, le score 0,5 ne l'exige PAS (bande large + sens suffisent).
+    """
+    return np.select(
+        [band & aligned & amplifying, soft_band & aligned],
+        [_S1, _S05],
+        default=_S0,                    # 05.3 : sur-extension ou pas de momentum
+    )
+
+
+def _score_sr(rr):
+    """PDR 05.2 — bareme s_sr. rr NaN => 0 (le gate RR coupe de toute facon)."""
+    return np.select([rr >= params.SR_RR_FULL, rr >= params.RR_MIN], [_S1, _S07], default=_S0)
+
+
+def _score_patterns(df, new4, atr4, bos, pattern_cols, signe):
+    """PDR 05.4 — bareme s_patterns. `pattern_cols` = colonnes CDL du sens vise,
+    `signe` = params.CDL_BULLISH (long) ou params.CDL_BEARISH (short)."""
+    hit = pd.Series(False, index=df.index)
+    for col in pattern_cols:
+        hit = hit | (df[col] == signe)
+    # Le doji reste lu a +100 : c'est une INDECISION, elle disqualifie une cassure dans
+    # les DEUX sens (05.4). Il n'a pas de version baissiere.
+    doji = df[_cdl_col(params.FILTER_DOJI) + SUFFIX_4H] == params.CDL_BULLISH
+    bos_prev = _prev_4h(bos.astype(float), new4).fillna(0.0) > 0
+    recent = hit.copy()  # pattern dans les PATTERN_RECENT_CANDLES_4H bougies
+    older = hit.astype(float)
+    for _ in range(params.PATTERN_RECENT_CANDLES_4H - 1):
+        older = _prev_4h(older, new4)
+        recent = recent | (older.fillna(0.0) > 0)
+    return np.select(
+        [
+            atr4.isna(),                 # warm-up : BOS indefini => 0 (M01)
+            bos & doji,                  # 05.4 : 0 — doji sur la bougie de cassure
+            hit & (bos | bos_prev),      # 05.4 : 1,0 — pattern sur cassure/suivante
+            recent,                      # 05.4 : 0,5 — pattern < 3 bougies 4h
+        ],
+        [_S0, _S0, _S1, _S05],
+        default=_S03,                    # 05.4 : 0,3 — absence non disqualifiante
+    )
 
 
 def module_scores(df: pd.DataFrame) -> pd.DataFrame:
     """PDR 05 — les 5 scores discrets, table-driven (np.select), valeurs
     STRICTEMENT dans params.SCORE_VALUES (M01, BUILD_NOTES 6).
 
+    A2 (2026-08-03) : produit DEUX jeux — `s_*` (haussier) et `s_*_short` (baissier).
+    Meme bareme, memes seuils, seule la polarite des predicats change : le short
+    n'introduit AUCUN degre de liberte nouveau (contrainte du budget de tests, docs/01).
     S'execute sur le df 1h merge : requiert *_4h, volume_4h, new_4h, rr_dispo.
     NaN de warm-up => score 0 (M01 invariant 3) — jamais de fillna sur les prix.
     """
@@ -288,81 +417,56 @@ def module_scores(df: pd.DataFrame) -> pd.DataFrame:
     e50 = df["ema50" + SUFFIX_4H]
     e200 = df["ema200" + SUFFIX_4H]
     atr4 = df["atr" + SUFFIX_4H]
+    rsi = df["rsi" + SUFFIX_4H]
+    hist = df["macd_hist" + SUFFIX_4H]
+    sfx = contracts.SHORT_SUFFIX
+    warm = adx.isna() | e50.isna() | e200.isna() | atr4.isna()
+    trend_min = adx >= params.ADX_TREND_MIN
 
     # ---- s_structure (05.1 ; BUILD_NOTES 4 : contexte TREND = conditions PRIX,
     # le veto macro/F&G vit dans regimes.py)
     bos = _bool(df["bos_bull" + SUFFIX_4H])
-    bos_fresh = _bool(df["bos_fresh" + SUFFIX_4H])
-    choch = _bool(df["choch_bear" + SUFFIX_4H])
-    intact = _bool(df["hh_hl_intact" + SUFFIX_4H])
-    trend_ctx = (adx >= params.ADX_TREND_MIN) & (e50 > e200) & (close > e50)
-    # "dernier evenement = CHoCH baissier" : CHoCH plus recent que le dernier BOS.
-    pos = pd.Series(np.arange(len(df), dtype=float), index=df.index)
-    last_bos = pos.where(bos).ffill()
-    last_choch = pos.where(choch).ffill()
-    choch_last = last_choch.notna() & (last_choch > last_bos.fillna(-1.0))
-    warm_structure = adx.isna() | e50.isna() | e200.isna() | atr4.isna()
-    # A/B Jonas 09/07 (BUILD_NOTES) : ordre BOS-frais/CHoCH sur bougie croisee.
-    bos_cond = (bos_fresh & trend_ctx, _S1)   # 05.1 : 1,0 — BOS frais ET TREND
-    choch_cond = (choch_last, _S0)            # 05.1 : 0 — dernier evenement = CHoCH
-    ranked = [choch_cond, bos_cond] if params.S_STRUCTURE_CHOCH_PRIORITY else [bos_cond, choch_cond]
-    df["s_structure"] = np.select(
-        [
-            warm_structure,             # M01 invariant 3 : warm-up => 0
-            ranked[0][0],
-            ranked[1][0],
-            intact & ~bos_fresh,        # 05.1 : 0,7 — HH/HL intacte, continuation
-        ],
-        [_S0, ranked[0][1], ranked[1][1], _S07],
-        default=_S03,                   # 05.1 : 0,3 — structure neutre
-    )
+    bos_bear = _bool(df["bos_bear" + SUFFIX_4H])
+    df["s_structure"] = _score_structure(
+        df, bos, _bool(df["bos_fresh" + SUFFIX_4H]), _bool(df["choch_bear" + SUFFIX_4H]),
+        _bool(df["hh_hl_intact" + SUFFIX_4H]),
+        trend_min & (e50 > e200) & (close > e50), warm)
+    df["s_structure" + sfx] = _score_structure(   # A2 — contexte de tendance INVERSE
+        df, bos_bear, _bool(df["bos_fresh_bear" + SUFFIX_4H]),
+        _bool(df["choch_bull" + SUFFIX_4H]), _bool(df["ll_lh_intact" + SUFFIX_4H]),
+        trend_min & (e50 < e200) & (close < e50), warm)
 
-    # ---- s_momentum (05.3)
-    rsi = df["rsi" + SUFFIX_4H]
-    hist = df["macd_hist" + SUFFIX_4H]
-    growing = hist > _prev_4h(hist, new4)  # croissant vs bougie 4h precedente
-    full = rsi.between(params.RSI_MOM_LOW, params.RSI_MOM_HIGH) & (hist > 0) & growing
-    soft_band = rsi.between(
-        params.RSI_MOM_SOFT_LOW, params.RSI_MOM_LOW, inclusive="left"
-    ) | rsi.between(params.RSI_MOM_HIGH, params.RSI_MOM_SOFT_HIGH, inclusive="right")
-    df["s_momentum"] = np.select(
-        [full, soft_band & (hist > 0)],
-        [_S1, _S05],
-        default=_S0,                    # 05.3 : sur-extension > 75 ou pas de momentum
-    )
+    # ---- s_momentum (05.3) — histogramme MACD dans le sens du trade ET qui s'amplifie
+    prev_hist = _prev_4h(hist, new4)
+    df["s_momentum"] = _score_momentum(
+        rsi.between(params.RSI_MOM_LOW, params.RSI_MOM_HIGH),
+        rsi.between(params.RSI_MOM_SOFT_LOW, params.RSI_MOM_LOW, inclusive="left")
+        | rsi.between(params.RSI_MOM_HIGH, params.RSI_MOM_SOFT_HIGH, inclusive="right"),
+        hist > 0, hist > prev_hist)
+    df["s_momentum" + sfx] = _score_momentum(     # A2 — miroir autour de 50, hist < 0
+        rsi.between(params.RSI_MOM_SHORT_LOW, params.RSI_MOM_SHORT_HIGH),
+        rsi.between(params.RSI_MOM_SHORT_HIGH, params.RSI_MOM_SHORT_SOFT_HIGH, inclusive="right")
+        | rsi.between(params.RSI_MOM_SHORT_SOFT_LOW, params.RSI_MOM_SHORT_LOW, inclusive="left"),
+        hist < 0, hist < prev_hist)
 
-    # ---- s_sr (05.2) — rr NaN => 0 (le gate RR coupe de toute facon)
-    rr = df["rr_dispo"]
-    df["s_sr"] = np.select(
-        [rr >= params.SR_RR_FULL, rr >= params.RR_MIN],
-        [_S1, _S07],
-        default=_S0,
-    )
+    # ---- s_sr (05.2)
+    df["s_sr"] = _score_sr(df["rr_dispo"])
+    df["s_sr" + sfx] = _score_sr(df["rr_dispo" + sfx])   # A2 — RR vers le SUPPORT
 
     # ---- s_patterns (05.4)
-    bullish = pd.Series(False, index=df.index)
-    entry_cols = [_cdl_col(p) + SUFFIX_4H for p in params.ENTRY_CDL_PATTERNS]
-    for col in [*entry_cols, PINBAR_COL + SUFFIX_4H]:
-        bullish = bullish | (df[col] == params.CDL_BULLISH)
-    doji = df[_cdl_col(params.FILTER_DOJI) + SUFFIX_4H] == params.CDL_BULLISH
-    bos_prev = _prev_4h(bos.astype(float), new4).fillna(0.0) > 0
-    recent = bullish.copy()  # pattern dans les PATTERN_RECENT_CANDLES_4H bougies
-    older = bullish.astype(float)
-    for _ in range(params.PATTERN_RECENT_CANDLES_4H - 1):
-        older = _prev_4h(older, new4)
-        recent = recent | (older.fillna(0.0) > 0)
-    df["s_patterns"] = np.select(
-        [
-            atr4.isna(),                 # warm-up : BOS indefini => 0 (M01)
-            bos & doji,                  # 05.4 : 0 — doji sur la bougie de cassure
-            bullish & (bos | bos_prev),  # 05.4 : 1,0 — pattern sur cassure/suivante
-            recent,                      # 05.4 : 0,5 — pattern < 3 bougies 4h
-        ],
-        [_S0, _S0, _S1, _S05],
-        default=_S03,                    # 05.4 : 0,3 — absence non disqualifiante
-    )
+    df["s_patterns"] = _score_patterns(
+        df, new4, atr4, bos,
+        [_cdl_col(p) + SUFFIX_4H for p in params.ENTRY_CDL_PATTERNS] + [PINBAR_COL + SUFFIX_4H],
+        params.CDL_BULLISH)
+    df["s_patterns" + sfx] = _score_patterns(     # A2 — patterns baissiers sur BOS baissier
+        df, new4, atr4, bos_bear,
+        [_cdl_col(p) + SUFFIX_4H for p in params.ENTRY_CDL_PATTERNS_SHORT]
+        + [PINBAR_BEAR_COL + SUFFIX_4H],
+        params.CDL_BEARISH)
 
-    # ---- s_volume (05.5)
+    # ---- s_volume (05.5) — SANS SENS par construction : un volume fort confirme un
+    # mouvement, il ne dit pas dans quelle direction. Le short reutilise donc le meme
+    # score, il n'est pas duplique par symetrie de facade.
     vol = df["volume" + SUFFIX_4H]
     vsma = df["vol_sma20" + SUFFIX_4H]
     df["s_volume"] = np.select(
@@ -370,4 +474,5 @@ def module_scores(df: pd.DataFrame) -> pd.DataFrame:
         [_S1, _S05],
         default=_S0,
     )
+    df["s_volume" + sfx] = df["s_volume"]
     return df

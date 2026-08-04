@@ -1,0 +1,214 @@
+# DECISIONS.md — journal des arbitrages de Jonas
+
+> **But** : un arbitrage de Jonas ne doit JAMAIS vivre uniquement dans une conversation.
+> Toute décision est écrite ici le jour où elle est prise, avec ce qu'elle implique et son
+> état d'application. Ce fichier est versionné : il survit à un `/clear`, à un changement de
+> modèle et à une réinstallation.
+>
+> **Règle** : une décision n'est « fermée » que quand la colonne *État* dit `appliqué` et
+> cite le commit. `acté` = tranché mais pas encore codé. `reporté` = volontairement remis.
+>
+> Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/CHANTIERS.md`.
+
+---
+
+## Session du 2026-08-03 — réponses aux décisions A1-A8 et C1-C8
+
+Source : arbitrages donnés par Jonas le 03/08 au soir, en réponse à l'inventaire
+`research/pistes_2026-07-31/CHANTIERS.md`.
+
+### A — Décisions de conception
+
+| # | Décision de Jonas | État | Trace |
+|---|---|---|---|
+| A1 | `startup_candle_count` = **999** bougies, pour la précision | appliqué | `325a906` |
+| A2 | Retirer les fractals bruts du DataFrame **+ autoriser le bot à shorter (long ET short)** | pivots : appliqué `39bc8cc` · short : **appliqué le 04/08** | voir A2-bis et session 04/08 |
+| A3 | Indice actions = **NASDAQ100** (pas SP500) | appliqué | `7406a83` |
+| A4 | Bloc corrélation macro **fusionné**, en fail-safe | appliqué | `0e3b0e4` |
+| A5 | Véto macro HOSTILE seul : **non, pas seul** → la pénalité NEUTRE est CONSERVÉE | acté, aucun code à changer | `cio.py:31` inchangé |
+| A6 | Sizing : **risque constant à 1,16 %** (Kelly plein) pour la V1 | appliqué | `docs/03 §3.1.0` + `params.RISK_CONSTANT_PCT` |
+| A7 | Hypothèse d'edge : **H1 + une partie de H2** — voir la formulation ci-dessous | appliqué (signé) | `docs/01_edge.md` v4 |
+| A8 | G-rules : à retravailler, mais **priorité aux autres paramètres** | reporté | — |
+
+#### A2-bis — le short (décision du 03/08)
+
+Jonas : « long et short ». Ce n'est pas un drapeau. Périmètre réel :
+`can_short = False` (`AritV1.py:42`) et `user_data/config.dry.json` sans `trading_mode`
+(donc **spot** par défaut). Il faut passer en `futures` / `isolated`, rendre la géométrie
+SL/TP symétrique, revoir le sens du véto macro, le sizing, les 7 règles G, et une partie
+des 231 tests.
+
+⚠️ **Cette décision est une dépendance de A7, pas une option** : si la macro donne la
+direction, un signal macro baissier est inexploitable sans short.
+
+#### A6-bis — risque constant à 1,16 %
+
+Jonas a choisi **le Kelly plein (1,16 %)** en connaissance du fait que le PDR impose
+½ Kelly. Conséquence obligatoire : **amender `docs/03_risque.md` AVANT de toucher
+`risk.py`** — sinon on viole l'interdit n°4 (« aucune valeur magique, tout paramètre
+vit dans `docs/` d'abord »). Remplace l'interpolation conviction-dépendante de
+`risk.py:107`.
+
+Le risque **adaptatif** (piloté par le module quant) est explicitement renvoyé à plus
+tard : chantier V2, à ouvrir après la V1.
+
+#### A7-bis — l'hypothèse d'edge retenue (formulation de Jonas, 03/08)
+
+> **La macro détermine la DIRECTION de la position (long ou short). La technique
+> détermine le MOMENT d'entrée et le moment de sortie.**
+>
+> Exemple donné : BTC atteint un seuil intéressant, la macro est haussière, les
+> indicateurs techniques (volume, gamma, MACD, RSI) sont majoritairement haussiers
+> → entrée en position.
+
+Composition : **H1** (l'edge est dans la géométrie du couple stop/cible, seule déviation
+positive au modèle nul, z = 1,74) **+ une partie de H2** (le régime macro conditionne,
+p = 0,095, le seul signal non-bruit).
+
+Ce que ça implique et qui reste à trancher :
+- il faut un **critère de falsification chiffré** pour que `docs/01_edge.md` soit signable
+  (le doc actuel exige « si B ≤ A : hypothèse invalidée, pas de rationalisation ») ;
+- « gamma » n'existe pas nativement en crypto spot (c'est une grandeur d'options) —
+  à remplacer ou à définir ;
+- la séparation direction/timing change le rôle du score de conviction : il ne sélectionne
+  plus la direction, il ne fait plus que temporiser.
+
+### C — Dettes techniques
+
+| # | Décision de Jonas | État |
+|---|---|---|
+| C1 | Calendrier éco : **JSON statique annuel embarqué (FOMC + BLS) en source primaire**, ForexFactory hebdo en secondaire, fetch async 1×/semaine, cache local, **jamais appelé depuis le pipeline temps réel**. Échec du fetch FF ⇒ on continue sur la primaire sans dégrader le blocage des trois événements qui comptent. Remplace `FINNHUB_KEY`. | à coder |
+| C2 | Spread state : **mesurer d'abord les conséquences** avant de décider | analyse à faire |
+| C3 | Bollinger : **câbler d'urgence** | appliqué le 03/08 (`bb_*_1h`, journalisées, non décisionnelles) |
+| C4 | Force S/R par nombre de touches : **annulé** | à retirer |
+| C5 | Fraîcheur du signal 4h : **annulé** | à retirer |
+| C6 | Jonas visait le **bloc corrélation c6/c7** (livré par A4). Le C6 de `CHANTIERS.md` — les **protections freqtrade** — était donc resté ouvert. | **appliqué le 04/08** — `params.PROTECTIONS`, `docs/07 §7.1.1` |
+| C7 | Webhook Discord : **régénérer** | action de Jonas |
+| C8 | `Untitled-1.py` : supprimer si problématique | **sans objet** — vérifié, le fichier n'existe plus |
+
+### B — Chantiers de mesure
+
+Aucune réponse donnée sur B1-B17. Restent ouverts tels quels dans `CHANTIERS.md`.
+
+---
+
+## Écarts constatés entre les réponses et l'état réel du code
+
+Consignés parce qu'ils se reproduiront si on ne les note pas :
+
+1. **A7 n'avait PAS été appliqué** contrairement au souvenir de Jonas : `docs/01_edge.md`
+   n'a pas bougé depuis le 06/07 (`d5b0340`) et H1/H2/H3 n'existaient que comme propositions
+   dans `research/pistes_2026-07-31/RAPPORT.md:571-591`.
+2. **C6 était une collision de noms** : le `c6` du bloc corrélation macro (livré) contre le
+   `C6` des protections freqtrade (jamais codé).
+3. **A5 était à moitié fait sans que ce soit dit** : la règle de décision n'a pas bougé, mais
+   l'instrumentation qui permet de trancher A5 par filtrage d'un seul run a été livrée avec
+   A4 (journal schéma v1 → v2, `contracts.py:105`).
+
+---
+
+## Session du 2026-08-04 — application de C6 et du short (A2)
+
+Aucune décision NOUVELLE de Jonas ce jour : cette session applique des arbitrages déjà
+signés le 03/08. Ce qui suit est l'état d'application, plus les points que l'application a
+révélés et qui n'étaient couverts par aucune réponse.
+
+### C6 — protections freqtrade : FERMÉ
+Câblées dans `params.PROTECTIONS`, consommées par `AritV1.protections`. Vérifié **sur le
+freqtrade installé (2026.6)**, pas sur la doc : la liste vit dans la STRATÉGIE, plus dans
+`config.json`. Valeurs et justification : `docs/07 §7.1.1`.
+
+Point important démontré au passage : **le natif et le custom ne sont pas redondants**.
+`StoplossGuard` compte les sorties au stop quel que soit leur R ; `risk.cb_sequential_state`
+compte toute clôture ≤ −0,8R (donc aussi G6/G7) et exige qu'elles soient consécutives. Le
+sizing ÷2 pendant 5 trades reste hors de portée de toute protection native.
+
+⚠️ **`--enable-protections` devient obligatoire en backtest** (07.2). Sans le drapeau,
+freqtrade ignore silencieusement les protections : le backtest ne mesure plus le même
+produit que le dry-run.
+
+### A2 — le short : CODÉ, non mesuré
+Livré de bout en bout : features baissières miroirs, direction macro, géométrie symétrique
+(SL/TP/R/MAE/MFE/G1-G7), sizing, journal v3, `trading_mode: futures`. Specs :
+`docs/03 §3.7`, `docs/05 §5.6`, `docs/08 §8.6`, `docs/11 §11.7`. 297 tests verts, ruff
+propre, `AritV1.py` ramené à 248 lignes (il était à 262, hors contrat depuis A4).
+
+Deux bugs LATENTS trouvés en codant, qui auraient cassé le short en silence :
+1. `order_filled` rejetait les entrées short. Un short entre en **SELL** ; le code lisait
+   tout `ft_order_side == "sell"` comme une sortie G4 partielle et sortait avant d'écrire
+   le `custom_data`. Aucun short n'aurait eu de `initial_sl` — donc aucune gestion.
+2. `make_signal_id` ne normalisait pas le `:` des paires perpétuelles, contrairement à ce
+   que promettait sa docstring. `BTC/USDT:USDT` produisait un `signal_id` contenant `:`,
+   illégal en nom de fichier Windows ⇒ `OSError` à la création de `veto/<id>.intent`.
+
+### Trois décisions que l'application a rendues nécessaires — À VALIDER
+
+- **A2-ter — LEVIER.** Le short impose les futures. J'ai gardé le défaut freqtrade
+  (`leverage() → 1.0`), donc l'exposition reste celle du spot. Un levier > 1 est une
+  décision de risque qui t'appartient. Conséquence si on reste à 1 : quand la distance de
+  stop est très serrée, le stake calculé dépasse l'équité, freqtrade le plafonne, et le
+  risque réel devient **inférieur** à 1,16 % sans le dire. (`docs/03 §3.7.4`)
+- **A2-quater — véto actions c6/c7 en HOSTILE.** J'ai gardé le véto actions comme un
+  coupe-circuit des DEUX sens (il force toujours RISK_OFF), alors que HOSTILE, lui,
+  autorise désormais le short. Raison : le bloc c6/c7 est un fail-safe de corrélation, pas
+  un avis directionnel. Si tu penses qu'une cassure du NASDAQ corrélée au BTC est un signal
+  de SHORT et pas un signal de « ne rien faire », c'est à changer — et ça se teste seul,
+  le véto est ablatable par construction (A4).
+- **A2-quinquies — RISK_OFF sur Fear & Greed < 25.** Même question : la peur extrême reste
+  aujourd'hui un « on ne trade pas ». En v4 elle pourrait être un signal de short. Non
+  touché, faute de réponse.
+
+### Bloquants découverts, à traiter avant tout dry-run
+1. **Parité backtest/live rompue** (`docs/11 §11.7`) : le régime macro V1.1 n'existe qu'en
+   backtest. En live, `macro_state.json` ne le porte pas ⇒ **le live est long-only alors que
+   le backtest est long+short**. C'est M08 qu'il faut compléter, et c'est prioritaire : sans
+   ça, le dry-run ne teste pas le produit qu'on a mesuré.
+2. **Données OHLCV futures manquantes** : `user_data/data/binance/futures/` ne contient que
+   BTC en 4h et 5m. Il faut les 4 paires en 5m/1h/4h/1d avant tout backtest en futures :
+   `freqtrade download-data --exchange binance --trading-mode futures -p BTC/USDT:USDT
+   ETH/USDT:USDT SOL/USDT:USDT BNB/USDT:USDT -t 5m 1h 4h 1d --timerange 20200101-`
+3. **`check_bias.py` n'a pas pu tourner** sur la nouvelle config (mêmes données manquantes).
+   Le zéro-look-ahead des colonnes A2 est prouvé au niveau feature par recalcul sur données
+   tronquées (`test_colonnes_baissieres_ne_repeignent_pas`), ce qui est fort mais **n'est
+   pas** le `lookahead-analysis` de bout en bout. À relancer dès les données présentes.
+
+### C1 — calendrier économique : CODÉ (couverture CPI/NFP à compléter)
+`services/calendar_source.py` + `user_data/calendar/economic_calendar.json`. Finnhub retiré
+du code (57 lignes). Spec : `docs/06 §6.6`. Le run horaire ne fait **aucun** appel réseau
+pour le calendrier ; le fetch ForexFactory est une tâche hebdomadaire séparée.
+
+Vérifié de bout en bout sur le flux réel le 04/08 : 16 FOMC (primaire) + la NFP du
+2026-08-07 (secondaire), fusionnés, dédoublonnés, triés. La dégradation FF a été observée en
+conditions réelles (rate-limit) : warning, cache précédent conservé, primaire intacte.
+
+⚠️ **Ce qu'il reste à faire, et c'est toi qui peux le faire vite** : `bls.gov` refuse les
+récupérations automatisées (HTTP 403). Je n'ai pas inventé les dates. Il faut copier les
+dates 2026-2027 de `bls.gov/schedule/news_release/cpi.htm` (CPI) et `.../empsit.htm` (NFP)
+dans `economic_calendar.json` — publication à 08:30 US Eastern. Tant que ce n'est pas fait,
+la couverture CPI/NFP dépend de ForexFactory, **qui ne voit que la semaine en cours** : un
+CPI à J+20 n'est connu de personne. `coverage_gaps()` le signale en `ERROR` à chaque run.
+
+Piège trouvé et corrigé : ForexFactory identifie le pays par **code devise** (`USD`), pas
+par code pays. Le filtre initial sur `"US"` laissait passer zéro événement **en silence**.
+
+### C2 — spread : ANALYSÉ, pas codé (c'est ce que tu avais demandé)
+Rapport complet : `research/pistes_2026-07-31/C2_spread_analyse.md`. Résumé :
+
+1. La porte est **inerte**, pas cassée : `AritV1` passe `spread_frac = None` en dur.
+2. `docs/11 §11.5` interdit le réseau dans les callbacks ⇒ le spread devrait passer par un
+   service de fond, donc être **toujours périmé** — sur la grandeur la plus volatile du
+   système. Et il faudrait choisir une politique de panne : service mort ⇒ on bloque tout,
+   ou on ne bloque rien. Il n'y a pas de troisième option.
+3. **Le vrai coût** : les données OHLCV n'ont pas de carnet d'ordres ⇒ une porte spread
+   existe en live et **pas en backtest**. On fabriquerait volontairement la divergence
+   live/backtest que `docs/09` surveille comme critère d'invalidation.
+4. Ordre de grandeur : sur BTC/ETH/SOL/BNB perp, le spread est ~10× sous le seuil de
+   0,05 % en régime normal. La porte ne mordrait qu'en stress — déjà couvert en grande
+   partie par la fenêtre news et les circuit breakers.
+
+**Recommandation** : ne pas coder. Faire comme pour les Bollinger (C3) — **journaliser sans
+décider** au démarrage du dry-run, mesurer la distribution réelle, puis trancher avec des
+chiffres. Sur un substrat à espérance nulle, tout filtre qui réduit l'exposition *paraît*
+positif : l'activer sans mesure, ce serait s'acheter une illusion.
+
+**À valider par toi** : d'accord pour laisser la porte inerte jusqu'à la mesure ?

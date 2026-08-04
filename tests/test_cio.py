@@ -13,13 +13,23 @@ def _scores(value):
     return {col: value for col in SCORE_COLS}
 
 
-def _df(scores, mult, seuil, regime, rr=2.0, new_4h=True, n=1):
+def _df(scores, mult, seuil, regime, rr=2.0, new_4h=True, n=1,
+        scores_short=None, mult_short=None, rr_short=None, trend_dir=0):
+    """df minimal pour cio. A2 : les colonnes short existent TOUJOURS (features.compute_all
+    les produit systematiquement) ; par defaut elles sont neutres pour que les cas de test
+    haussiers historiques restent litteralement les memes."""
     data = {col: [scores[col]] * n for col in SCORE_COLS}
+    short = scores_short if scores_short is not None else {c: 0.0 for c in SCORE_COLS}
+    for col in SCORE_COLS:
+        data[col + contracts.SHORT_SUFFIX] = [short[col]] * n
     data["multiplicateur"] = [mult] * n
+    data["multiplicateur_short"] = [mult if mult_short is None else mult_short] * n
     data["seuil"] = [seuil] * n
     data["regime"] = [regime] * n
     data["rr_dispo"] = [rr] * n
+    data["rr_dispo_short"] = [rr if rr_short is None else rr_short] * n
     data["new_4h"] = [new_4h] * n
+    data[contracts.TREND_DIR_COL] = [trend_dir] * n
     return pd.DataFrame(data)
 
 
@@ -48,15 +58,20 @@ def test_conviction_bounded_zero_one():
             for m in (params.MULT_RISK_OFF, params.MULT_REDUCED, params.MULT_FULL)]
     df = pd.DataFrame({
         **{col: [v for v, _ in rows] for col in SCORE_COLS},
+        **{col + contracts.SHORT_SUFFIX: [v for v, _ in rows] for col in SCORE_COLS},
         "multiplicateur": [m for _, m in rows],
+        "multiplicateur_short": [m for _, m in rows],
         "seuil": [params.SEUIL_TREND] * len(rows),
         "regime": ["TREND"] * len(rows),
         "rr_dispo": [2.0] * len(rows),
+        "rr_dispo_short": [2.0] * len(rows),
         "new_4h": [True] * len(rows),
+        contracts.TREND_DIR_COL: [0] * len(rows),
     })
     out = cio.conviction(df)
-    assert (out["conviction"] >= 0.0).all()
-    assert (out["conviction"] <= 1.0).all()
+    for col in ("conviction", "conviction_short"):   # A2 : meme borne pour les deux sens
+        assert (out[col] >= 0.0).all()
+        assert (out[col] <= 1.0).all()
 
 
 def test_signal_at_exact_seuil_uses_ge():
@@ -196,3 +211,94 @@ def test_neutre_bump_can_block_marginal_signal():
     neutre = cio.conviction(_df_macro(_scores(0.5), params.MULT_FULL, conv, "TREND", "NEUTRE"))
     assert neutre["seuil"].iloc[0] == conv + params.MACRO_NEUTRE_CONV_BUMP
     assert bool(neutre["signal_long"].iloc[0]) is False
+
+
+# ============ A2 — la macro donne la DIRECTION, la technique le timing (docs/01 v4) ============
+def _dir_df(macro, trend_dir, scores=None, scores_short=None):
+    """df en TREND, conviction pleine des deux cotes : seuls la macro et trend_dir tranchent."""
+    df = _df(_scores(1.0) if scores is None else scores,
+             params.MULT_FULL, params.SEUIL_TREND, "TREND",
+             scores_short=_scores(1.0) if scores_short is None else scores_short,
+             trend_dir=trend_dir)
+    df[contracts.MACRO_REGIME_COL] = [macro]
+    return cio.conviction(df)
+
+
+def test_porteur_autorise_le_long_seul():
+    out = _dir_df("PORTEUR", trend_dir=1)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_LONG
+    assert bool(out["signal_long"].iloc[0])
+    assert not bool(out["signal_short"].iloc[0])
+
+
+def test_hostile_autorise_le_short_seul_et_bloque_toujours_le_long():
+    """Equivalence a demontrer : avant A2, HOSTILE => RISK_OFF => aucun long. Apres A2 le
+    regime n'est plus ecrase, mais le long doit rester bloque — par la direction cette fois."""
+    out = _dir_df("HOSTILE", trend_dir=-1)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_SHORT
+    assert not bool(out["signal_long"].iloc[0])     # <- l'equivalence cote long
+    assert bool(out["signal_short"].iloc[0])
+
+
+def test_neutre_autorise_les_deux_sens():
+    """A5 : la penalite NEUTRE est conservee — elle releve le seuil, elle ne coupe pas."""
+    out = _dir_df("NEUTRE", trend_dir=0)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_BOTH
+    assert out["seuil"].iloc[0] == params.SEUIL_TREND + params.MACRO_NEUTRE_CONV_BUMP
+    assert bool(out["signal_long"].iloc[0])
+    assert bool(out["signal_short"].iloc[0])
+    # Le bump mord dans les DEUX sens : conviction juste sous le seuil releve => rien.
+    marginal = _dir_df("NEUTRE", trend_dir=0,
+                       scores=_scores(0.5), scores_short=_scores(0.5))
+    assert not bool(marginal["signal_long"].iloc[0])
+    assert not bool(marginal["signal_short"].iloc[0])
+
+
+def test_trend_dir_interdit_de_trader_a_contresens_de_la_technique():
+    """LE garde-fou de non-regression : elargir TREND aux tendances baissieres (A2,
+    regimes.REGLES) ne doit ouvrir AUCUN long nouveau."""
+    # Tendance technique baissiere + macro qui autoriserait le long => long refuse.
+    out = _dir_df("PORTEUR", trend_dir=-1)
+    assert not bool(out["signal_long"].iloc[0])
+    # Tendance technique haussiere + macro qui autoriserait le short => short refuse.
+    out = _dir_df("HOSTILE", trend_dir=1)
+    assert not bool(out["signal_short"].iloc[0])
+    # trend_dir = 0 (indecis) : les deux restent possibles, c'est la macro qui tranche.
+    out = _dir_df("NEUTRE", trend_dir=0)
+    assert bool(out["signal_long"].iloc[0]) and bool(out["signal_short"].iloc[0])
+
+
+def test_macro_inconnue_ou_absente_retombe_en_long_seul():
+    """Deux fail-safes : on n'ouvre jamais un short sur une absence d'information."""
+    nan_macro = _dir_df(float("nan"), trend_dir=0)
+    assert nan_macro["direction_macro"].iloc[0] == contracts.DIR_LONG
+    assert not bool(nan_macro["signal_short"].iloc[0])
+    # Colonne absente = chemin LIVE actuel (docs/06 §6.3) : long-only, comme avant A2.
+    df = _df(_scores(1.0), params.MULT_FULL, params.SEUIL_TREND, "TREND",
+             scores_short=_scores(1.0), trend_dir=0)
+    out = cio.conviction(df)
+    assert (out["direction_macro"] == contracts.DIR_LONG).all()
+    assert not bool(out["signal_short"].iloc[0])
+    assert bool(out["signal_long"].iloc[0])
+
+
+def test_short_exige_son_propre_rr():
+    """Le short lit rr_dispo_short (distance au SUPPORT), jamais le rr long."""
+    df = _df(_scores(1.0), params.MULT_FULL, params.SEUIL_TREND, "TREND",
+             rr=5.0, rr_short=params.RR_MIN - 0.01,
+             scores_short=_scores(1.0), trend_dir=-1)
+    df[contracts.MACRO_REGIME_COL] = ["HOSTILE"]
+    out = cio.conviction(df)
+    assert not bool(out["signal_short"].iloc[0])   # rr long genereux : sans effet
+
+
+def test_conviction_short_utilise_les_scores_et_le_multiplicateur_short():
+    out = _dir_df("HOSTILE", trend_dir=-1, scores=_scores(0.0), scores_short=_scores(1.0))
+    assert out["conviction"].iloc[0] == 0.0
+    assert out["conviction_short"].iloc[0] == 1.0
+
+
+def test_cio_pose_toutes_les_colonnes_du_contrat():
+    out = _dir_df("NEUTRE", trend_dir=0)
+    for col in contracts.CIO_COLUMNS:
+        assert col in out.columns

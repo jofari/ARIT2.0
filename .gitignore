@@ -37,3 +37,8 @@ PROMPT_ARIT_BUILD.md
 # Rapports de backtest generes (research/_reporting) : resultats de trading, depot PUBLIC.
 # Le HTML se regenere en une commande, il n'a pas a etre versionne ni publie.
 RAPPORT_TRADES*.html
+
+# C1 (04/08) — calendrier economique : la source PRIMAIRE est VERSIONNEE (c'est tout son
+# interet : elle marche sans reseau et survit a un clone). Seul le cache ForexFactory,
+# qui est de la donnee fetchee et rafraichie chaque semaine, est ignore.
+user_data/calendar/forexfactory_week.json

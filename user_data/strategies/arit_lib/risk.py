@@ -91,41 +91,60 @@ def _parse_iso(value):
         return None
 
 
+def _is_short(trade) -> bool:
+    """Sens du trade (A2). L'attribut NATIF freqtrade fait foi ; a defaut, le custom_data
+    ecrit a l'entree (11.3). Absent des deux => False, donc les trades ouverts avant le
+    2026-08-04 sont relus en long, exactement comme ils ont ete joues."""
+    native = getattr(trade, "is_short", None)
+    if native is not None:
+        return bool(native)
+    return bool(_custom(trade, "is_short", False))
+
+
 def _trade_r(trade) -> float:
-    """R realise d'un trade clos = (close - entry) / (entry - initial_sl) (long)."""
+    """R realise d'un trade clos, DANS SON SENS (A2) :
+    sign x (close - entry) / (sign x (entry - initial_sl)), sign = -1 si short."""
     entry = float(getattr(trade, "open_rate", 0.0) or 0.0)
     sl0 = float(_custom(trade, "initial_sl", 0.0) or 0.0)
-    risk_dist = entry - sl0
+    sign = contracts.direction_sign(_is_short(trade))
+    risk_dist = sign * (entry - sl0)
     if risk_dist <= 0:
         return 0.0
     close = getattr(trade, "close_rate", None)
     close = float(close) if close is not None else entry
-    return (close - entry) / risk_dist
+    return sign * (close - entry) / risk_dist
 
 
 # ------------------------------------------------------------- sizing (03.1)
 def compute_risk_pct(conviction, seuil, trade_no, cb_divisor=1) -> float:
-    """Risque % = (1% + n*(cap-1%)) / cb_divisor, n=(c-seuil)/(1-seuil) borne [0,1]."""
-    denom = 1.0 - seuil
-    n = 1.0 if denom <= 0 else (conviction - seuil) / denom
-    n = min(1.0, max(0.0, n))
+    """Risque % CONSTANT = min(RISK_CONSTANT_PCT, cap) / cb_divisor (docs/03 §3.1.0, A6 03/08).
+
+    `conviction` et `seuil` restent dans la signature mais ne sont PLUS lus : le sizing
+    proportionnel a la conviction (docs/03 §3.1.1) est SUSPENDU, pas supprime — il revient
+    en V2 avec le risque adaptatif. Motif du gel : la conviction n'a jamais demontre de
+    pouvoir predictif, faire varier la taille dessus ajoute de la variance sans esperance.
+    Les caps 2 %/3 % et le diviseur du coupe-circuit sequentiel continuent de BORNER.
+    """
     cap = (params.RISK_CAP_FIRST_PCT if trade_no <= params.RISK_CAP_SWITCH_TRADE_NO
            else params.RISK_CAP_AFTER_PCT)
     divisor = cb_divisor if cb_divisor and cb_divisor > 0 else 1
-    return (params.RISK_BASE_PCT + n * (cap - params.RISK_BASE_PCT)) / divisor
+    return min(params.RISK_CONSTANT_PCT, cap) / divisor
 
 
-def compute_stake(equity, risk_pct, entry, sl_initial, min_notional=0.0, risk_cap_pct=None):
-    """Stake USDT = equity*risk_pct / dist_frac, dist_frac=(entry-sl)/entry.
+def compute_stake(equity, risk_pct, entry, sl_initial, min_notional=0.0, risk_cap_pct=None,
+                  sign: int = 1):
+    """Stake USDT = equity*risk_pct / dist_frac, dist_frac = sign*(entry-sl)/entry.
 
-    Retour : (stake|None, raison|None). Div/0 (entry<=sl) =>
-    (None, contracts.SKIP_ZERO_STOP_DISTANCE), jamais d'exception (M04.4). Si stake <
+    Retour : (stake|None, raison|None). Distance de stop nulle OU DU MAUVAIS COTE (SL sous
+    l'entree pour un short, au-dessus pour un long) => (None,
+    contracts.SKIP_ZERO_STOP_DISTANCE), jamais d'exception (M04.4). C'est ce test de SIGNE
+    qui empeche un short mal cable de sizer sur une distance negative (A2). Si stake <
     min_notional et forcer depasse le cap => (None, contracts.SKIP_MIN_NOTIONAL) ;
     sinon force a min_notional (03.1).
     """
     if entry <= 0:
         return None, contracts.SKIP_ZERO_STOP_DISTANCE
-    dist_frac = (entry - sl_initial) / entry
+    dist_frac = sign * (entry - sl_initial) / entry
     if dist_frac <= 0:
         return None, contracts.SKIP_ZERO_STOP_DISTANCE
     if equity <= 0:
@@ -142,7 +161,12 @@ def compute_stake(equity, risk_pct, entry, sl_initial, min_notional=0.0, risk_ca
 
 # --------------------------------------------------- budgets / compteurs (DB)
 def residual_risk_total(open_trades, equity) -> float:
-    """Somme des residuels des positions ouvertes / equite (0 si SL >= entree)."""
+    """Somme des residuels des positions ouvertes / equite (0 si la position est a BE ou mieux).
+
+    A2 : le residuel d'un SHORT est (SL - entree), pas (entree - SL) — sans le signe, tout
+    short a SL au-dessus de l'entree compterait pour 0 et le budget 03.2.5 serait aveugle
+    a la moitie du portefeuille.
+    """
     if equity <= 0:
         return 0.0
     total = 0.0
@@ -150,7 +174,8 @@ def residual_risk_total(open_trades, equity) -> float:
         entry = float(getattr(t, "open_rate", 0.0) or 0.0)
         sl = float(getattr(t, "stop_loss", 0.0) or 0.0)
         qty = float(getattr(t, "amount", 0.0) or 0.0)
-        total += qty * max(0.0, entry - sl)
+        sign = contracts.direction_sign(_is_short(t))
+        total += qty * max(0.0, sign * (entry - sl))
     return total / equity
 
 

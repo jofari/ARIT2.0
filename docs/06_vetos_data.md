@@ -94,3 +94,44 @@ Spread instantané (best ask − best bid)/mid ≤ **0,05 %** au moment de l'ent
 
 ## 6.5 Discipline API
 Toutes les clés en variables d'environnement (`.env` non commité). Binance : clés **sans droit de retrait**. Respect des rate limits (cache systématique ; F&G 1 h, calendrier 30 min).
+
+## 6.6 AMENDEMENT du 2026-08-04 — calendrier économique à deux sources (dette C1)
+
+Remplace `FINNHUB_KEY`, **retiré du code**. Constat qui motivait la dette : la clef n'a
+jamais été fournie, l'endpoint calendrier de Finnhub est passé premium, et la porte « news »
+(03.2.2) est donc restée **inerte ou bloquante** selon l'état du fichier macro — jamais
+utile. Architecture décidée par Jonas le 03/08 :
+
+| | Source | Réseau | Rôle |
+|---|---|---|---|
+| **Primaire** | `user_data/calendar/economic_calendar.json`, **versionné dans le repo** | aucun | garantit le blocage des événements qui comptent |
+| **Secondaire** | ForexFactory, flux hebdo public | 1×/semaine, **tâche séparée** | complète la semaine en cours |
+
+`services/calendar_source.py` porte les deux. **Le run horaire de `macro_state.py` ne fait
+aucun appel réseau pour le calendrier** : il lit le JSON versionné et le cache FF. Le fetch
+FF est une tâche distincte (`calendar_source.py --fetch-ff`, hebdomadaire).
+
+**Règle de dégradation** (formulation de Jonas) : « si le fetch FF échoue, on continue sur
+la primaire sans dégrader le blocage des trois événements qui comptent ». Traduction dans le
+code : `load_events()` **ne lève jamais**. Cache absent, périmé (> 8 jours) ou corrompu ⇒ on
+n'a que la primaire, et c'est un `WARNING`, pas un blocage. Seule une primaire **illisible**
+— anomalie de déploiement, pas panne réseau — dégrade le service.
+
+### Contrôle de couverture — le trou est crié, jamais tu
+`coverage_gaps()` vérifie que les **trois événements qui comptent** (FOMC, CPI, NFP)
+apparaissent bien à l'horizon 45 jours. Tout manquant est journalisé en `ERROR` à chaque run.
+
+⚠️ **État réel au 2026-08-04, à corriger** : la primaire ne contient que le **FOMC**
+(16 réunions 2026-2027, vérifiées à la source sur `federalreserve.gov`, DST US appliquée —
+14:00 ET = 18:00 UTC en EDT, 19:00 UTC en EST). **CPI et NFP ne sont pas renseignés** :
+`bls.gov` refuse les récupérations automatisées (HTTP 403) et inventer des dates de
+publication dans un bot de trading est inacceptable. En attendant, leur couverture repose
+sur ForexFactory, qui ne voit que **la semaine en cours** — donc un CPI à J+20 n'est connu
+de personne. **Action à faire** : copier les dates 2026-2027 depuis
+`bls.gov/schedule/news_release/cpi.htm` et `.../empsit.htm` dans le JSON, et renseigner
+`verified_utc`. Tant que ce n'est pas fait, `coverage_gaps` signalera `CPI` à chaque run.
+
+### Piège vérifié sur le flux réel (à ne pas réintroduire)
+ForexFactory identifie le pays par son **code devise** (`"USD"`), pas par un code pays. Un
+filtre sur `"US"` laisse passer **zéro événement, en silence** — panne invisible jusqu'au
+jour où une NFP n'est pas bloquée. Constaté puis corrigé le 04/08 sur le flux réel.

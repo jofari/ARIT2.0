@@ -24,12 +24,27 @@ REGLES = (
     ),
     ("RANGE", lambda r, m: r["adx_4h"] < params.ADX_RANGE_BELOW),
     ("TRANSITION", lambda r, m: r["adx_4h"] < params.ADX_TREND_MIN),
-    (
-        "TREND",
-        lambda r, m: (r["ema50_4h"] > r["ema200_4h"]) & (r["close_4h"] > r["ema50_4h"]),
-    ),
+    # A2 : TREND = « le marche tend », dans UN SENS OU DANS L'AUTRE. Avant le 04/08 ce
+    # predicat n'acceptait que la configuration haussiere, donc une tendance baissiere
+    # tombait dans le fallback RANGE et aucun short n'etait structurellement possible.
+    # Le SENS est porte a part par `trend_dir` — le long reste filtre par trend_dir >= 0
+    # dans cio, donc ce elargissement n'ouvre AUCUN long nouveau (cf. tests M02).
+    ("TREND", lambda r, m: trend_dir(r) != 0),
     ("RANGE", lambda r, m: True),  # fallback
 )
+
+
+def trend_dir(r) -> "pd.Series":
+    """+1 tendance haussiere · -1 baissiere · 0 indecise (A2, PDR 04.1 elargi).
+
+    Haussier = EMA50 > EMA200 ET close au-dessus de l'EMA50 (definition d'origine du
+    predicat TREND) ; baissier = son miroir strict. Toute autre configuration (EMAs et
+    prix qui se contredisent) reste 0 et retombe donc dans le fallback RANGE, exactement
+    comme avant.
+    """
+    up = (r["ema50_4h"] > r["ema200_4h"]) & (r["close_4h"] > r["ema50_4h"])
+    down = (r["ema50_4h"] < r["ema200_4h"]) & (r["close_4h"] < r["ema50_4h"])
+    return up.astype(int) - down.astype(int)
 
 # Macro Analyst V1.1 (06.2) : aliases lisibles des valeurs de params.MACRO_REGIMES.
 _PORTEUR, _NEUTRE, _HOSTILE = params.MACRO_REGIMES
@@ -87,16 +102,29 @@ def classify(df: pd.DataFrame, macro: dict | None = None) -> pd.DataFrame:
     df["regime"] = regime
     df["seuil"] = regime.map({reg: sm[0] for reg, sm in resolved.items()})
     df["multiplicateur"] = regime.map({reg: sm[1] for reg, sm in resolved.items()})
+    df[contracts.TREND_DIR_COL] = trend_dir(df)
+    # Sans regime macro V1.1 (chemin live actuel, docs/06 §6.3) il n'y a AUCUNE information
+    # directionnelle : le multiplicateur short est celui du long. C'est cio qui refusera le
+    # short faute de `direction_macro` — voir la limite documentee en tete de cio.conviction.
+    df["multiplicateur_short"] = df["multiplicateur"]
     return df
 
 
 def _classify_macro(df: pd.DataFrame) -> pd.DataFrame:
     """Regime pilote par la colonne macro (backtest). Le +0,05 de seuil NEUTRE est applique
-    par cio (04 §4.2). Retrocompat : sans la colonne, classify() reste inchange."""
+    par cio (04 §4.2). Retrocompat : sans la colonne, classify() reste inchange.
+
+    ⚠️ CHANGEMENT A2 (2026-08-04, hypothese v4 de docs/01) : la macro HOSTILE ne force
+    PLUS RISK_OFF. Avant, HOSTILE = « aucune entree » — cohérent avec un bot long-only.
+    En v4 la macro donne la DIRECTION : HOSTILE veut dire « short autorise », pas
+    « rien a faire ». Le blocage des longs en HOSTILE est desormais porte par
+    `direction_macro` dans cio, ce qui est strictement equivalent COTE LONG et debloque
+    le short. Le veto actions c6/c7, lui, continue de forcer RISK_OFF : c'est un
+    fail-safe de correlation, pas un avis directionnel (cf. question ouverte DECISIONS).
+    """
     neutral = {"risk_off": False, "fear_greed": params.FG_NEUTRAL_BACKTEST, "stale": False}
     regime = _regime_series(df, neutral)                    # technique seule (RISK_OFF neutralise)
     macro_col = df[contracts.MACRO_REGIME_COL]
-    regime = regime.mask(macro_col == _HOSTILE, "RISK_OFF")  # veto macro (absorbe F&G<25)
     # Bloc correlation c6/c7 (docs/06 §6.2.1, A4 du 03/08) : veto SEPARE de la somme des 5.
     # Colonne absente (donnees macro sans indice actions) => bloc inoperant, rien ne change.
     if contracts.EQUITY_VETO_COL in df.columns:
@@ -104,14 +132,19 @@ def _classify_macro(df: pd.DataFrame) -> pd.DataFrame:
         regime = regime.mask(equity_veto, "RISK_OFF")
     is_trend = regime == "TREND"
     porteur = macro_col == _PORTEUR
-    mult = pd.Series(params.MULT_RISK_OFF, index=df.index, dtype=float)  # RANGE/RISK_OFF => x0
-    mult = mult.mask(regime == "TRANSITION", params.MULT_REDUCED)        # TRANSITION toujours x0,85
-    mult = mult.mask(is_trend & porteur, params.MULT_FULL)
-    mult = mult.mask(is_trend & ~porteur, params.MULT_REDUCED)           # TREND+NEUTRE/NaN => x0,85
+    hostile = macro_col == _HOSTILE
+    base = pd.Series(params.MULT_RISK_OFF, index=df.index, dtype=float)   # RANGE/RISK_OFF => x0
+    base = base.mask(regime == "TRANSITION", params.MULT_REDUCED)         # TRANSITION => x0,85
+    # Le multiplicateur PLEIN recompense l'accord macro/technique, chacun dans son sens :
+    # long plein en PORTEUR, short plein en HOSTILE (miroir exact, A2).
+    mult = base.mask(is_trend, params.MULT_REDUCED).mask(is_trend & porteur, params.MULT_FULL)
+    mult_short = base.mask(is_trend, params.MULT_REDUCED).mask(is_trend & hostile, params.MULT_FULL)
     df["regime"] = regime
     df["seuil"] = regime.map({"TREND": params.SEUIL_TREND,
                               "TRANSITION": params.SEUIL_TRANSITION}).astype(float)
     df["multiplicateur"] = mult
+    df["multiplicateur_short"] = mult_short
+    df[contracts.TREND_DIR_COL] = trend_dir(df)
     return df
 
 

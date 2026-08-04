@@ -5,6 +5,8 @@
 
 - **Spec contractuelle = `docs/` à la racine** (22 fichiers, avec `modules/` et `11_sync`).
   ⚠️ PAS `for claude build/ARIT_PDR_v3/` (copie incomplète, 11 fichiers). Lire docs/ avant tout code.
+- **Arbitrages de Jonas : `DECISIONS.md` (racine) — à lire en début de session, avant tout code.**
+  Toute décision qu'il donne s'écrit là le jour même, jamais seulement dans la conversation.
 - Carte du repo pour s'orienter : `guide.md` · carte des modules (macro/technical/cio/risk/quant/
   backtest, fiches → vrai code, zéro code dedans) : `modules/`. État du chantier : `for claude build/PLAN.md` ·
   pièges connus : `for claude build/BUILD_NOTES.md` · bilan : `for claude build/RAPPORT_BUILD.md`.
@@ -15,5 +17,8 @@
   arit_lib · AritV1.py < 250 lignes, zéro métier, zéro réseau dans les callbacks · tout en UTC ·
   backtest TOUJOURS `--timeframe-detail 5m` · réponses à Jonas en français.
 - venv : `C:\Users\jofar\venvs\arit` (ne pas réinstaller `aiodns` — voir BUILD_NOTES).
-  Tests : `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 231 passed).
+  Tests : `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 318 passed).
+- Le bot est **long ET short** depuis le 04/08 (A2) : `trading_mode: futures`, paires
+  `BTC/USDT:USDT`. Convention de signe unique = `docs/03 §3.7`, jamais de `if is_short`
+  dispersé. Backtest : `--enable-protections` est OBLIGATOIRE depuis C6 (docs/07 §7.2).
 - Git : remote `https://github.com/jofari/ARIT2.0.git`, branche `main`, **push après chaque commit**.

@@ -8,7 +8,11 @@ G1-G7 et poids : JAMAIS hyperoptes (docs/README interdit n5, PDR 09.3).
 import os as _os  # uniquement pour les overrides du protocole A/B (PDR 09 §9.1)
 
 # ---------------------------------------------------------------- 03.1 Sizing
-RISK_BASE_PCT = 0.01           # PDR 03.1 — risque plancher 1 %
+# A6 (decision Jonas 2026-08-03, docs/03 §3.1.0) : risque CONSTANT en V1. Kelly mesure sur
+# l'echantillon de juillet 2026. Ecart assume au PDR, qui impose 1/2 Kelly (0,58 %) : Jonas a
+# tranche pour le Kelly PLEIN. Le sizing par conviction (§3.1.1) est SUSPENDU, pas supprime.
+RISK_CONSTANT_PCT = 0.0116     # docs/03 §3.1.0 — risque constant 1,16 %
+RISK_BASE_PCT = 0.01           # PDR 03.1 — risque plancher 1 % (§3.1.1, suspendu -> V2)
 RISK_CAP_FIRST_PCT = 0.02      # PDR 03.1 — cap 2 % trades n1..100
 RISK_CAP_AFTER_PCT = 0.03      # PDR 03.1 — cap 3 % ensuite
 RISK_CAP_SWITCH_TRADE_NO = 100  # PDR 03.1 — compteur global persistant
@@ -103,7 +107,8 @@ BOS_FRESH_CANDLES_4H = 3          # PDR 05.1 — BOS "frais" 3 bougies 4h
 # Override protocole (voir bloc 09 §9.1 plus haut) : ARIT_CHOCH_PRIORITY=1
 S_STRUCTURE_CHOCH_PRIORITY = _os.environ.get("ARIT_CHOCH_PRIORITY", "") == "1"
 SR_CLUSTER_TOL_ATR = 0.5          # PDR 05.2 — meme niveau si ecart <= 0,5 x ATR
-SR_FORCE_TOUCHES_DIV = 4          # PDR 05.2 — force=min(t/4,1) ⚠️ NON IMPLEMENTE (13/07)
+# SR_FORCE_TOUCHES_DIV : SUPPRIME le 2026-08-03 (C4, decision Jonas « annuler »). La force
+# des S/R par nombre de touches ne sera pas implementee en V1 — constante morte depuis le 13/07.
 SR_WINDOW_4H = 180                # M01 — clustering sur 180 dernieres bougies 4h
 SR_RR_FULL = 2.0                  # PDR 05.2 — s_sr = 1,0 si RR_dispo >= 2,0
 
@@ -120,10 +125,14 @@ RSI_PERIOD = 14                   # PDR 05.3
 MACD_FAST, MACD_SLOW, MACD_SIGNAL = 12, 26, 9  # PDR 05.3
 ATR_PERIOD = 14                   # PDR 05.3
 VOL_SMA_PERIOD = 20               # PDR 05.3
-BBANDS_PERIOD, BBANDS_STD = 20, 2  # PDR 05.3 — ⚠️ a cabler (decision Jonas 09/07)
+BBANDS_PERIOD, BBANDS_STD = 20, 2  # PDR 05.3 — cablees le 03/08 (C3) : 1h, journalisees only
 
 RSI_MOM_LOW, RSI_MOM_HIGH = 50, 70       # PDR 05.3 — s_momentum = 1,0 si RSI in [50,70]
 RSI_MOM_SOFT_LOW, RSI_MOM_SOFT_HIGH = 45, 75  # PDR 05.3 — 0,5 si [45,50) ou (70,75]
+# A2 — bandes RSI baissieres : miroir EXACT par symetrie autour de 50 (x -> 100 - x), pour
+# qu'aucun degre de liberte nouveau n'entre par le short (budget de tests, docs/01 §B2).
+RSI_MOM_SHORT_LOW, RSI_MOM_SHORT_HIGH = 30, 50            # 05.3 miroir — 1,0 si RSI in [30,50]
+RSI_MOM_SHORT_SOFT_LOW, RSI_MOM_SHORT_SOFT_HIGH = 25, 55  # 05.3 miroir — 0,5 si [25,30) ou (50,55]
 
 PIN_BAR_WICK_BODY_RATIO = 2.0     # PDR 05.4 — meche basse >= 2 x corps
 PIN_BAR_CLOSE_TOP_FRACTION = 1 / 3  # PDR 05.4 — cloture dans le tiers haut
@@ -131,6 +140,12 @@ PATTERN_RECENT_CANDLES_4H = 3     # PDR 05.4 — s_patterns = 0,5 si pattern < 3
 ENTRY_CDL_PATTERNS = ("CDLENGULFING", "CDLHAMMER")  # PDR 05.4 — == 100
 FILTER_DOJI = "CDLDOJI"           # PDR 05.4 — doji sur cassure => s_patterns = 0
 CDL_BULLISH = 100                 # PDR 05.4 — sortie talib CDL* pour pattern bullish
+# A2 (Jonas 2026-08-03) — miroir baissier de 05.4. CDLHAMMER n'a PAS de sortie -100 (talib
+# ne le definit que haussier) : son miroir structurel est CDLSHOOTINGSTAR (meme geometrie
+# retournee). CDLENGULFING, lui, sort bien -100 sur l'engulfing baissier.
+ENTRY_CDL_PATTERNS_SHORT = ("CDLENGULFING", "CDLSHOOTINGSTAR")  # docs/05 §5.4 miroir — == -100
+CDL_BEARISH = -100                # 05.4 miroir — sortie talib CDL* pour pattern bearish
+PIN_BAR_CLOSE_BOTTOM_FRACTION = 1 / 3  # 05.4 miroir — cloture dans le tiers BAS (pin bar bear)
 
 VOL_STRONG_MULT = 1.5             # PDR 05.5 — s_volume = 1,0 si vol >= 1,5 x SMA20
 VOL_OK_MULT = 1.0                 # PDR 05.5 — 0,5 si >= 1,0 x
@@ -176,19 +191,70 @@ MACRO_CORR_STATES = ("COUPLE", "TRANSITION", "DECOUPLE")  # 06.2 c7
 # elles vivent ici comme reference contractuelle du PDR (le code ne les lit pas).
 DRY_RUN_WALLET_USDT = 10_000      # PDR 07.1 / README — miroir config (dry_run_wallet)
 STAKE_CURRENCY = "USDT"           # PDR 07.1
-PAIR_WHITELIST = ("BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT")  # PDR 07.1 — miroir config
+# A2 (04/08) : le short impose trading_mode=futures, donc les paires PERPETUELLES binance
+# ("BTC/USDT:USDT"). Les tables indexees par paire (SLIPPAGE_FRAC) restent en notation spot
+# et se lisent via contracts.spot_pair().
+PAIR_WHITELIST = ("BTC/USDT:USDT", "ETH/USDT:USDT",
+                  "SOL/USDT:USDT", "BNB/USDT:USDT")  # PDR 07.1 — miroir config
 TIMEFRAME_BASE = "1h"             # PDR 07.1 / README
 TIMEFRAME_SETUP = "4h"            # README — setups/entrees en cloture 4h
 TIMEFRAME_CONTEXT = "1d"          # README
 TIMEFRAME_DETAIL = "5m"           # PDR 07.2 — miroir CLI (--timeframe-detail obligatoire)
 TRADABLE_BALANCE_RATIO = 0.99     # PDR 07.1 — miroir config
-COOLDOWN_POST_EXIT_CANDLES = 2    # PDR 07.1 — ⚠️ Protections NON IMPLEMENTEES (13/07)
+COOLDOWN_POST_EXIT_CANDLES = 2    # PDR 07.1 — cablee le 2026-08-04 (C6), cf. PROTECTIONS
+
+# ------- 07.1 Protections freqtrade NATIVES (dette C6, cablee le 2026-08-04) -------
+# docs/07 §7.1 : les Protections natives *approchent* les coupe-circuits 03.5, le custom
+# de risk.py *complete* ce qu'elles ne savent pas faire. Les deux coexistent PAR DESIGN,
+# ce n'est pas un doublon — elles n'observent pas la meme population :
+#   - natif StoplossGuard : compte les sorties AU STOP (exit_reason stoploss), quel que
+#     soit le R ; custom cb_sequential_state : compte toute cloture <= -0,8R (donc aussi
+#     les sorties G6/G7), et exige qu'elles soient CONSECUTIVES.
+#   - natif MaxDrawdown : drawdown des trades CLOS sur fenetre glissante ; custom
+#     cb_day_active : equite WALLET vs snapshot 00:00 UTC (positions ouvertes incluses).
+# Le natif bloque au niveau bot (locks freqtrade, visibles en backtest et via l'API) ;
+# le custom borne en plus le SIZING (÷2 pendant 5 trades) — hors de portee du natif.
+# ⚠️ BACKTEST : sans `--enable-protections`, freqtrade les IGNORE (docs/07 §7.2).
+PROTECT_SLGUARD_LOOKBACK_CANDLES = 24   # 07.1 — 24 bougies 1h = 1 jour glissant. Le natif
+                                        # n'a pas de notion de "consecutif" : la fenetre
+                                        # d'1 jour est l'approximation la plus proche de
+                                        # "2 pertes qui se suivent" (03.5).
+PROTECT_MAXDD_LOOKBACK_CANDLES = 24     # 07.1 — meme fenetre d'1 jour que le CB jour 03.5
+PROTECT_MAXDD_STOP_CANDLES = 24         # 07.1 — blocage 1 jour, miroir du CB jour
+PROTECT_MAXDD_TRADE_LIMIT = 2           # 07.1 — plancher d'evaluation : le drawdown d'UN
+                                        # seul trade est deja borne par son stop (03.3),
+                                        # il ne doit pas armer une protection de portefeuille.
+
+# Consomme tel quel par AritV1.protections (freqtrade 2026.6 : la liste vit dans la
+# STRATEGIE, plus dans config.json — verifie sur l'installe, pas sur la doc).
+PROTECTIONS = [
+    {   # 07.1 — 2 bougies 1h sans re-entree sur la paire qu'on vient de quitter
+        "method": "CooldownPeriod",
+        "stop_duration_candles": COOLDOWN_POST_EXIT_CANDLES,
+    },
+    {   # 03.5 — approche le CB sequentiel (2 stops -> pause 12 bougies 1h)
+        "method": "StoplossGuard",
+        "lookback_period_candles": PROTECT_SLGUARD_LOOKBACK_CANDLES,
+        "trade_limit": CB_SEQ_CONSECUTIVE,
+        "stop_duration_candles": CB_SEQ_COOLDOWN_CANDLES_1H,
+        "only_per_pair": False,   # 03.5 : le CB sequentiel est au PORTEFEUILLE
+        "only_per_side": False,   # A2 : une serie perdante compte long ET short
+    },
+    {   # 03.5 — approche le CB jour (-6 % -> plus d'entree pendant 1 jour)
+        "method": "MaxDrawdown",
+        "lookback_period_candles": PROTECT_MAXDD_LOOKBACK_CANDLES,
+        "trade_limit": PROTECT_MAXDD_TRADE_LIMIT,
+        "stop_duration_candles": PROTECT_MAXDD_STOP_CANDLES,
+        "max_allowed_drawdown": CB_DAY_EQUITY_DROP_PCT,
+    },
+]
 
 # --------------------------------------------------------- 08 Journal & HITL
 VETO_WINDOW_MIN_CANARI = 5        # PDR 08.4 — fenetre veto Discord (canari)
 VETO_WINDOW_MIN_DRYRUN = 0        # PDR 08.4 / 11.6 — dry-run : aucun veto
 DIGEST_TIME_UTC = "08:00"         # PDR 08.2 — digest quotidien
-SIGNAL_FRESH_1H_CANDLES = 3       # PDR 11.6 — fraicheur 4h ⚠️ NON APPLIQUEE (13/07)
+# SIGNAL_FRESH_1H_CANDLES : SUPPRIME le 2026-08-03 (C5, decision Jonas « annuler »). La
+# fraicheur du signal 4h ne sera pas appliquee en V1 — constante morte depuis le 13/07.
 
 # --------------------------------------------------- 09 / M10 Watchdog & services
 WATCHDOG_HEARTBEAT_MAX_S = 600    # PDR 09.5 / M10 — heartbeat > 10 min => alerte

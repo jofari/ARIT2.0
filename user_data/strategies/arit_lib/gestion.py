@@ -18,8 +18,15 @@ Protocole `trade` (duck-typed, pas d'import freqtrade — docs/11 §11.5) :
     open_date_utc: datetime  horodatage d'entree, tz-aware UTC
 
 Protocole `row_1h` : pandas Series de la bougie 1h CLOTUREE, colonnes 11.3 —
-    close, high, low, date, atr_1h, last_hl_1h,
-    choch_bear_event_1h (bool, G6), bos_fresh_4h (bool), regime (str).
+    close, high, low, date, atr_1h, last_hl_1h, last_lh_1h (A2),
+    choch_bear_event_1h / choch_bull_event_1h (bool, G6), bos_fresh_4h (bool), regime (str).
+
+SENS DU TRADE (A2, 2026-08-04) — le bot est long ET short. Le sens vit dans
+`state.is_short` et se lit via `state.sign` (+1/-1, contracts.direction_sign). Toute
+comparaison de prix passe par `sign x (a - b)` : aucune G-rule ne contient de `if
+is_short`, ce qui garantit qu'aucune ne peut etre symetrisee A MOITIE. Les trois
+asymetries reelles, elles, sont explicites : l'ancre de G2, l'evenement de G6, et
+l'extreme de bougie (high/low) utilise pour l'excursion et pour atteindre une cible.
 Le niveau TP2 de sortie est fourni explicitement par l'appelant (parametre `tp2`) :
 depuis la decision Jonas 09/07 c'est la resistance 4h COURANTE (nearest_res_4h de la
 row), recalculee a chaque cloture 1h — plus le TP2 fige a l'entree (docs/03 par.3.3
@@ -49,35 +56,60 @@ def _resolve(overrides: dict | None) -> dict:
     return overrides if overrides is not None else flags()
 
 
-def r_multiple(price: float, entry: float, initial_sl: float) -> float:
-    """R du prix : (price - entry) / (entry - initial_sl). +1R = +1x le risque initial.
+def r_multiple(price: float, entry: float, initial_sl: float, sign: int = 1) -> float:
+    """R du prix : sign x (price - entry) / risque, risque = sign x (entry - initial_sl).
 
-    initial_sl est immuable (unite R). Risque nul/negatif (cas degenere) -> 0.0.
+    +1R = +1x le risque initial, DANS LE SENS DU TRADE (A2). initial_sl est immuable
+    (unite R). Risque nul/negatif (cas degenere : SL du mauvais cote) -> 0.0.
+    `sign` = contracts.direction_sign(is_short) ; defaut +1 = long, retrocompatible.
     """
-    risk = entry - initial_sl
+    risk = sign * (entry - initial_sl)
     if risk <= 0:
         return 0.0
-    return (price - entry) / risk
+    return sign * (price - entry) / risk
 
 
-def initial_levels(entry, last_hl_4h, atr_4h, nearest_res_4h):
+def initial_levels(entry, anchor_4h, atr_4h, target_4h, sign: int = 1):
     """SL/TP1/TP2 initiaux a l'entree (PDR 03.3) — fonction PURE, appelee par M07.
 
-    SL = last_hl_4h - SL_HL_ATR_BUFFER x atr_4h si HL exploitable (non-NaN et sous l'entree),
-    sinon fallback entry - SL_FALLBACK_ATR_MULT x atr_4h. Reference = prix d'ENTREE (PDR 03.3) ;
-    features.rr_available utilise `close` pour l'ESTIMATION pre-entree (pas encore d'entree) —
-    divergence assumee et documentee. TP1 = entry + TP1_R x (entry - SL). TP2 = nearest_res_4h
-    si strictement > TP1, sinon None (pas de cible). atr_4h NaN => SL NaN (le caller skip, M04.4).
+    LONG  (sign=+1) : anchor = last_hl_4h, target = nearest_res_4h.
+    SHORT (sign=-1) : anchor = last_lh_4h, target = nearest_sup_4h (A2, docs/03 §3.7).
+
+    SL = anchor - sign x SL_HL_ATR_BUFFER x atr_4h si l'ancre est exploitable (non-NaN et
+    du BON COTE de l'entree : sous l'entree en long, au-dessus en short), sinon fallback
+    entry - sign x SL_FALLBACK_ATR_MULT x atr_4h. Reference = prix d'ENTREE (PDR 03.3) ;
+    features.rr_available utilise `close` pour l'ESTIMATION pre-entree (pas encore d'entree)
+    — divergence assumee et documentee. TP1 = entry + sign x TP1_R x risque. TP2 = target
+    s'il est strictement AU-DELA de TP1 dans le sens du trade, sinon None (pas de cible).
+    atr_4h NaN => SL NaN (le caller skip, M04.4).
     """
-    hl_ok = last_hl_4h is not None and last_hl_4h == last_hl_4h and last_hl_4h < entry
-    if hl_ok:
-        sl = last_hl_4h - params.SL_HL_ATR_BUFFER * atr_4h
+    anchor_ok = (anchor_4h is not None and anchor_4h == anchor_4h
+                 and sign * (entry - anchor_4h) > 0)
+    if anchor_ok:
+        sl = anchor_4h - sign * params.SL_HL_ATR_BUFFER * atr_4h
     else:
-        sl = entry - params.SL_FALLBACK_ATR_MULT * atr_4h
-    tp1 = entry + params.TP1_R * (entry - sl)
-    res_ok = (nearest_res_4h is not None and nearest_res_4h == nearest_res_4h
-              and nearest_res_4h > tp1)
-    return sl, tp1, (nearest_res_4h if res_ok else None)
+        sl = entry - sign * params.SL_FALLBACK_ATR_MULT * atr_4h
+    tp1 = entry + sign * params.TP1_R * (sign * (entry - sl))
+    target_ok = (target_4h is not None and target_4h == target_4h
+                 and sign * (target_4h - tp1) > 0)
+    return sl, tp1, (target_4h if target_ok else None)
+
+
+def _num(value) -> float:
+    return float(value) if value is not None and pd.notna(value) else float("nan")
+
+
+def entry_levels(row, entry: float, sign: int = 1):
+    """Colonnes 4h du sens vise -> initial_levels (A2, PDR 03.3). Retour (sl, tp1, tp2).
+
+    LONG  : ancre `last_hl_4h`, cible `nearest_res_4h`.
+    SHORT : ancre `last_lh_4h`, cible `nearest_sup_4h`.
+    Le choix des colonnes est centralise ICI et pas dans la strategie : le disperser est
+    exactement la faute qui produit un short symetrise a moitie.
+    """
+    anchor, target = (("last_hl_4h", "nearest_res_4h") if sign > 0
+                      else ("last_lh_4h", "nearest_sup_4h"))
+    return initial_levels(entry, row.get(anchor), _num(row.get("atr_4h")), row.get(target), sign)
 
 
 def _candle_ts(row) -> int:
@@ -89,13 +121,17 @@ def update_excursions(state: TradeState, row, entry: float) -> TradeState:
     """MAE/MFE en R a chaque cloture 1h (docs/M05 §2, decision #7). Mute et retourne `state`.
 
     Garde une-action-par-bougie : si la bougie a deja ete traitee (meme ts) -> no-op.
-    Sinon mae_r = min(mae_r, R(low)), mfe_r = max(mfe_r, R(high)), puis stamp du ts.
+    A2 : l'extreme ADVERSE est le low en long mais le HIGH en short (un prix qui monte
+    fait mal a un vendeur) — inverser les deux serait le bug le plus silencieux du short,
+    car le signe de mae/mfe resterait plausible tout en pilotant G1/G3/G4/G7 a l'envers.
     """
     ts = _candle_ts(row)
     if ts == state.last_candle_ts:
         return state
-    state.mae_r = min(state.mae_r, r_multiple(row["low"], entry, state.initial_sl))
-    state.mfe_r = max(state.mfe_r, r_multiple(row["high"], entry, state.initial_sl))
+    sign = state.sign
+    adverse, favorable = (row["low"], row["high"]) if sign > 0 else (row["high"], row["low"])
+    state.mae_r = min(state.mae_r, r_multiple(adverse, entry, state.initial_sl, sign))
+    state.mfe_r = max(state.mfe_r, r_multiple(favorable, entry, state.initial_sl, sign))
     state.last_candle_ts = ts
     return state
 
@@ -103,12 +139,14 @@ def update_excursions(state: TradeState, row, entry: float) -> TradeState:
 def compute_sl(trade, row_1h, state: TradeState, flags: dict | None = None) -> float | None:
     """SL = max(candidats G1/G2/G3 actifs) en prix absolu (docs/03 §3.4, decision #5).
 
-    G1 : entree x (1 + G1_BE_BUFFER_FRAC) si mfe_r >= G1_TRIGGER_R.
-    G2 : last_hl_1h - G2_ATR_BUFFER x atr_1h, seulement si ce candidat > SL courant.
-    G3 : close - k x atr_1h (k = G3_ATR_MULT, ou G3_ATR_MULT_RISK_OFF en RISK_OFF)
+    G1 : entree x (1 + sign x G1_BE_BUFFER_FRAC) si mfe_r >= G1_TRIGGER_R.
+    G2 : ancre_1h - sign x G2_ATR_BUFFER x atr_1h, seulement si ce candidat RESSERRE.
+         Ancre = last_hl_1h en long, last_lh_1h en short (A2).
+    G3 : close - sign x k x atr_1h (k = G3_ATR_MULT, ou G3_ATR_MULT_RISK_OFF en RISK_OFF)
          seulement si mfe_r >= G3_TRIGGER_R.
-    Retour = max des candidats s'il RESSERRE strictement (> trade.stop_loss), sinon None.
-    Monotonie re-verifiee ici : jamais un SL <= SL courant (invariant docs/README n2).
+    Retour = le candidat le plus SERRE s'il resserre strictement, sinon None. « Resserrer »
+    = monter en long, DESCENDRE en short (A2) : d'ou la comparaison sur sign x prix partout.
+    Monotonie re-verifiee ici : le SL ne s'elargit jamais (invariant docs/README n2).
     """
     if params.CONTROL_A_MODE:
         # PDR 09 §9.1.1 — controle A : SL fige a l'initial, aucun G1/G2/G3. Contrat compute_sl
@@ -116,24 +154,26 @@ def compute_sl(trade, row_1h, state: TradeState, flags: dict | None = None) -> f
         # l'entree reste en place ; renvoyer initial_sl a l'identique ferait logger un faux move).
         return None
     active = _resolve(flags)
+    sign = state.sign
     entry = trade.open_rate
     current_sl = trade.stop_loss
     atr = row_1h["atr_1h"]
     mfe = state.mfe_r
     candidates = []
     if active["G1"] and mfe >= params.G1_TRIGGER_R:
-        candidates.append(entry * (1.0 + params.G1_BE_BUFFER_FRAC))
+        candidates.append(entry * (1.0 + sign * params.G1_BE_BUFFER_FRAC))
     if active["G2"]:
-        g2 = row_1h["last_hl_1h"] - params.G2_ATR_BUFFER * atr
-        if g2 > current_sl:
+        anchor = row_1h["last_hl_1h"] if sign > 0 else row_1h["last_lh_1h"]
+        g2 = anchor - sign * params.G2_ATR_BUFFER * atr
+        if sign * (g2 - current_sl) > 0:
             candidates.append(g2)
     if active["G3"] and mfe >= params.G3_TRIGGER_R:
         k = params.G3_ATR_MULT_RISK_OFF if row_1h["regime"] == "RISK_OFF" else params.G3_ATR_MULT
-        candidates.append(row_1h["close"] - k * atr)
+        candidates.append(row_1h["close"] - sign * k * atr)
     if not candidates:
         return None
-    new_sl = max(candidates)
-    if new_sl <= current_sl:
+    new_sl = max(candidates, key=lambda c: sign * c)   # le plus serre dans le sens du trade
+    if sign * (new_sl - current_sl) <= 0:
         return None
     return new_sl
 
@@ -147,6 +187,11 @@ def partial_tp(trade, current_profit_r: float, state: TradeState,
     PDR 03.4 G4 : vendre 50 % de la QUANTITE — freqtrade convertit le stake en coins
     au prix COURANT, donc stake = -G4_SELL_FRACTION x amount x current_rate
     (current_rate reconstruit depuis le R courant : entry + R x (entry - initial_sl)).
+    A2 : cette formule est DEJA symetrique et n'a pas besoin du signe — le terme
+    (entry - initial_sl) est negatif en short (SL au-dessus), ce qui fait descendre le
+    prix reconstruit quand R monte. Verifie : entree 100, SL 110, R = 1,5 => 85.
+    Le stake reste NEGATIF dans les deux sens : freqtrade reduit la position, il ne la
+    retourne pas.
     Mute tp1_done a True au declenchement.
     """
     if params.CONTROL_A_MODE:  # PDR 09 §9.1.1 — controle A : aucune G-rule, G4 jamais declenche.
@@ -185,6 +230,9 @@ def check_exit(trade, row_1h, state: TradeState, tp2: float | None,
     `tp2` = niveau fourni par le caller (resistance 4h courante, decision Jonas 09/07),
     None si aucun. extension_on (G5) neutralise TP2.
     """
+    sign = state.sign
+    # A2 : l'extreme qui atteint une CIBLE est le high en long, le LOW en short.
+    reach = row_1h["high"] if sign > 0 else row_1h["low"]
     if params.CONTROL_A_MODE:
         # Meme garde "vie du trade" que G6 (docs/03 par.3.4 amendement 2026-07-10) : la bougie
         # doit etre entierement posterieure a l'entree, sinon un high PRE-fill sort a t+0
@@ -193,15 +241,18 @@ def check_exit(trade, row_1h, state: TradeState, tp2: float | None,
             return None
         entry = trade.open_rate
         tp1 = entry + params.TP1_R * (entry - state.initial_sl)
-        return "TP_CONTROL_A" if row_1h["high"] >= tp1 else None
+        return "TP_CONTROL_A" if sign * (reach - tp1) >= 0 else None
     active = _resolve(flags)
-    if (active["G6"] and bool(row_1h["choch_bear_event_1h"])
+    # A2 : l'evenement de structure ADVERSE est le CHoCH baissier pour un acheteur,
+    # le CHoCH HAUSSIER pour un vendeur.
+    choch_adverse = row_1h["choch_bear_event_1h"] if sign > 0 else row_1h["choch_bull_event_1h"]
+    if (active["G6"] and bool(choch_adverse)
             and row_1h["date"] >= trade.open_date_utc):
         return "G6"
     if (active["G7"] and _age_candles(trade, row_1h) >= params.G7_MAX_CANDLES_1H
             and state.mfe_r < params.G7_MIN_R):
         return "G7"
     if (not state.extension_on and state.tp1_done
-            and tp2 is not None and row_1h["high"] >= tp2):
+            and tp2 is not None and sign * (reach - tp2) >= 0):
         return "TP2"
     return None

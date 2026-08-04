@@ -105,3 +105,41 @@ Aucune ne demande plus de dix minutes de réflexion, toutes bloquent quelque cho
 - Le diagnostic lui-même : edge d'entrée nul, gestion destructrice, macro = seul signal
   non-bruit. Ces trois conclusions sont solides et ne sont pas à refaire.
 - Deux schémas d'architecture à jour (`modules/ARCHITECTURE.md`).
+
+---
+
+# MISE À JOUR DU 2026-08-04 — état des dettes C
+
+`DECISIONS.md` (racine) fait foi. Le tableau C ci-dessus est daté du 31/07 ; voici où il en est.
+
+| # | Dette | Statut au 04/08 |
+|---|---|---|
+| C1 | Calendrier économique | **FERMÉ côté code** — `services/calendar_source.py`, Finnhub retiré. ⚠️ dates CPI/NFP à copier depuis bls.gov (403 sur fetch auto) |
+| C2 | Porte spread inerte | **ANALYSÉ, non codé** — c'était la demande. Recommandation : mesurer d'abord (`C2_spread_analyse.md`) |
+| C3 | Bollinger | **FERMÉ** le 03/08 — `bb_*_1h`, journalisées, non décisionnelles |
+| C4 | Force S/R par touches | **FERMÉ** — constante supprimée (annulé par Jonas) |
+| C5 | Fraîcheur signal 4h | **FERMÉ** — constante supprimée (annulé par Jonas) |
+| C6 | Protections freqtrade | **FERMÉ** le 04/08 — `params.PROTECTIONS`, `docs/07 §7.1.1` |
+| C7 | Webhook Discord | action de Jonas (à régénérer, `.env`) |
+| C8 | `Untitled-1.py` | sans objet — fichier absent |
+| C9 | hyperopt/plot inutilisables | **toujours ouvert** — optuna et plotly absents du venv |
+
+## Décisions A
+
+A1, A3, A4 appliqués (03/08). **A2 (long ET short) appliqué le 04/08** — le bot n'est plus
+long-only. A5 acté sans code. A6 appliqué (risque constant 1,16 %). A7 signé (`docs/01`
+v4). A8 toujours reporté par Jonas.
+
+## Ce qui bloque le dry-run — liste RÉVISÉE au 04/08
+
+La liste `E` ci-dessus reste valable, avec deux entrées **nouvelles et prioritaires** :
+
+1. **Parité backtest/live rompue par A2** : le régime macro V1.1 en 5 composants n'est
+   produit qu'en backtest. `services/macro_state.py` écrit `fear_greed`/`risk_off`/`stale`
+   mais **pas** ce régime, et `macro_regime.regime_now()` n'a donc aucun producteur. En
+   live, `direction_macro` retombe sur son fail-safe ⇒ **le live est long-only alors que le
+   backtest est long+short**. Ce sont deux produits différents. À traiter dans M08.
+2. **Données OHLCV futures manquantes** : `user_data/data/binance/futures/` n'a que BTC en
+   4h et 5m. Il faut les 4 paires en 5m/1h/4h/1d. Sans elles, aucun backtest en futures,
+   et `check_bias.py` ne peut pas re-tourner sur la nouvelle config.
+3. (rappel) Hypothèse signée : **fait** (A7) — ce point de la liste E est levé.

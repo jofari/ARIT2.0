@@ -50,16 +50,21 @@ def _base_cfg(base, **over):
 
 
 # ------------------------------------------------------------------- sizing
-def test_risk_pct_bornes():
-    assert risk.compute_risk_pct(SEUIL, SEUIL, 1) == params.RISK_BASE_PCT
-    assert risk.compute_risk_pct(1.0, SEUIL, 1) == params.RISK_CAP_FIRST_PCT
-    # CB seq : diviseur 2 sur la borne haute.
-    assert risk.compute_risk_pct(1.0, SEUIL, 1, cb_divisor=2) == params.RISK_CAP_FIRST_PCT / 2
+def test_risk_pct_constant():
+    # A6 (docs/03 §3.1.0) : le risque ne depend PLUS de la conviction — meme valeur au
+    # seuil et a conviction maximale. C'est le test qui verrouille la suspension de §3.1.1.
+    assert risk.compute_risk_pct(SEUIL, SEUIL, 1) == params.RISK_CONSTANT_PCT
+    assert risk.compute_risk_pct(1.0, SEUIL, 1) == params.RISK_CONSTANT_PCT
+    # CB seq : le diviseur 2 continue de s'appliquer.
+    assert risk.compute_risk_pct(1.0, SEUIL, 1, cb_divisor=2) == params.RISK_CONSTANT_PCT / 2
 
 
-def test_cap_trade_100_vs_101():
-    assert risk.compute_risk_pct(1.0, SEUIL, 100) == params.RISK_CAP_FIRST_PCT   # 2 %
-    assert risk.compute_risk_pct(1.0, SEUIL, 101) == params.RISK_CAP_AFTER_PCT   # 3 %
+def test_cap_borne_le_risque_constant():
+    # Les caps 2 %/3 % restent en vigueur et BORNENT le constant (non mordants : 1,16 % < 2 %).
+    assert risk.compute_risk_pct(1.0, SEUIL, 100) == min(
+        params.RISK_CONSTANT_PCT, params.RISK_CAP_FIRST_PCT)
+    assert risk.compute_risk_pct(1.0, SEUIL, 101) == min(
+        params.RISK_CONSTANT_PCT, params.RISK_CAP_AFTER_PCT)
 
 
 def test_compute_stake_zero_stop_distance():

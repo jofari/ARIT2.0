@@ -98,44 +98,47 @@ def test_write_atomic_failure_keeps_old_file_intact(tmp_path):
     assert not (tmp_path / "macro_state.json.tmp").exists()
 
 
-# -------------------------------------------------- securite : clef jamais fuitee
-def test_fetch_calendar_error_never_leaks_key(monkeypatch):
-    key = "SECRET_FINNHUB_TOKEN"
-
-    class _HTTPError(Exception):
-        def __init__(self, message, status):
-            super().__init__(message)
-            self.response = type("R", (), {"status_code": status})()
-
-    class _Resp:
-        def raise_for_status(self):
-            raise _HTTPError(f"401 Client Error for url ?token={key}", 401)
-
-    def _fake_get(url, params=None, timeout=None):
-        return _Resp()
-
-    monkeypatch.setattr(macro_state.requests, "get", _fake_get)
-    with pytest.raises(RuntimeError) as excinfo:
-        macro_state.fetch_calendar(key)
-    assert key not in str(excinfo.value)
-    assert excinfo.value.__cause__ is None  # pas de chainage qui reexposerait l'URL
-    assert "401" in str(excinfo.value)
+# ------------------------------- C1 : le calendrier ne fait plus de reseau dans ce run
+def _cal(events, primaire_ok=True, secondaire_ok=True, trous=()):
+    """Stub de calendar_source.load_events (C1). Signature (user_data_dir, now)."""
+    meta = {"primaire": {"ok": primaire_ok, "n": len(events)},
+            "secondaire": {"ok": secondaire_ok, "raison": None if secondaire_ok else "perime"},
+            "total": len(events), "trous_couverture": list(trous)}
+    return lambda _d, _n: (list(events), meta)
 
 
-def test_main_scrubbed_message_has_no_key(tmp_path, monkeypatch, caplog):
-    key = "SECRET_FINNHUB_TOKEN"
+def test_finnhub_a_ete_retire(monkeypatch):
+    """C1 : plus aucune clef, plus aucun appel calendrier au runtime horaire."""
+    assert not hasattr(macro_state, "fetch_calendar")
+    assert not hasattr(macro_state, "FINNHUB_ENV")
+
+
+def test_main_ne_bloque_pas_quand_forexfactory_est_indisponible(tmp_path, monkeypatch):
+    """Degradation VOULUE (Jonas 03/08) : FF en echec => on continue sur la primaire."""
     macro_state.set_user_data_dir(tmp_path)
-    monkeypatch.setenv("FINNHUB_KEY", key)
-
-    def _boom(finnhub_key):
-        raise RuntimeError(macro_state._scrub_finnhub_error(RuntimeError(f"?token={key}")))
-
-    monkeypatch.setattr(macro_state, "fetch_calendar", _boom)
+    # Evenement calé sur l'heure REELLE : main() utilise _now_utc(), pas la constante NOW.
+    soon = (macro_state._now_utc() + timedelta(hours=6)).isoformat()
+    primaire = [{"name": "FOMC rate decision", "time_utc": soon, "impact": "high"}]
+    monkeypatch.setattr(macro_state.calendar_source, "load_events",
+                        _cal(primaire, secondaire_ok=False))
     monkeypatch.setattr(macro_state, "fetch_fear_greed", lambda: 55)
+    code = macro_state.main()
+    assert code == macro_state.EXIT_OK          # PAS un echec : la primaire suffit
+    written = json.loads((tmp_path / macro_state.contracts.MACRO_STATE_FILE).read_text("utf-8"))
+    assert written["stale"] is False
+    assert len(written["next_events"]) == 1     # l'evenement de la primaire est bien la
+
+
+def test_main_journalise_les_trous_de_couverture(tmp_path, monkeypatch, caplog):
+    """Un trou sur un des trois evenements qui comptent n'est JAMAIS silencieux."""
     import logging
-    with caplog.at_level(logging.WARNING):
+    macro_state.set_user_data_dir(tmp_path)
+    monkeypatch.setattr(macro_state.calendar_source, "load_events",
+                        _cal([], trous=("CPI", "NFP")))
+    monkeypatch.setattr(macro_state, "fetch_fear_greed", lambda: 55)
+    with caplog.at_level(logging.ERROR):
         macro_state.main()
-    assert key not in caplog.text
+    assert "CPI" in caplog.text and "NFP" in caplog.text
 
 
 # ----------------------------------------------------------------- main
@@ -144,10 +147,9 @@ def test_main_partial_uses_old_value_on_source_failure(tmp_path, monkeypatch):
     old = macro_state.build_state([], 60, NOW - timedelta(minutes=30))
     macro_state.write_atomic(old, tmp_path / macro_state.contracts.MACRO_STATE_FILE)
 
-    monkeypatch.setattr(macro_state, "fetch_calendar", lambda key: [_event(120)])
+    monkeypatch.setattr(macro_state.calendar_source, "load_events", _cal([_event(120)]))
     monkeypatch.setattr(macro_state, "fetch_fear_greed",
                         lambda: (_ for _ in ()).throw(RuntimeError("down")))
-    monkeypatch.setenv("FINNHUB_KEY", "x")
 
     code = macro_state.main()
     assert code == macro_state.EXIT_PARTIAL
@@ -157,12 +159,12 @@ def test_main_partial_uses_old_value_on_source_failure(tmp_path, monkeypatch):
 
 
 def test_main_total_failure_no_old_is_fail_safe(tmp_path, monkeypatch):
+    """Echec TOTAL = source primaire illisible (anomalie de deploiement) ET F&G mort."""
     macro_state.set_user_data_dir(tmp_path)
-    monkeypatch.setattr(macro_state, "fetch_calendar",
-                        lambda key: (_ for _ in ()).throw(RuntimeError("down")))
+    monkeypatch.setattr(macro_state.calendar_source, "load_events",
+                        _cal([], primaire_ok=False))
     monkeypatch.setattr(macro_state, "fetch_fear_greed",
                         lambda: (_ for _ in ()).throw(RuntimeError("down")))
-    monkeypatch.delenv("FINNHUB_KEY", raising=False)
 
     code = macro_state.main()
     assert code == macro_state.EXIT_ERROR

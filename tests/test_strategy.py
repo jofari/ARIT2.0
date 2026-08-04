@@ -314,13 +314,17 @@ def _fake_macro(monkeypatch, daily, veto=None):
         veto = pd.DataFrame({contracts.EQUITY_VETO_COL: False,
                              contracts.EQUITY_VETO_REASON_COL: contracts.EQUITY_PASS_NOT_STARTED,
                              "stale_days": 0}, index=daily.index)
-    fake = type("M", (), {
-        "load_history": staticmethod(lambda d: None),
-        "daily_regimes": staticmethod(lambda h: daily),
-        "load_equity_inputs": staticmethod(lambda d: (pd.Series(dtype="float64"),
-                                                      pd.Series(dtype="float64"))),
-        "daily_equity_veto": staticmethod(lambda e, b, r: veto),
-        "stale_episodes": staticmethod(lambda v: None)})
+    # A2/04-08 : l'assemblage (charger + joindre le veto + detecter le stale) a quitte la
+    # strategie pour macro_regime.daily_with_equity_veto — M07 ne fait plus que journaliser
+    # les evenements retournes. Le stub suit ce contrat.
+    def _daily_with_veto(_d):
+        if daily.empty:
+            return daily, [("macro_unavailable", {"dir": str(_d)})]
+        joined = daily.join(veto[[contracts.EQUITY_VETO_COL,
+                                  contracts.EQUITY_VETO_REASON_COL]])
+        return joined, []
+
+    fake = type("M", (), {"daily_with_equity_veto": staticmethod(_daily_with_veto)})
     monkeypatch.setattr(strat_mod, "macro_regime", fake)
 
 
@@ -381,3 +385,161 @@ def test_live_does_not_pose_macro_column(monkeypatch):
     s.config = {"user_data_dir": "user_data"}
     s.populate_indicators(_candles(), {"pair": "BTC/USDT"})
     assert seen["has_col"] is False                          # live/dry : jamais la colonne (M08)
+
+
+# --------------------- C6 : protections freqtrade natives (07.1.1, 03.5) ---------------------
+def test_protections_declarees_dans_la_strategie():
+    """freqtrade 2026.6 : la liste vit dans la STRATEGIE, plus dans config.json."""
+    assert Strat.protections is params.PROTECTIONS
+    assert [p["method"] for p in Strat.protections] == [
+        "CooldownPeriod", "StoplossGuard", "MaxDrawdown"]
+
+
+def test_protections_derivent_des_constantes_03_5():
+    """Aucune valeur en dur : les protections suivent les CB de 03.5 (interdit n4)."""
+    by_method = {p["method"]: p for p in params.PROTECTIONS}
+    assert by_method["CooldownPeriod"]["stop_duration_candles"] == \
+        params.COOLDOWN_POST_EXIT_CANDLES
+    slg = by_method["StoplossGuard"]
+    assert slg["trade_limit"] == params.CB_SEQ_CONSECUTIVE
+    assert slg["stop_duration_candles"] == params.CB_SEQ_COOLDOWN_CANDLES_1H
+    assert slg["only_per_pair"] is False        # CB sequentiel = portefeuille (03.5)
+    assert slg["only_per_side"] is False        # A2 : serie perdante long ET short
+    mdd = by_method["MaxDrawdown"]
+    assert mdd["max_allowed_drawdown"] == params.CB_DAY_EQUITY_DROP_PCT
+    assert mdd["stop_duration_candles"] == params.PROTECT_MAXDD_STOP_CANDLES
+
+
+def test_protections_chargeables_par_freqtrade():
+    """Garde-fou d'upgrade : si freqtrade renomme une cle, ce test casse AVANT le dry-run."""
+    pm = pytest.importorskip("freqtrade.plugins.protectionmanager")
+    manager = pm.ProtectionManager({"timeframe": params.TIMEFRAME_BASE,
+                                    "stake_currency": params.STAKE_CURRENCY},
+                                   params.PROTECTIONS)
+    handlers = manager._protection_handlers
+    assert len(handlers) == len(params.PROTECTIONS)
+    assert {h.__class__.__name__ for h in handlers} == {
+        "CooldownPeriod", "StoplossGuard", "MaxDrawdown"}
+    # les valeurs 03.5 ont bien ete lues par freqtrade, pas juste acceptees
+    descs = " | ".join(h.short_desc() for h in handlers)
+    assert "2 candles" in descs                                  # cooldown post-sortie
+    assert f"{params.CB_DAY_EQUITY_DROP_PCT}" in descs           # -6 % du CB jour
+
+
+# ==================== A2 — le bot est long ET short (docs/01 v4, DECISIONS A2) ====================
+def _row_short(**kw):
+    """Bougie 1h merge minimale pour les callbacks d'entree, cote SHORT."""
+    base = {"date": T0, "date_4h": T0, "close": 100.0,
+            "last_hl_4h": 95.0, "last_lh_4h": 105.0, "atr_4h": 2.0,
+            "nearest_res_4h": 130.0, "nearest_sup_4h": 70.0,
+            "rr_dispo": 9.0, "rr_dispo_short": 9.0,
+            "conviction": 0.9, "conviction_short": 0.8, "regime": "TREND"}
+    base.update(kw)
+    return pd.DataFrame([base])
+
+
+def test_can_short_est_actif():
+    assert Strat.can_short is True
+
+
+def test_entry_trend_pose_enter_short():
+    s = _inst()
+    df = pd.DataFrame({
+        "signal_long": [True, False, False, False],
+        "signal_short": [False, True, True, False],
+        "new_4h": [True, True, False, True],
+    })
+    out = s.populate_entry_trend(df.copy(), {"pair": "BTC/USDT"})
+    assert list(out["enter_long"]) == [1, 0, 0, 0]
+    # Meme garde new_4h que le long : jamais deux fois le meme setup 4h.
+    assert list(out["enter_short"]) == [0, 1, 0, 0]
+    # Colonne toujours posee, meme sans signal short dans le df.
+    out = s.populate_entry_trend(pd.DataFrame({"close": [1, 2]}), {})
+    assert list(out["enter_short"]) == [0, 0]
+
+
+def test_confirm_trade_entry_lit_le_rr_du_sens(monkeypatch):
+    """Un short doit passer la porte RR sur rr_dispo_short, pas sur le RR long."""
+    _capture(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(strat_mod.risk, "gate_check",
+                        lambda p, n, w, t, cfg: (seen.update(cfg) or (True, None, {})))
+    monkeypatch.setattr(strat_mod.risk, "cb_sequential_state", lambda t, n: (False, 1))
+    monkeypatch.setattr(strat_mod.risk, "cb_day_active", lambda w, n, u: False)
+    monkeypatch.setattr(strat_mod.Trade, "get_trades_proxy", staticmethod(lambda: []))
+    s = _inst()
+    s.dp = _DP(_row_short(rr_dispo=9.0, rr_dispo_short=1.0))
+    s.config = {"user_data_dir": "user_data", "dry_run": True}
+    s.wallets = _Wallets()
+    s.confirm_trade_entry("BTC/USDT", T0, side=contracts.DIR_SHORT)
+    assert seen["rr"] == 1.0                  # rr_dispo_short, malgre un rr long genereux
+    s.confirm_trade_entry("BTC/USDT", T0, side=contracts.DIR_LONG)
+    assert seen["rr"] == 9.0
+
+
+def test_custom_stake_amount_short_utilise_lancre_et_la_cible_baissieres(monkeypatch):
+    _capture(monkeypatch)
+    monkeypatch.setattr(strat_mod.risk, "cb_sequential_state", lambda t, n: (False, 1))
+    monkeypatch.setattr(strat_mod.Trade, "get_trades_proxy", staticmethod(lambda: []))
+    s = _inst()
+    s.dp = _DP(_row_short())
+    s.config = {"user_data_dir": "user_data", "dry_run": True}
+    s.wallets = _Wallets(10_000.0)
+    stake = s.custom_stake_amount("BTC/USDT", T0, 100.0, 10.0, side=contracts.DIR_SHORT)
+    pending = s._pending["BTC/USDT"]
+    # SL au-DESSUS de l'entree, ancre sur last_lh_4h (105) + 0,1xATR.
+    assert pending["initial_sl"] == pytest.approx(105.0 + params.SL_HL_ATR_BUFFER * 2.0)
+    assert pending["initial_sl"] > 100.0
+    assert pending["tp1"] < 100.0                       # cible SOUS l'entree
+    assert pending["tp2"] == 70.0                       # nearest_sup_4h, pas nearest_res_4h
+    assert pending["is_short"] is True
+    assert pending["entry_conviction"] == 0.8           # conviction_short, pas conviction
+    assert stake > 0                                    # le stake reste positif (taille)
+    # Le long sur la MEME bougie prend l'autre ancre et l'autre cible.
+    s.custom_stake_amount("BTC/USDT", T0, 100.0, 10.0, side=contracts.DIR_LONG)
+    long_pending = s._pending["BTC/USDT"]
+    assert long_pending["initial_sl"] < 100.0
+    assert long_pending["tp2"] == 130.0
+    assert long_pending["is_short"] is False
+    assert long_pending["entry_conviction"] == 0.9
+
+
+def test_custom_stake_amount_short_skip_si_stop_du_mauvais_cote(monkeypatch):
+    """LH sous l'entree ET ATR NaN => SL non finie => skip journalise, jamais d'ordre."""
+    events = _capture(monkeypatch)
+    monkeypatch.setattr(strat_mod.risk, "cb_sequential_state", lambda t, n: (False, 1))
+    monkeypatch.setattr(strat_mod.Trade, "get_trades_proxy", staticmethod(lambda: []))
+    s = _inst()
+    s.dp = _DP(_row_short(atr_4h=float("nan")))
+    s.config = {"user_data_dir": "user_data", "dry_run": True}
+    s.wallets = _Wallets()
+    assert s.custom_stake_amount("BTC/USDT", T0, 100.0, 10.0,
+                                 side=contracts.DIR_SHORT) == 0.0
+    assert any(et == "gate_check" for et, _ in events)
+
+
+def test_order_filled_fige_le_sens_dans_le_custom_data(monkeypatch):
+    _capture(monkeypatch)
+    s = _inst()
+    s._pending["BTC/USDT"] = {
+        "initial_sl": 110.0, "risk_pct": 0.0116, "signal_id": "SID", "tp1": 85.0,
+        "tp2": 70.0, "entry_conviction": 0.8, "entry_regime": "TREND",
+        "is_short": True, "trade_no": 1}
+    trade = _CDTrade()
+    trade.is_open = True
+    trade.is_short = True
+    trade.pair, trade.open_rate, trade.amount = "BTC/USDT", 100.0, 1.0
+    trade.stake_amount, trade.open_date_utc = 1000.0, T0
+    s.order_filled("BTC/USDT", trade, type("O", (), {"ft_order_side": "sell"})())
+    # ft_order_side 'sell' + is_open : c'est l'ENTREE d'un short, pas une sortie G4.
+    state = s._trade_state(trade)
+    assert state.is_short is True and state.sign == -1
+
+
+def test_signal_id_supporte_les_paires_futures():
+    """Bug latent active par A2 : le ':' des paires perpetuelles est illegal en nom de
+    fichier Windows (veto/<signal_id>.intent)."""
+    sid = contracts.make_signal_id("BTC/USDT:USDT", T0.to_pydatetime())
+    assert ":" not in sid and "/" not in sid
+    # Meme signal_id qu'en spot => les journaux restent comparables entre les deux modes.
+    assert sid == contracts.make_signal_id("BTC/USDT", T0.to_pydatetime())

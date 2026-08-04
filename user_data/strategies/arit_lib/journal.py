@@ -18,6 +18,7 @@ permettre la reconstruction d'un cycle par signal_id (evaluation..exit). C'est l
 hors JOURNAL_REQUIRED_FIELDS, mais elle est structurellement indispensable au dataset.
 """
 
+import functools
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,26 @@ from pathlib import Path
 from . import contracts, params
 
 logger = logging.getLogger(__name__)
+
+
+def safe(default, event):
+    """Decorateur de callback M07 (regle 3) : toute exception -> ligne 'system' + action sure.
+
+    Vit ici plutot que dans la strategie parce que son unique effet EST de journaliser :
+    c'est la seule chose qui doit survivre a une exception dans un callback freqtrade.
+    Une feature qui casse ne doit jamais tuer le bot ni passer un ordre par defaut —
+    d'ou `default` (False pour une porte, 0.0 pour un sizing, None pour une gestion).
+    """
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrap(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:
+                write("system", ev_system(event, {"error": str(exc)}))
+                return default
+        return wrap
+    return deco
 
 _WRITE_ATTEMPTS = 2  # M06 : 1 ecriture + 1 retry puis logging.error (jamais d'exception)
 _SECONDS_PER_HOUR = 3600.0  # conversion duree s -> h (exit.duration_h)
@@ -289,6 +310,10 @@ def ev_entry(trade, state) -> dict:
         "tp2": _coerce(_get(trade, "tp2")),
         "conviction": _coerce(_get(state, "entry_conviction")),
         "regime": _get(state, "entry_regime"),
+        # schema v3 (A2, 04/08) : sans le sens, un journal post-short est incomparable a
+        # tout ce qui precede et le Test 1 de docs/01 n'est pas mesurable.
+        "direction": (contracts.DIR_SHORT if _get(state, "is_short")
+                      else contracts.DIR_LONG),
     }
     if ts_utc:
         record["ts_utc"] = ts_utc

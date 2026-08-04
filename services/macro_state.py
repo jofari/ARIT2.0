@@ -10,7 +10,11 @@ Regles (M08 / 06) :
 - next_events = 3 prochains high-impact <= 48 h, tries.
 - Echec d'UNE source : garder la derniere valeur connue (relire l'ancien fichier) ;
   stale seulement si updated_utc global > 2 h (le lecteur traite stale => RISK_OFF).
-- Clef Finnhub via env FINNHUB_KEY ; jamais en dur, jamais loggee.
+- Calendrier : `calendar_source` (C1, decision Jonas 03/08) = JSON versionne + cache
+  ForexFactory. ZERO reseau pour le calendrier dans ce run horaire ; le fetch FF est une
+  tache hebdomadaire SEPAREE (`calendar_source.py --fetch-ff`). Finnhub a ete RETIRE le
+  2026-08-04 : son endpoint calendrier est passe premium, la clef n'a jamais ete fournie,
+  et la porte news est restee inerte tout ce temps.
 - Timestamps 100 % UTC ISO8601, aucune conversion locale.
 
 Import autorise : contracts/params (docs : les services peuvent les importer). AUCUN import
@@ -31,20 +35,22 @@ import requests
 _ARIT_LIB_DIR = Path(__file__).resolve().parents[1] / "user_data" / "strategies"
 if str(_ARIT_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(_ARIT_LIB_DIR))
+# services/ lui-meme, pour calendar_source (C1) : ce module est importable meme quand
+# macro_state est charge autrement qu'en script (tests, start_arit.py).
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import calendar_source  # noqa: E402  (meme dossier services/, C1)
 from arit_lib import contracts, params  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 # --- Constantes d'infrastructure (endpoints/HTTP) : hors params.py car elles ne sont
 # pas des parametres de trading. Valeurs metier (fenetres, seuils) viennent de params.
-FINNHUB_ENV = "FINNHUB_KEY"                                       # docs/06.1 / M08 invariant 2
-FINNHUB_CALENDAR_URL = "https://finnhub.io/api/v1/calendar/economic"  # docs/06.1
 FEAR_GREED_URL = "https://api.alternative.me/fng/"               # docs/06.2 alternative.me
 HTTP_TIMEOUT_S = 10
 FG_RETRY_MAX = 3                                                  # M08 : retry x3 backoff
 FG_BACKOFF_BASE_S = 2  # infra, non fixe par le PDR (M08 : "backoff" sans valeur chiffree)
-_US_COUNTRIES = ("US", "USA", "UNITED STATES")                    # docs/06.1 : events US
 
 # Codes retour pour le Task Scheduler (M08 : main -> codes retour).
 EXIT_OK = 0
@@ -93,63 +99,7 @@ def _parse_iso(value):
     return parsed.astimezone(timezone.utc)
 
 
-def _parse_finnhub_time(value):
-    """Finnhub 'YYYY-MM-DD HH:MM:SS' (UTC) ou ISO -> datetime aware UTC, sinon None."""
-    if not value:
-        return None
-    text = str(value)
-    try:
-        parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-        return parsed
-    except ValueError:
-        return _parse_iso(text)
-
-
 # ----------------------------------------------------------------- fetch
-def _scrub_finnhub_error(exc) -> str:
-    """Message d'erreur Finnhub SANS la clef (M08 §2 / 06.5) : l'URL Finnhub contient
-    ?token=<KEY> et fuiterait dans le log de main(). On ne garde que type + status HTTP."""
-    status = getattr(getattr(exc, "response", None), "status_code", None)
-    label = f"HTTP {status}" if status is not None else type(exc).__name__
-    return f"calendar Finnhub injoignable ({label})"
-
-
-def fetch_calendar(finnhub_key) -> list:
-    """/calendar/economic -> events US impact=high filtres par mots-cles (NEWS_KEYWORDS).
-
-    Retourne des dicts normalises {"name", "time_utc" (ISO UTC), "impact": "high"}.
-    Leve un RuntimeError SCRUBBE en cas d'echec reseau/HTTP (main() gere le fallback).
-    SECURITE (M08 §2 / 06.5) : la clef n'apparait JAMAIS dans l'exception - l'URL Finnhub
-    porte ?token=<KEY>, donc aucune exception requests brute n'est propagee/loggee.
-    """
-    if not finnhub_key:
-        raise RuntimeError("FINNHUB_KEY absente")
-    try:
-        resp = requests.get(
-            FINNHUB_CALENDAR_URL, params={"token": finnhub_key}, timeout=HTTP_TIMEOUT_S
-        )
-        resp.raise_for_status()
-        payload = resp.json() or {}
-    except Exception as exc:
-        raise RuntimeError(_scrub_finnhub_error(exc)) from None
-    raw = payload.get("economicCalendar") or payload.get("calendar") or []
-    events = []
-    for item in raw:
-        if str(item.get("impact", "")).lower() != "high":
-            continue
-        country = str(item.get("country", "")).upper()
-        if country and country not in _US_COUNTRIES:
-            continue
-        name = str(item.get("event", ""))
-        if not any(kw.lower() in name.lower() for kw in params.NEWS_KEYWORDS):
-            continue
-        when = _parse_finnhub_time(item.get("time"))
-        if when is None:
-            continue
-        events.append({"name": name, "time_utc": when.isoformat(), "impact": "high"})
-    return events
-
-
 def fetch_fear_greed() -> int:
     """alternative.me Fear&Greed (valeur du jour) -> int. Retry x3 backoff, puis leve."""
     last_exc = None
@@ -256,24 +206,27 @@ def main() -> int:
     path = _state_path()
     old = _read_old(path)
 
-    key = os.environ.get(FINNHUB_ENV)
-    events = None
     fg = None
-    cal_ok = True
     fg_ok = True
 
-    try:
-        events = fetch_calendar(key)
-    except Exception as exc:
-        cal_ok = False
-        logger.warning("macro_state: calendar echec (%s)", exc)
+    # C1 (Jonas 03/08) : calendrier = primaire versionnee + cache FF, ZERO reseau ici.
+    # `load_events` ne leve jamais, donc `cal_ok` ne depend plus d'un appel distant : il
+    # ne vaut False que si la source PRIMAIRE elle-meme est illisible (anomalie de deploiement).
+    events, cal_meta = calendar_source.load_events(_user_data_dir(), now)
+    cal_ok = bool(cal_meta["primaire"]["ok"])
+    if not cal_meta["secondaire"]["ok"]:   # degradation VOULUE : la primaire suffit (C1)
+        logger.warning("macro_state: cache ForexFactory indisponible (%s) - primaire conservee",
+                       cal_meta["secondaire"].get("raison"))
+    if cal_meta["trous_couverture"]:       # jamais silencieux (cf. calendar_source)
+        logger.error("macro_state: TROU de couverture calendrier sur %s",
+                     cal_meta["trous_couverture"])
     try:
         fg = fetch_fear_greed()
     except Exception as exc:
         fg_ok = False
         logger.warning("macro_state: fear_greed echec (%s)", exc)
 
-    if not cal_ok:
+    if not cal_ok:   # primaire illisible : on retombe sur le dernier etat connu
         events = (old or {}).get("next_events", []) if old else []
     if not fg_ok:
         fg = (old or {}).get("fear_greed") if old else None

@@ -28,3 +28,26 @@ Chaque jour 08:00 UTC, `journal.py` génère un résumé Markdown (posté sur Di
 
 ## 8.5 Rétention
 JSONL append-only, jamais supprimé (c'est le dataset V2). Rotation par fichier journalier ; compression mensuelle zip acceptable.
+
+## 8.6 AMENDEMENT du 2026-08-04 — schéma journal v3 (décision A2)
+
+`contracts.SCHEMA_VERSION` passe de **2 à 3**. Deux champs, tous deux nécessaires à
+l'hypothèse v4 de `01_edge.md` :
+
+| Événement | Champ | Valeurs |
+|---|---|---|
+| `entry` | `direction` (**requis**) | `"long"` \| `"short"` |
+| `evaluation` | `regime_inputs.direction_macro` | `"long"` \| `"short"` \| `"both"` \| `"none"` |
+
+`evaluation.raison` porte désormais le sens signalé (`"long"`, `"short"`, `"long/short"`)
+au lieu du régime quand il y a signal ; `decision` reste `"signal"` / `"no_signal"`. Sans
+ce changement un signal short apparaissait comme un `no_signal`.
+
+**Pourquoi c'est structurant et pas cosmétique** : le Test 1 de `01_edge.md` (« la macro
+donne-t-elle vraiment la direction ? ») se mesure en comparant la direction autorisée à
+l'issue du trade. Sans `direction_macro` sur chaque évaluation et `direction` sur chaque
+entrée, ce test n'est pas calculable a posteriori et il faut re-runner — exactement le coût
+que le passage v1→v2 avait servi à éviter pour la porte macro.
+
+⚠️ Un journal v2 et un journal v3 ne se concatènent pas naïvement : filtrer sur
+`schema_version` avant toute agrégation.

@@ -31,3 +31,44 @@ ADX(14)_4h · EMA(50)_4h, EMA(200)_4h, EMA(50)_1d · RSI(14)_4h · MACD(12,26,9)
 
 ## 5.6 Tests unitaires exigés (pytest, données synthétiques)
 Pivots (confirmation à +2, pas de repaint) · BOS avec/sans displacement · CHoCH · clustering S/R (écarts autour de 0,5×ATR) · RR_dispo · chaque s_* sur cas construits · absence de look-ahead (une feature 4h ne change pas avant la clôture 4h).
+
+## 5.6 AMENDEMENT du 2026-08-04 — jeu de features BAISSIER (décision A2)
+
+Le short (03.7) a besoin de sa propre lecture technique. Règle qui a guidé tout ce bloc :
+**le miroir n'introduit aucun degré de liberté nouveau** — mêmes seuils, mêmes barèmes,
+seule la polarité des prédicats change. Le budget de tests est déjà dépassé (`CHANTIERS.md`
+B2) ; un short avec ses propres paramètres serait un second modèle à valider, pas une
+symétrie.
+
+### Structure (05.1 miroir)
+| Haussier | Baissier | Construction |
+|---|---|---|
+| `last_hl` | `last_lh` | dernier pivot high CONFIRMÉ plus bas que le précédent |
+| `last_ph` | `last_pl` | dernier pivot low confirmé |
+| `hh_hl_intact` | `ll_lh_intact` | séquence LL **et** LH établie |
+| `bos_bull` | `bos_bear` | clôture sous le dernier PL + **même** exigence de displacement (≥ 1 × ATR) |
+| `bos_fresh` | `bos_fresh_bear` | même fenêtre de fraîcheur (3 bougies 4h) |
+| `choch_bear` | `choch_bull` | clôture au-dessus du dernier LH |
+| `choch_bear_event_1h` | `choch_bull_event_1h` | front montant de l'état (G6, décision 10/07) |
+
+Même anti-repaint : tout part des pivots confirmés à `shift(PIVOT_N)`. Prouvé
+mécaniquement par `test_colonnes_baissieres_ne_repeignent_pas` (recalcul sur données
+tronquées ⇒ préfixes identiques), pas seulement par relecture.
+
+### Scores (05.2 à 05.5 miroirs) — `s_*_short`
+- **`s_structure_short`** : contexte de tendance inversé (`EMA50 < EMA200` **et**
+  `close < EMA50`), BOS baissier, CHoCH haussier comme événement adverse.
+- **`s_momentum_short`** : bandes RSI par symétrie autour de 50 — plein sur **[30, 50]**
+  (miroir de [50, 70]), 0,5 sur **(50, 55]** ou **[25, 30)**. Histogramme MACD **négatif** et
+  qui s'amplifie. L'asymétrie du PDR est conservée : le score plein exige l'amplification,
+  le 0,5 non.
+- **`s_sr_short`** : `rr_dispo_short = (close − nearest_sup_4h) / (SL_est − close)` avec
+  `SL_est = last_lh_4h + 0,1 × ATR_4h` (fallback `close + 1,5 × ATR_4h`). Mêmes paliers.
+- **`s_patterns_short`** : patterns talib lus à **−100** — `CDLENGULFING` (engulfing
+  baissier) et `CDLSHOOTINGSTAR`. ⚠️ `CDLHAMMER` n'a pas de sortie −100 dans talib (il n'est
+  défini que haussier) : son miroir structurel est la shooting star. Pin bar bearish custom
+  (`cdl_pinbar_bear`) : mèche **haute** ≥ 2 × corps et clôture dans le tiers **bas**. Le doji
+  reste lu à +100 — c'est une indécision, elle disqualifie une cassure dans les deux sens.
+- **`s_volume_short` = `s_volume`**, **volontairement non dupliqué** : un volume fort
+  confirme un mouvement, il ne dit pas dans quelle direction. Le dupliquer par symétrie de
+  façade aurait donné l'illusion d'un cinquième signal baissier indépendant.

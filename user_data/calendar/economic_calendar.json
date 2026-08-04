@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "_comment": "C1 (decision Jonas 2026-08-03) - SOURCE PRIMAIRE du calendrier economique. Fichier VERSIONNE dans le repo, aucun reseau pour le lire. Toutes les heures sont en UTC, DST US deja appliquee (EST = UTC-5, EDT = UTC-4). Ne jamais editer a la main sans mettre a jour 'verified_utc' de la serie concernee.",
+  "generated_utc": "2026-08-04T00:00:00+00:00",
+  "sources": {
+    "FOMC": {
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "verified_utc": "2026-08-04",
+      "covers_until_utc": "2027-12-08T19:00:00+00:00",
+      "note": "Communique de politique monetaire le DERNIER jour de chaque reunion a 14:00 US Eastern. Le calendrier officiel est publie environ un an a l'avance."
+    },
+    "BLS_CPI": {
+      "url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+      "verified_utc": null,
+      "covers_until_utc": null,
+      "note": "NON RENSEIGNE. bls.gov refuse les recuperations automatisees (HTTP 403), et fabriquer des dates de publication dans un bot de trading est inacceptable. En attendant, la couverture CPI repose sur la source SECONDAIRE ForexFactory, et calendar_source.coverage_gaps() le signale a chaque run. Publication a 08:30 US Eastern."
+    },
+    "BLS_NFP": {
+      "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+      "verified_utc": null,
+      "covers_until_utc": null,
+      "note": "NON RENSEIGNE, meme raison que BLS_CPI. Employment Situation (nonfarm payrolls), publication a 08:30 US Eastern."
+    }
+  },
+  "events": [
+    {"name": "FOMC rate decision", "time_utc": "2026-01-28T19:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2026-03-18T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2026-04-29T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2026-06-17T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2026-07-29T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2026-09-16T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2026-10-28T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2026-12-09T19:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-01-27T19:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-03-17T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-04-28T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-06-09T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-07-28T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-09-15T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-10-27T18:00:00+00:00", "impact": "high", "source": "FOMC"},
+    {"name": "FOMC rate decision", "time_utc": "2027-12-08T19:00:00+00:00", "impact": "high", "source": "FOMC"}
+  ]
+}

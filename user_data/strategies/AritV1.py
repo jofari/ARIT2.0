@@ -2,7 +2,6 @@
 arit_lib/, pur+teste). Aucun reseau dans les callbacks (docs/11 par.11.5) ; exception arit_lib ->
 action sure + journal 'system' ; noms/constantes = arit_lib.contracts/params (zero magie)."""
 
-import functools
 import math
 from pathlib import Path
 
@@ -18,33 +17,25 @@ except Exception:  # pragma: no cover - fallback tests (helpers purs restent imp
 from arit_lib import cio, contracts, features, gestion, journal, macro_regime, params, regimes, risk
 
 _LIVE_MODES = ("live", "dry_run")  # live/dry : macro_state.json ; backtest : colonne macro (M08)
+_safe = journal.safe               # M07 regle 3 : exception callback -> 'system' + action sure
 
 
 def _num(value) -> float:
     return float(value) if value is not None and pd.notna(value) else float("nan")
 
 
-def _safe(default, event):  # M07 regle 3 : exception callback -> journal 'system' + action sure
-    def deco(fn):
-        @functools.wraps(fn)
-        def wrap(self, *a, **k):
-            try:
-                return fn(self, *a, **k)
-            except Exception as exc:
-                journal.write("system", journal.ev_system(event, {"error": str(exc)}))
-                return default
-        return wrap
-    return deco
-
-
 class AritV1(IStrategy):
     timeframe = params.TIMEFRAME_BASE
-    can_short = False
+    can_short = True                             # A2 (Jonas 03/08) : long ET short
+    # Levier : on garde le defaut freqtrade (1.0, cf. IStrategy.leverage) => exposition
+    # identique au spot, le short ne l'augmente pas. Le choix d'un levier > 1 est une
+    # DECISION DE RISQUE non signee — voir DECISIONS.md, question ouverte A2-ter.
     position_adjustment_enable = True            # requis G4 (PDR 03.4)
     use_custom_stoploss = True
     stoploss = -0.99                             # plancher ; vrai SL = custom + exchange
     process_only_new_candles = True              # docs/11 par.11.2
     startup_candle_count = params.STARTUP_CANDLES  # warm-up EMA200 1d (A1 03/08, cf. params)
+    protections = params.PROTECTIONS              # C6 07.1 ; backtest : --enable-protections
     def __init__(self, config=None):
         super().__init__(config)
         self._pending: dict = {}
@@ -73,10 +64,14 @@ class AritV1(IStrategy):
         return df
     def populate_entry_trend(self, df, metadata):
         df["enter_long"] = 0
-        if "signal_long" in df.columns and "new_4h" in df.columns:
-            # Garde new_4h (docs/11 par.11.2) : jamais deux evaluations du meme setup 4h.
-            sig = df["signal_long"].fillna(False) & df["new_4h"].fillna(False)
-            df.loc[sig, "enter_long"] = 1
+        df["enter_short"] = 0                    # A2 : colonne toujours posee (freqtrade 2026.6)
+        if "new_4h" not in df.columns:
+            return df
+        # Garde new_4h (docs/11 par.11.2) : jamais deux evaluations du meme setup 4h.
+        new4 = df["new_4h"].fillna(False)
+        for col, signal in (("enter_long", "signal_long"), ("enter_short", "signal_short")):
+            if signal in df.columns:
+                df.loc[df[signal].fillna(False) & new4, col] = 1
         return df
     def populate_exit_trend(self, df, metadata):
         return df  # sorties par callbacks (G6/G7/TP2) ; stub requis au chargement freqtrade 2026.6
@@ -94,8 +89,10 @@ class AritV1(IStrategy):
             return False
         veto = (params.VETO_WINDOW_MIN_DRYRUN if self.config.get("dry_run", True)
                 else params.VETO_WINDOW_MIN_CANARI)                          # PDR 11.6
+        short = kwargs.get("side") == contracts.DIR_SHORT   # A2 : sens fourni par freqtrade
+        rr_col = "rr_dispo_short" if short else "rr_dispo"  # A2 : la porte RR lit le SENS vise
         cfg = {"regime": row.get("regime"), "spread_frac": None,   # spread gate : cf. ecart
-               "rr": _num(row.get("rr_dispo")), "signal_id": sid, "user_data_dir": udd,
+               "rr": _num(row.get(rr_col)), "signal_id": sid, "user_data_dir": udd,
                "risk_pct": self._entry_risk_pct(row, trades, current_time), "veto_window_min": veto}
         ok, gate, metrics = risk.gate_check(pair, current_time, self.wallets, trades, cfg)
         self._log("gate_check", sid, [metrics], "enter" if ok else "skip", gate, pair)  # n6
@@ -106,8 +103,8 @@ class AritV1(IStrategy):
         if row is None:
             return 0.0
         trades = Trade.get_trades_proxy()
-        sl0, tp1, tp2 = gestion.initial_levels(current_rate, row.get("last_hl_4h"),  # PDR 03.3
-                                               _num(row.get("atr_4h")), row.get("nearest_res_4h"))
+        sign = contracts.direction_sign(kwargs.get("side") == contracts.DIR_SHORT)  # A2
+        sl0, tp1, tp2 = gestion.entry_levels(row, current_rate, sign)         # PDR 03.3 (A2)
         sid = self._signal_id(pair, row)
         if not math.isfinite(sl0):
             self._log("gate_check", sid, [], "skip", contracts.SKIP_ZERO_STOP_DISTANCE, pair)
@@ -115,20 +112,22 @@ class AritV1(IStrategy):
         risk_pct = self._entry_risk_pct(row, trades, current_time)
         equity = float(self.wallets.get_total_stake_amount())    # equite courante (compounding)
         stake, reason = risk.compute_stake(                  # tuple (stake|None, raison)
-            equity, risk_pct, current_rate, sl0, min_notional=min_stake or 0.0)
+            equity, risk_pct, current_rate, sl0, min_notional=min_stake or 0.0, sign=sign)
         if stake is None:                                    # skip journalise avec raison (n6)
             self._log("gate_check", sid, [], "skip", reason, pair)
             return 0.0
+        conv = "conviction" if sign > 0 else "conviction_short"
         self._pending[pair] = {
             "initial_sl": sl0, "risk_pct": risk_pct, "signal_id": sid, "tp1": tp1, "tp2": tp2,
-            "entry_conviction": _num(row.get("conviction")), "entry_regime": row.get("regime"),
-            "trade_no": risk.trade_counter(trades) + 1}
+            "entry_conviction": _num(row.get(conv)), "entry_regime": row.get("regime"),
+            "is_short": sign < 0, "trade_no": risk.trade_counter(trades) + 1}
         return float(stake)
     @_safe(None, "order_filled_error")
     def order_filled(self, pair, trade, order, **kwargs):
         if not trade.is_open:                                # fill de sortie -> journal exit
             return self._journal_exit(trade)
-        if getattr(order, "ft_order_side", "buy") == "sell":     # sortie G4 : deja loggee
+        entry_side = "sell" if getattr(trade, "is_short", False) else "buy"  # A2 : short = SELL
+        if getattr(order, "ft_order_side", entry_side) != entry_side:  # sortie G4 : deja loggee
             return None
         if trade.get_custom_data("initial_sl") is not None or pair not in self._pending:
             return None
@@ -136,7 +135,8 @@ class AritV1(IStrategy):
         state = contracts.TradeState(
             initial_sl=p["initial_sl"], risk_pct=p["risk_pct"], trade_no=p["trade_no"],
             entry_conviction=p["entry_conviction"], entry_regime=p["entry_regime"],
-            signal_id=p["signal_id"], tp2=p["tp2"] or 0.0)   # TP2 fige a l'entree (11.3, PDR 03.3)
+            signal_id=p["signal_id"], tp2=p["tp2"] or 0.0,    # TP2 fige a l'entree (11.3, PDR 03.3)
+            is_short=bool(getattr(trade, "is_short", p["is_short"])))  # A2 : sens fige a l'entree
         self._save_state(trade, state)
         tinfo = {"pair": trade.pair, "open_rate": trade.open_rate, "amount": trade.amount,
                  "stake_amount": trade.stake_amount, "open_date": trade.open_date_utc,
@@ -162,7 +162,7 @@ class AritV1(IStrategy):
         new_abs = gestion.compute_sl(trade, row, state)      # max(G1/G2/G3), jamais elargi
         self._save_state(trade, state)
         if new_abs is not None:
-            r = gestion.r_multiple(current_rate, trade.open_rate, state.initial_sl)
+            r = gestion.r_multiple(current_rate, trade.open_rate, state.initial_sl, state.sign)
             self._log("gestion", {"pair": trade.pair, "signal_id": state.signal_id},
                       "SL", trade.stop_loss, new_abs, r)
             return stoploss_from_absolute(new_abs, current_rate)
@@ -189,10 +189,11 @@ class AritV1(IStrategy):
             return None
         state = self._trade_state(trade)
         gestion.update_excursions(state, row, trade.open_rate)
-        # TP2 de SORTIE = resistance 4h COURANTE recalculee chaque cloture 1h (decision Jonas
+        # TP2 de SORTIE = niveau 4h COURANT recalcule chaque cloture 1h (decision Jonas
         # 2026-07-09, docs/03 par.3.3 amendement) ; state.tp2 reste en custom_data pour l'audit.
-        res = _num(row.get("nearest_res_4h"))
-        tp2 = res if math.isfinite(res) else None
+        # A2 : resistance pour un long, SUPPORT pour un short.
+        level = _num(row.get("nearest_res_4h" if state.sign > 0 else "nearest_sup_4h"))
+        tp2 = level if math.isfinite(level) else None
         reason = gestion.check_exit(trade, row, state, tp2)     # "G6"/"G7"/"TP2"/None
         self._save_state(trade, state)
         return reason
@@ -211,17 +212,9 @@ class AritV1(IStrategy):
     def _macro_daily(self):  # regimes macro quotidiens point-in-time (backtest) : charge+cache 1x
         if not hasattr(self, "_macro_cache"):
             d = Path(self.config.get("user_data_dir", "user_data")) / contracts.MACRO_DATA_DIR
-            daily = macro_regime.daily_regimes(macro_regime.load_history(d))
-            if daily.empty:                                  # fichiers absents => macro neutre (n6)
-                journal.write("system", journal.ev_system("macro_unavailable", {"dir": str(d)}))
-            else:                                            # bloc correlation c6/c7 (06 §6.2.1)
-                veto = macro_regime.daily_equity_veto(*macro_regime.load_equity_inputs(d), daily)
-                daily = daily.join(veto[[contracts.EQUITY_VETO_COL,
-                                         contracts.EQUITY_VETO_REASON_COL]])
-                stale = macro_regime.stale_episodes(veto)     # fail-safe jamais silencieux (A4)
-                if stale:
-                    journal.write("system", journal.ev_system("equity_veto_stale", stale))
-            self._macro_cache = daily
+            self._macro_cache, events = macro_regime.daily_with_equity_veto(d)
+            for kind, detail in events:                 # macro_unavailable / equity_veto_stale
+                journal.write("system", journal.ev_system(kind, detail))
         return self._macro_cache
     def _trade_state(self, trade):
         data = {k: trade.get_custom_data(k) for k in contracts.CUSTOM_DATA_KEYS}
@@ -244,18 +237,22 @@ class AritV1(IStrategy):
         if pair is None or len(df) == 0 or not bool(df.iloc[-1].get("new_4h")):
             return
         row = df.iloc[-1]
+        # A2 : un no_signal ne doit pas masquer un signal short. La raison porte le SENS
+        # signale, c'est ce qui rend le Test 1 de docs/01 lisible dans le journal.
+        sig = [d for d, col in ((contracts.DIR_LONG, "signal_long"),
+                                (contracts.DIR_SHORT, "signal_short")) if bool(row.get(col))]
         exp = {"pair": pair, "signal_id": self._signal_id(pair, row),
-               "decision": "signal" if bool(row.get("signal_long")) else "no_signal",
-               "raison": row.get("regime"),
+               "decision": "signal" if sig else "no_signal",
+               "raison": "/".join(sig) if sig else row.get("regime"),
                "close_vs_ema": cio.explain(row)["regime_inputs"]["close_vs_ema"],
                "fear_greed": macro.get("fear_greed"), "macro_stale": macro.get("stale")}
         self._log("evaluation", row, exp)
     def _journal_exit(self, trade) -> None:
         state = self._trade_state(trade)
-        r = (gestion.r_multiple(trade.close_rate, trade.open_rate, state.initial_sl)
+        r = (gestion.r_multiple(trade.close_rate, trade.open_rate, state.initial_sl, state.sign)
              if state.initial_sl else 0.0)
         info = {"pair": trade.pair, "signal_id": state.signal_id,
                 "open_date": trade.open_date_utc, "close_date": trade.close_date_utc}
         fees = getattr(trade, "fee_close", params.FEE_TAKER_FRAC)
-        self._log("exit", info, getattr(trade, "exit_reason", None), r,
-                  state.mae_r, state.mfe_r, fees, params.SLIPPAGE_FRAC.get(trade.pair))
+        self._log("exit", info, getattr(trade, "exit_reason", None), r, state.mae_r, state.mfe_r,
+                  fees, params.SLIPPAGE_FRAC.get(contracts.spot_pair(trade.pair)))  # cle sans ':'

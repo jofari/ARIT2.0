@@ -324,3 +324,131 @@ def test_control_a_flag_false_keeps_existing_behavior():
     assert gestion.compute_sl(trade, _row(), st, only_g1) == pytest.approx(100.0 * 1.001)
     st6 = TradeState(initial_sl=95.0, mfe_r=2.0)
     assert gestion.check_exit(trade, _row(choch_bear_event_1h=True), st6, tp2=None) == "G6"
+
+
+# ================== A2 — geometrie SHORT (miroir strict, docs/03 §3.7) ==================
+SHORT = -1
+
+
+def _row_s(date=T0, close=100.0, high=100.0, low=100.0, atr_1h=1.0, last_lh_1h=999.0,
+           choch_bull_event_1h=False, regime="TREND", **kw):
+    """Bougie 1h vue par un SHORT : ancre G2 = last_lh_1h, evenement G6 = CHoCH haussier."""
+    row = _row(date=date, close=close, high=high, low=low, atr_1h=atr_1h, regime=regime, **kw)
+    row["last_lh_1h"] = last_lh_1h
+    row["choch_bull_event_1h"] = choch_bull_event_1h
+    return row
+
+
+def _state_s(**kw):
+    kw.setdefault("is_short", True)
+    return TradeState(**kw)
+
+
+def test_initial_levels_short_est_le_miroir():
+    """Memes chiffres que le long, retournes autour de l'entree."""
+    sl, tp1, tp2 = gestion.initial_levels(100.0, 105.0, 2.0, 70.0, sign=SHORT)
+    assert sl == pytest.approx(105.0 + params.SL_HL_ATR_BUFFER * 2.0)   # LH 4h + 0,1xATR
+    assert sl > 100.0                                                   # SL AU-DESSUS de l'entree
+    assert tp1 == pytest.approx(100.0 - params.TP1_R * (sl - 100.0))    # TP1 -1,5R
+    assert tp1 < 100.0
+    assert tp2 == 70.0                                                  # support SOUS TP1
+    # Le R du TP1 vaut bien +1,5 dans le sens du trade.
+    assert gestion.r_multiple(tp1, 100.0, sl, SHORT) == pytest.approx(params.TP1_R)
+
+
+def test_initial_levels_short_fallback_quand_lh_sous_lentree():
+    sl, tp1, tp2 = gestion.initial_levels(100.0, 95.0, 2.0, float("nan"), sign=SHORT)
+    assert sl == pytest.approx(100.0 + params.SL_FALLBACK_ATR_MULT * 2.0)
+    assert tp2 is None
+    # Un support AU-DESSUS de TP1 n'est pas une cible valable pour un short.
+    _, tp1b, tp2b = gestion.initial_levels(100.0, 105.0, 2.0, 99.0, sign=SHORT)
+    assert tp1b < 99.0 and tp2b is None
+
+
+def test_r_multiple_short_signe_correctement():
+    entry, sl = 100.0, 110.0          # risque = 10, SL au-dessus
+    assert gestion.r_multiple(90.0, entry, sl, SHORT) == pytest.approx(1.0)    # baisse = gain
+    assert gestion.r_multiple(110.0, entry, sl, SHORT) == pytest.approx(-1.0)  # SL touche = -1R
+    assert gestion.r_multiple(100.0, entry, sl, SHORT) == 0.0
+    # SL du mauvais cote (sous l'entree pour un short) = cas degenere => 0, jamais d'infini.
+    assert gestion.r_multiple(90.0, entry, 90.0, SHORT) == 0.0
+
+
+def test_update_excursions_short_inverse_high_et_low():
+    """LE piege du short : l'excursion ADVERSE est le high, pas le low."""
+    state = _state_s(initial_sl=110.0)
+    row = _row_s(date=_hours(1), high=105.0, low=95.0)
+    gestion.update_excursions(state, row, entry=100.0)
+    assert state.mae_r == pytest.approx(-0.5)   # high 105 => -0,5R (contre le vendeur)
+    assert state.mfe_r == pytest.approx(0.5)    # low 95   => +0,5R (pour le vendeur)
+    # Le long sur la MEME bougie donne l'exact oppose.
+    long_state = TradeState(initial_sl=90.0)
+    gestion.update_excursions(long_state, _row(date=_hours(1), high=105.0, low=95.0), 100.0)
+    assert long_state.mae_r == pytest.approx(-0.5) and long_state.mfe_r == pytest.approx(0.5)
+
+
+def test_compute_sl_short_ne_peut_que_descendre():
+    trade = _Trade(open_rate=100.0, stop_loss=110.0)
+    # G1 : break-even au-dessus de +1R => SL sous l'entree, buffer du BON cote.
+    state = _state_s(initial_sl=110.0, mfe_r=1.0)
+    new_sl = gestion.compute_sl(trade, _row_s(), state)
+    assert new_sl == pytest.approx(100.0 * (1.0 - params.G1_BE_BUFFER_FRAC))
+    assert new_sl < trade.open_rate < trade.stop_loss
+    # G3 : trailing ATR au-DESSUS du close pour un short.
+    state = _state_s(initial_sl=110.0, mfe_r=1.0)
+    new_sl = gestion.compute_sl(trade, _row_s(close=90.0, atr_1h=2.0), state,
+                                flags={"G1": False, "G2": False, "G3": True,
+                                       "G4": True, "G5": True, "G6": True, "G7": True})
+    assert new_sl == pytest.approx(90.0 + params.G3_ATR_MULT * 2.0)
+    # G2 : ancre = last_lh_1h, candidat au-dessus du SL courant => refuse (elargirait).
+    state = _state_s(initial_sl=110.0)
+    assert gestion.compute_sl(trade, _row_s(last_lh_1h=120.0), state) is None
+    # Invariant absolu : jamais d'elargissement, quel que soit le sens.
+    trade_serre = _Trade(open_rate=100.0, stop_loss=92.0)
+    state = _state_s(initial_sl=110.0, mfe_r=5.0)
+    assert gestion.compute_sl(trade_serre, _row_s(close=99.0, atr_1h=2.0), state) is None
+
+
+def test_check_exit_short_utilise_le_choch_haussier_et_le_low():
+    trade = _Trade(open_rate=100.0, stop_loss=110.0)
+    # G6 : c'est le CHoCH HAUSSIER qui sort un short.
+    state = _state_s(initial_sl=110.0)
+    assert gestion.check_exit(
+        trade, _row_s(date=_hours(1), choch_bull_event_1h=True), state, None) == "G6"
+    # Un CHoCH baissier ne sort PAS un short (il va dans son sens).
+    assert gestion.check_exit(
+        trade, _row_s(date=_hours(1), choch_bear_event_1h=True), state, None) is None
+    # TP2 : atteint par le LOW, et seulement apres TP1.
+    state = _state_s(initial_sl=110.0, tp1_done=True)
+    assert gestion.check_exit(trade, _row_s(date=_hours(1), low=80.0), state, 85.0) == "TP2"
+    state = _state_s(initial_sl=110.0, tp1_done=True)
+    assert gestion.check_exit(trade, _row_s(date=_hours(1), low=90.0), state, 85.0) is None
+    # G5 (extension) neutralise TP2 dans les deux sens.
+    state = _state_s(initial_sl=110.0, tp1_done=True, extension_on=True)
+    assert gestion.check_exit(trade, _row_s(date=_hours(1), low=80.0), state, 85.0) is None
+
+
+def test_partial_tp_short_reconstruit_le_bon_prix():
+    trade = _Trade(open_rate=100.0, stop_loss=110.0, amount=2.0)
+    state = _state_s(initial_sl=110.0)
+    stake = gestion.partial_tp(trade, params.G4_TRIGGER_R, state)
+    # +1,5R pour un short entre a 100 avec SL 110 => prix 85 (et non 115).
+    assert stake == pytest.approx(-(params.G4_SELL_FRACTION * 2.0 * 85.0))
+    assert stake < 0                      # on REDUIT la position, on ne la retourne pas
+    assert state.tp1_done is True
+
+
+def test_g7_time_stop_identique_dans_les_deux_sens():
+    """G7 ne regarde que l'age et le MFE : rien a symetriser, et c'est verifie."""
+    trade = _Trade(open_rate=100.0, stop_loss=110.0)
+    row = _row_s(date=_hours(params.G7_MAX_CANDLES_1H))
+    assert gestion.check_exit(trade, row, _state_s(initial_sl=110.0, mfe_r=0.0), None) == "G7"
+    state = _state_s(initial_sl=110.0, mfe_r=params.G7_MIN_R)
+    assert gestion.check_exit(trade, row, state, None) is None
+
+
+def test_tradestate_sign_et_retrocompat():
+    assert TradeState().sign == 1                      # defaut = long, trades d'avant A2
+    assert TradeState(is_short=True).sign == -1
+    assert "is_short" in TradeState().as_dict()
+    assert TradeState.from_dict({"is_short": True}).sign == -1

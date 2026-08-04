@@ -489,6 +489,29 @@ def stale_episodes(veto: pd.DataFrame) -> dict | None:
             "premier": str(starts.index[0]) if len(starts) else None}
 
 
+def daily_with_equity_veto(macro_dir) -> tuple[pd.DataFrame, list[tuple[str, dict]]]:
+    """Regimes macro quotidiens + bloc correlation actions c6/c7 joint (backtest, M08).
+
+    Assemble ce que la strategie faisait a la main : charger l'historique, calculer les
+    regimes, joindre les colonnes de veto actions, detecter les episodes stale. Ce bloc
+    est du METIER et n'a donc rien a faire dans AritV1 (CLAUDE.md : « zero metier » dans
+    la strategie).
+
+    NE JOURNALISE PAS — meme contrat que risk.gate_check : retourne
+    `(daily, evenements)` ou `evenements` est une liste de (kind, detail) que M07 passe a
+    journal.ev_system. C'est ce qui garde ce module pur et sans import croisé (docs/11).
+    Historique absent => (DataFrame vide, [macro_unavailable]) : le caller retombe alors
+    sur le neutre backtest documente (M02), il ne plante pas.
+    """
+    daily = daily_regimes(load_history(macro_dir))
+    if daily.empty:
+        return daily, [("macro_unavailable", {"dir": str(macro_dir)})]
+    veto = daily_equity_veto(*load_equity_inputs(macro_dir), daily)
+    daily = daily.join(veto[[contracts.EQUITY_VETO_COL, contracts.EQUITY_VETO_REASON_COL]])
+    stale = stale_episodes(veto)          # fail-safe A4 jamais silencieux
+    return daily, ([("equity_veto_stale", stale)] if stale else [])
+
+
 def regime_now(macro_state: dict) -> tuple[str, dict]:
     """Live : macro_state.json etendu (scores deja calcules) -> (regime, scores).
 

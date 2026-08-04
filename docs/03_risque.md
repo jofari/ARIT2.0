@@ -1,8 +1,29 @@
 # 03 — Risque & gestion de position (LE cœur d'ARIT)
 
 ## 3.1 Sizing (custom_stake_amount)
+
+### 3.1.0 AMENDEMENT du 2026-08-03 — risque CONSTANT (décision A6 de Jonas)
+**Le sizing proportionnel à la conviction décrit en 3.1.1 est SUSPENDU en V1.**
+- **Risque % = 1,16 %, constant**, quelle que soit la conviction. Source : Kelly mesuré sur
+  l'échantillon de juillet 2026 (`research/pistes_2026-07-31/RAPPORT.md`).
+- Motif : la conviction n'a jamais démontré de pouvoir prédictif ; faire varier la taille
+  selon une grandeur non validée ajoute de la variance sans espérance. Un risque constant
+  est la seule taille défendable tant qu'aucun edge n'est démontré (hypothèse v4, voir 01).
+- ⚠️ **Écart assumé au PDR** : le PDR d'origine impose ½ Kelly (soit 0,58 %). Jonas a
+  tranché pour le **Kelly plein**, en connaissance de cet écart, le 2026-08-03. Cet
+  amendement existe pour que le choix soit tracé et non « magique » (interdit n°4).
+  Conséquence : le sizing V1 n'a plus de marge de sécurité Kelly — l'erreur d'estimation de
+  l'espérance se répercute intégralement dans la taille.
+- Les caps (2 % / 3 %), le résiduel 6 % et le budget hebdo 8 % restent en vigueur et
+  **bornent** ce risque constant ; le diviseur du coupe-circuit séquentiel s'y applique aussi.
+- Le risque **adaptatif** (piloté par le module quant) est un chantier V2, explicitement
+  reporté par Jonas.
+
+### 3.1.1 Sizing par conviction — SUSPENDU (conservé pour la V2)
 - Conviction `c ∈ [seuil, 1]` (sortie du CIO, voir 04). Normalisation : `n = (c − seuil) / (1 − seuil)` ∈ [0,1].
 - **Risque % = 1 % + n × (cap − 1 %)** avec **cap = 2 %** pour les trades n°1 à 100 (compteur global persistant), **cap = 3 %** ensuite.
+
+### 3.1.2 Commun (inchangé)
 - **Stake (USDT) = équité_courante × risque% ÷ distance_stop_fraction**, où `distance_stop_fraction = (prix_entrée − SL_initial) / prix_entrée`. Équité courante = wallet total dry-run/réel (compounding).
 - Arrondis : quantité arrondie à la précision de la paire (freqtrade gère) ; si stake < min-notional Binance OU si le respect du min-notional forcerait risque > cap → **skip** (journalisé `skip_min_notional`).
 
@@ -48,3 +69,50 @@ Invariant absolu (natif freqtrade, ne pas contourner) : **le SL ne descend jamai
 
 ## 3.6 Frais & slippage (backtest et journal)
 Frais Binance spot réels (0,1 % taker par défaut, config). Slippage modélisé : 0,05 % (BTC/ETH) · 0,10 % (SOL/BNB) par côté. Le slippage réel mesuré en live est journalisé et comparé (invalidation si > 2× modèle).
+
+## 3.7 AMENDEMENT du 2026-08-04 — géométrie SHORT (décision A2 de Jonas)
+
+**Le bot est long ET short** (`can_short = True`, `trading_mode: futures`, `margin_mode:
+isolated`). Ce n'est pas une option : l'hypothèse v4 de `01_edge.md` fait donner la
+DIRECTION par la macro, et un régime macro HOSTILE est inexploitable sans vente à
+découvert. Périmètre confirmé par Jonas après mise en garde : « long et short, en entier ».
+
+### 3.7.1 Convention de signe — unique, non contournable
+`sign = +1` en long, `−1` en short (`contracts.direction_sign`, exposé par
+`TradeState.sign`). Toute la géométrie en découle :
+
+| Grandeur | Formule unique |
+|---|---|
+| risque (unité R) | `sign × (entrée − SL_initial)` — toujours > 0, sinon cas dégénéré ⇒ skip |
+| R d'un prix | `sign × (prix − entrée) / risque` |
+| prix d'un R | `entrée + sign × R × risque` |
+| « le SL resserre » | `sign × (SL_nouveau − SL_courant) > 0` |
+| « la cible est atteinte » | `sign × (extrême − cible) ≥ 0` |
+
+Aucune G-rule ne contient de test `if is_short` : le signe passe par ces formules. C'est
+délibéré — c'est ce qui rend impossible une symétrisation *à moitié*, le mode de panne le
+plus probable et le plus silencieux de ce chantier.
+
+### 3.7.2 Les quatre asymétries réelles (tout le reste est mécanique)
+1. **Ancre du SL initial et de G2** : `last_hl` (dernier Higher Low) en long, `last_lh`
+   (dernier Lower High) en short. Le SL short est donc AU-DESSUS de l'entrée.
+2. **Cible** : `nearest_res_4h` en long, `nearest_sup_4h` en short — pour le TP2 initial
+   comme pour le TP2 de sortie recalculé à chaque clôture 1h (amendement 09/07).
+3. **Événement de sortie G6** : CHoCH baissier en long, **CHoCH haussier** en short.
+4. **Extrême de bougie** : l'excursion ADVERSE (MAE) est le `low` en long et le **`high`**
+   en short ; l'excursion favorable (MFE) est l'inverse. Inverser ces deux-là piloterait
+   G1/G3/G4/G7 à l'envers tout en gardant des signes plausibles — d'où un test dédié.
+
+### 3.7.3 Ce qui NE change pas
+Le sizing (risque constant 1,16 %, §3.1.0), les caps 2 %/3 %, le résiduel 6 %, le budget
+hebdomadaire 8 %, RR ≥ 1,5, les circuit breakers (§3.5) et les protections natives
+(07.1.1) sont **indifférents au sens**. Le résiduel d'un short se lit `SL − entrée` : sans
+ce signe, tout short compterait pour 0 dans le budget 03.2.5.
+
+### 3.7.4 Levier — DÉCISION NON PRISE
+`AritV1` garde le défaut freqtrade (`leverage() → 1.0`), donc **l'exposition reste celle du
+spot** : passer en futures n'augmente pas le risque par lui-même. Choisir un levier > 1 est
+une décision de risque qui appartient à Jonas et n'est pas signée (cf. `DECISIONS.md`,
+question A2-ter). Conséquence à connaître : si la distance de stop est très serrée, le
+stake calculé par §3.1.2 peut dépasser l'équité disponible ; freqtrade le plafonne alors,
+et le risque réel du trade devient **inférieur** à 1,16 % — silencieusement.
