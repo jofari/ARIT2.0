@@ -24,9 +24,29 @@ SERVICES = [
     ("ARIT discord_bot", [str(PYTHON), str(REPO / "services" / "discord_bot.py")]),
     ("ARIT watchdog", [str(PYTHON), str(REPO / "services" / "watchdog.py")]),
 ]
-BOT = ("ARIT bot (freqtrade dry-run)", [
-    str(FREQTRADE), "trade", "-c", str(REPO / "user_data" / "config.dry.json"),
-])
+CONFIG_DRY = REPO / "user_data" / "config.dry.json"
+CONFIG_API = REPO / "user_data" / "config.api.json"  # overlay FreqUI, gitignore (docs/07 §7.4)
+BOT_TITLE = "ARIT bot (freqtrade dry-run)"
+UI_HOST = "127.0.0.1"  # miroir de config.api.example.json — la UI n'est JAMAIS exposee au reseau
+UI_PORT = 8080
+
+
+def bot_command() -> list[str]:
+    """Commande du bot : config contractuelle, + overlay FreqUI si disponible.
+
+    L'overlay n'est PAS versionne (il porte username/password/jwt). Sur un clone
+    frais il est absent : on lance quand meme (le bot trade correctement sans UI)
+    mais on l'annonce — l'absence ne degrade que l'observabilite, pas le trading.
+    """
+    cmd = [str(FREQTRADE), "trade", "-c", str(CONFIG_DRY)]
+    if CONFIG_API.is_file() and CONFIG_API.stat().st_size > 0:
+        cmd += ["-c", str(CONFIG_API)]
+        print(f"[OK] overlay FreqUI -> http://{UI_HOST}:{UI_PORT}")
+    else:
+        print(f"[WARN] {CONFIG_API.name} absent ou vide : bot lance SANS FreqUI.\n"
+              f"       Creer l'overlay : copier user_data/config.api.example.json "
+              f"en user_data/config.api.json et remplacer les 4 secrets.", file=sys.stderr)
+    return cmd
 
 
 def launch(title: str, cmd: list[str]) -> None:
@@ -52,7 +72,7 @@ def main() -> None:
     for title, cmd in SERVICES:
         launch(title, cmd)
     if not args.no_bot:
-        launch(*BOT)
+        launch(BOT_TITLE, bot_command())
     print("Arret : fermer chaque fenetre (ou Ctrl+C dedans). Le watchdog alerte si le bot meurt.")
 
 

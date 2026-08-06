@@ -1,5 +1,8 @@
 # Secrets
 .env
+# Overlay FreqUI : contient username/password/jwt_secret_key locaux (depot PUBLIC).
+# Modele non secret : user_data/config.api.example.json
+user_data/config.api.json
 
 # Reglages Claude Code locaux (chemins machine, depot PUBLIC)
 .claude/settings.local.json

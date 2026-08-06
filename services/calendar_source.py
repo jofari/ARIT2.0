@@ -41,7 +41,7 @@ _ARIT_LIB_DIR = Path(__file__).resolve().parents[1] / "user_data" / "strategies"
 if str(_ARIT_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(_ARIT_LIB_DIR))
 
-from arit_lib import contracts, params  # noqa: E402
+from arit_lib import contracts  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,10 @@ FF_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"  # flux publi
 HTTP_TIMEOUT_S = 15
 FF_CACHE_MAX_AGE_H = 8 * 24   # 8 jours : un fetch hebdo peut glisser d'un jour sans trou
 # ⚠️ ForexFactory identifie le pays par son CODE DEVISE ("USD"), pas par un code pays.
-# Verifie sur le flux reel le 2026-08-04 : les valeurs presentes sont USD/EUR/JPY/AUD/NZD/
-# CNY/CAD/CHF/GBP/All. Filtrer sur "US" laissait passer ZERO evenement, en silence — le
-# genre de panne qui ne se voit que le jour ou une NFP n'est pas bloquee.
-_US_COUNTRIES = ("USD", "US", "USA", "UNITED STATES")
+# Verifie sur le flux reel le 2026-08-04 : USD/EUR/JPY/AUD/NZD/CNY/CAD/CHF/GBP/All. Depuis
+# la decision du 04/08 on ne filtre plus par devise (cf. fetch_forexfactory) ; l'info est
+# conservee dans le champ `devise` de chaque evenement, pour pouvoir trancher plus tard
+# avec des mesures plutot qu'a priori.
 
 # Les trois evenements qui comptent (formulation de Jonas). Sert au controle de couverture :
 # chaque cle porte les fragments de nom qui l'identifient, en minuscules.
@@ -62,6 +62,62 @@ KEY_EVENTS = {
     "CPI": ("cpi", "consumer price"),
     "NFP": ("nfp", "nonfarm", "non-farm", "employment situation"),
 }
+
+# ------------------------------------------------------------ liste SUIVIE (Jonas 04/08)
+# Indicateurs que Jonas veut voir bloquer « au minimum », INDEPENDAMMENT de la couleur que
+# ForexFactory leur donne : beaucoup sont ORANGE (medium) sur FF — PPI, Retail Sales,
+# Industrial Production, KOF, SPPI — et le filtre `impact == high` les jetait donc tous.
+#
+# Un evenement suivi est capture puis PROMU en `impact: "high"`, ce qui le rend bloquant
+# dans `risk._macro_ok` (fenetre +/- NEWS_WINDOW_MIN). L'impact d'origine est conserve dans
+# `impact_ff` : c'est ce qui permettra de mesurer plus tard, sans re-fetch, ce que la
+# promotion a reellement coute en trades manques.
+#
+# ⚠️ Pour revenir en arriere : vider ce dict. Le code retombe alors sur « les rouges seuls ».
+# Fragments en MINUSCULES, compares en sous-chaine sur le titre FF.
+WATCHED_EVENTS = {
+    # --- activite / cycle
+    "business services index": "BSI",
+    "manufacturing pmi": "PMI manufacturier",
+    "services pmi": "PMI services",
+    "cb leading index": "CB Leading Index",
+    "industrial production": "Production industrielle",
+    "kof": "KOF Economic Barometer",
+    # --- croissance
+    "gdp": "GDP",                      # couvre advance / prelim / final / price index
+    "corporate profit": "Corporate Profits",
+    # --- inflation amont
+    "ppi": "PPI",                      # couvre Core PPI
+    "producer price": "PPI",
+    "sppi": "SPPI (Japon)",
+    # --- emploi
+    "adp": "ADP Employment Change",
+    "employment change": "Employment Change",
+    "unemployment claims": "Unemployment Claims",
+    "jobless claims": "Unemployment Claims",
+    "private payroll": "Private Payrolls",
+    # --- demande / menages
+    "retail sales": "Retail Sales",    # couvre Core Retail Sales
+    "consumer spending": "Consumer Spending",
+    "durable goods": "Durable Goods Orders",
+    "business inventories": "Business Inventories",
+    # --- immobilier
+    "hpi": "House Price Index",
+    "house price": "House Price Index",
+    "rightmove": "Rightmove HPI (UK)",
+    # --- exterieur / credit
+    "current account": "Current Account",
+    "private sector credit": "Private Sector Credit",
+}
+
+
+def _matches_watched(name: str) -> str | None:
+    """Titre FF -> libelle de la liste suivie, ou None. Insensible a la casse."""
+    lowered = (name or "").lower()
+    for fragment, libelle in WATCHED_EVENTS.items():
+        if fragment in lowered:
+            return libelle
+    return None
 
 
 def _as_utc(moment: datetime) -> datetime:
@@ -96,14 +152,6 @@ def _matches_key_event(name: str) -> str | None:
     return None
 
 
-def _is_relevant(name: str) -> bool:
-    """Filtre metier 06.1 : un des trois evenements qui comptent, ou un NEWS_KEYWORDS."""
-    if _matches_key_event(name):
-        return True
-    lowered = (name or "").lower()
-    return any(keyword.lower() in lowered for keyword in params.NEWS_KEYWORDS)
-
-
 # ------------------------------------------------------------ source PRIMAIRE
 def load_static(user_data_dir) -> tuple[list, dict]:
     """(events, meta) depuis le JSON versionne. Ne leve jamais.
@@ -126,6 +174,19 @@ def load_static(user_data_dir) -> tuple[list, dict]:
 def fetch_forexfactory() -> list:
     """Flux hebdo ForexFactory -> events normalises. APPELE 1x/SEMAINE, jamais par le bot.
 
+    Decision Jonas 2026-08-04 : on garde **TOUS les evenements ROUGES** (impact=high) du flux,
+    toutes devises confondues, **PLUS la liste suivie `WATCHED_EVENTS`** quelle que soit la
+    couleur FF (beaucoup de ces indicateurs sont oranges). Avant, deux filtres
+    supplementaires s'appliquaient et sont RETIRES ici :
+      - filtre de NOM (`_is_relevant`) : ne gardait que FOMC/CPI/NFP + NEWS_KEYWORDS. Un
+        rouge « Retail Sales » ou « ADP » etait donc ignore alors qu'il bouge le marche.
+      - filtre PAYS (`_US_COUNTRIES`) : ne gardait que USD. Une decision BCE ou BoE rouge
+        passait a la trappe, alors qu'elle deplace le BTC comme une statistique US.
+    ⚠️ Consequence assumee : bien plus d'evenements bloquants (fenetre +/-30 min, params
+    NEWS_WINDOW_MIN). C'est le compromis voulu — sur-bloquer plutot que rater un rouge.
+    La devise de chaque evenement est CONSERVEE (champ `devise`) : re-filtrer plus tard se
+    fera sur la donnee mesuree, pas sur un a priori.
+
     Leve RuntimeError en cas d'echec : c'est `main()` du mode --fetch-ff qui decide quoi en
     faire (garder l'ancien cache). Le pipeline temps reel, lui, ne passe jamais ici.
     """
@@ -137,17 +198,27 @@ def fetch_forexfactory() -> list:
         raise RuntimeError(f"ForexFactory injoignable ({type(exc).__name__})") from None
     events = []
     for item in payload if isinstance(payload, list) else []:
-        if str(item.get("impact", "")).lower() != "high":
-            continue
-        country = str(item.get("country", "")).upper()
-        if country and country not in _US_COUNTRIES:
-            continue
         name = str(item.get("title", ""))
         when = _parse_iso(item.get("date"))
-        if when is None or not _is_relevant(name):
+        if when is None or not name:
             continue
+        impact_ff = str(item.get("impact", "")).lower()
+        suivi = _matches_watched(name)
+        if impact_ff != "high" and suivi is None:
+            continue
+        # Un evenement SUIVI n'est promu bloquant que s'il est deja au moins ORANGE chez FF.
+        # Les `low` sont conservés dans le calendrier (tracabilite, mesure future) mais NE
+        # BLOQUENT PAS : sans ce garde-fou, une semaine ordinaire promeut ~32 evenements —
+        # dont « Spanish Manufacturing PMI » et « French Final Services PMI », publies en
+        # cascade et sans effet mesurable sur le BTC — ce qui bloque ~24 % du temps calendaire
+        # (40 evenements x 1 h de fenetre sur 168 h). Mesure faite sur le flux du 2026-08-04.
+        bloquant = impact_ff in ("high", "medium")
         events.append({"name": name, "time_utc": when.isoformat(),
-                       "impact": "high", "source": "ForexFactory"})
+                       "impact": "high" if bloquant else "low",  # lu par risk._macro_ok
+                       "impact_ff": impact_ff or None,   # couleur d'origine, pour mesurer
+                       "suivi": suivi,             # None si c'est un rouge « ordinaire »
+                       "devise": str(item.get("country", "")).upper() or None,
+                       "source": "ForexFactory"})
     return events
 
 

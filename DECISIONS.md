@@ -212,3 +212,107 @@ chiffres. Sur un substrat à espérance nulle, tout filtre qui réduit l'exposit
 positif : l'activer sans mesure, ce serait s'acheter une illusion.
 
 **À valider par toi** : d'accord pour laisser la porte inerte jusqu'à la mesure ?
+→ **Répondu le 04/08 : OUI.** Voir la session ci-dessous.
+
+---
+
+## Session du 2026-08-04 (soir) — fermeture de TOUTES les dettes C
+
+Consigne de Jonas : « on ferme tous les C ». Quatre dettes restaient ouvertes (C1, C2, C7,
+C9) ; les cinq autres (C3, C4, C5, C6, C8) l'étaient déjà. **Les quatre sont fermées.**
+
+| # | Décision de Jonas | État |
+|---|---|---|
+| C1 | Retrouver les dates CPI/NFP en ligne **et surtout ajouter tous les événements marqués en ROUGE sur ForexFactory, au minimum** | **appliqué** |
+| C2 | Porte spread : laisser inerte + journaliser | **acté**, aucun code à changer |
+| C7 | Webhook régénéré, l'ancien est supprimé | **fermé** |
+| C9 | Installer optuna + plotly | **appliqué** |
+
+### C1 — élargissement du calendrier : TOUS les rouges
+
+C'est un **changement de doctrine**, pas un correctif. `fetch_forexfactory()` appliquait deux
+filtres en plus de l'impact ; les deux sont **retirés** :
+
+1. **Filtre de NOM** (`_is_relevant`) — ne gardait que FOMC/CPI/NFP + `NEWS_KEYWORDS`. Un
+   rouge « Retail Sales » ou « ISM Manufacturing PMI » était ignoré alors qu'il bouge le
+   marché. Fonction supprimée (plus aucun appelant).
+2. **Filtre PAYS** (`_US_COUNTRIES`) — ne gardait que `USD`. Une décision BCE ou BoE rouge
+   passait à la trappe. Constante supprimée ; la devise est désormais **conservée** dans le
+   champ `devise` de chaque événement, pour pouvoir re-filtrer plus tard sur des mesures
+   plutôt que sur un a priori.
+
+⚠️ **Conséquence assumée** : beaucoup plus d'événements bloquants (fenêtre ±30 min). Le
+premier fetch réel a ramené 8 rouges sur la semaine, dont 2 NZD et 2 CAD qui auraient été
+jetés avant. Sur-bloquer plutôt que rater un rouge — c'est le compromis choisi.
+Verrouillé par `test_fetch_ff_garde_tous_les_rouges_toutes_devises` : remettre un filtre
+serait invisible autrement.
+
+**Dates CPI/NFP 2026 renseignées** — 24 événements ajoutés à la primaire (16 → 40).
+`bls.gov` refuse toujours tout (403 sur `requests` **et** sur WebFetch), donc les dates
+viennent de sources **secondaires concordantes**, et c'est écrit dans le fichier :
+`usinflationcalculator.com` (qui recopie le BLS), recoupé pour les dates passées avec les
+URL d'archives `bls.gov/news.release/archives/empsit_*`. DST 2026 appliquée (EDT du 08/03
+au 01/11), publication 08:30 US Eastern.
+
+⚠️ **2027 non couvert** : le BLS publie son calendrier annuel fin 2026. À compléter à ce
+moment-là, sinon la couverture CPI/NFP retombe sur ForexFactory, qui ne voit qu'une semaine.
+
+**Résultat mesuré** : `calendar_source.py` sort en **code 0** (plus aucun trou), 46
+événements fusionnés, et `macro_state.py` ne logue plus ni warning ni erreur.
+
+### C2 — porte spread : fermée en « acte de non-codage »
+
+Jonas a suivi la recommandation : la porte reste inerte, on journalisera la distribution
+réelle du spread au démarrage du dry-run sans qu'elle décide quoi que ce soit, puis on
+tranchera avec des chiffres — même traitement que les Bollinger (C3). Motif retenu : sur un
+substrat à espérance nulle, tout filtre qui réduit l'exposition *paraît* positif ; l'activer
+sans mesure, c'est s'acheter une illusion. **Aucune ligne de code à écrire, et c'est le
+résultat.** La gate 3 reste dans `GATE_NAMES` — elle est traversée sans être évaluée.
+
+### C7 — webhook : fermé
+Régénéré par Jonas, l'ancien est supprimé côté Discord. Nouveau webhook en `.env`
+(gitignoré). Rapport de backtest envoyé et reçu le 04/08.
+
+### C9 — outillage : fermé
+`optuna` et `plotly` installés dans `C:\Users\jofar\venvs\arit`. `freqtrade plot-dataframe`,
+`plot-profit` et `hyperopt` redeviennent utilisables. ⚠️ Rappel : l'interdit n°5 interdit
+d'hyperopter G1-G7 et les poids — l'outil ne sert qu'au reste.
+
+### C1-bis — la liste des indicateurs SUIVIS (Jonas, 04/08 au soir)
+
+Jonas a fourni un glossaire de ~25 indicateurs macro avec « voilà les données que je veux au
+minimum ajouter ». Problème constaté : **la plupart ne sont pas rouges sur ForexFactory**
+(PPI, Retail Sales, Industrial Production, KOF, SPPI, ADP, Unemployment Claims sont oranges
+ou jaunes), donc le filtre `impact == "high"` les jetait tous, même après l'élargissement.
+
+D'où `WATCHED_EVENTS` (24 fragments de noms → libellés) : ces indicateurs sont capturés
+**quelle que soit leur couleur**.
+
+**Palier orange — le garde-fou qui compte.** Un événement suivi ne devient bloquant que si
+FF le classe déjà `high` ou `medium`. Mesuré sur le flux réel du 04/08 :
+
+| Règle | Événements capturés | Bloquants | Part du temps calendaire bloquée |
+|---|---|---|---|
+| Sans palier (tout suivi promu) | 40 | **40** | **~24 %** |
+| **Avec palier orange (retenu)** | 40 | **11** | **~7 %** |
+
+Sans le palier, la semaine bloquait sur « Spanish Manufacturing PMI », « Italian Services
+PMI » et « French Final Services PMI » — les PMI nationaux européens sont publiés en cascade
+et n'ont aucun effet mesurable sur le BTC. Les 11 bloquants retenus couvrent bien tous les
+indicateurs qui comptent de la liste : ISM Manufacturing, ADP, ISM Services, Unemployment
+Claims, NFP, Employment Change.
+
+Les `low` restent **dans** le calendrier avec `impact: "low"` (donc non bloquants) : la
+donnée est là pour mesurer plus tard, sans re-fetch, ce que le palier a coûté ou évité.
+`impact_ff` conserve la couleur d'origine de chaque événement.
+
+⚠️ **Deux retours en arrière possibles, tous deux à un endroit unique** : vider
+`WATCHED_EVENTS` ramène à « les rouges seuls » ; changer `bloquant` en `impact_ff == "high"`
+ramène à l'ancien filtre. Verrouillé par
+`test_liste_suivie_capture_les_oranges_mais_pas_les_low`.
+
+**À valider par toi** : d'accord pour le palier orange, ou tu veux que les `low` bloquent
+aussi (~24 % du temps) ?
+
+### État après cette session
+**Aucune dette C ouverte.** 320 tests verts, ruff propre.

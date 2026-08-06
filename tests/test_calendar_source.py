@@ -50,13 +50,25 @@ def test_le_calendrier_versionne_est_valide_et_couvre_le_fomc():
     assert hours.get(12) == 19 and hours.get(6) == 18
 
 
-def test_le_fichier_livre_declare_honnetement_ses_trous():
-    """CPI/NFP ne sont pas renseignes : le fichier doit le DIRE, pas le cacher."""
+def test_le_fichier_livre_declare_honnetement_sa_couverture():
+    """Chaque source dit jusqu'ou elle couvre. Un `verified_utc` sans `covers_until_utc`
+    serait le pire des deux mondes : on croirait la source sure sans savoir jusqu'a quand.
+
+    CPI/NFP renseignes le 2026-08-04 (decision Jonas) depuis des sources secondaires
+    concordantes ; 2027 reste a completer quand le BLS publiera son calendrier annuel.
+    """
     _events, meta = calendar_source.load_static(REPO / "user_data")
-    sources = meta["sources"]
-    assert sources["FOMC"]["verified_utc"]                     # verifie a la source
-    assert sources["BLS_CPI"]["verified_utc"] is None          # trou assume, pas invente
-    assert sources["BLS_NFP"]["verified_utc"] is None
+    for nom in ("FOMC", "BLS_CPI", "BLS_NFP"):
+        assert meta["sources"][nom]["verified_utc"], nom
+        assert meta["sources"][nom]["covers_until_utc"], nom
+
+
+def test_les_trois_evenements_qui_comptent_sont_dans_la_primaire():
+    """La primaire seule (zero reseau) doit couvrir FOMC + CPI + NFP : c'est tout son
+    interet — elle survit a un clone frais et a une panne ForexFactory."""
+    events, _meta = calendar_source.load_static(REPO / "user_data")
+    trouves = {calendar_source._matches_key_event(e["name"]) for e in events}
+    assert {"FOMC", "CPI", "NFP"} <= trouves
 
 
 # ----------------------------------------------------------------- primaire
@@ -148,30 +160,66 @@ def test_reconnaissance_des_noms_devenements(name, attendu):
 
 
 # ------------------------------------------------------------------- fetch FF
-def test_fetch_ff_filtre_impact_pays_et_pertinence(monkeypatch):
+def test_fetch_ff_garde_tous_les_rouges_toutes_devises(monkeypatch):
+    """Decision Jonas 2026-08-04 : TOUS les rouges, toutes devises. Seuls l'impact non-high
+    et la date illisible eliminent. Les filtres de NOM et de DEVISE sont RETIRES — c'est ce
+    que ce test verrouille, parce que les remettre serait invisible autrement."""
     payload = [
-        # ForexFactory identifie par CODE DEVISE : "USD" doit etre GARDE (verifie sur le
-        # flux reel le 04/08 — filtrer sur "US" ne laissait passer aucun evenement).
+        # ForexFactory identifie par CODE DEVISE (verifie sur le flux reel le 04/08).
         {"title": "Non-Farm Employment Change", "country": "USD", "impact": "High",
-         "date": "2026-08-07T08:30:00-04:00"},                       # gardé, offset ET
+         "date": "2026-08-07T08:30:00-04:00"},                       # garde, offset ET
         {"title": "CPI m/m", "country": "EUR", "impact": "High",
-         "date": "2026-08-12T12:30:00+00:00"},                       # pas les US
-        {"title": "CPI m/m", "country": "USD", "impact": "Low",
-         "date": "2026-08-12T12:30:00+00:00"},                       # impact bas
+         "date": "2026-08-12T12:30:00+00:00"},                       # garde : hors US
         {"title": "Retail Sales", "country": "USD", "impact": "High",
-         "date": "2026-08-14T12:30:00+00:00"},                       # hors périmètre
+         "date": "2026-08-14T12:30:00+00:00"},                       # garde : hors 3 events
+        {"title": "CPI m/m", "country": "USD", "impact": "Low",
+         "date": "2026-08-12T12:30:00+00:00"},                       # rejete : impact bas
         {"title": "FOMC Statement", "country": "USD", "impact": "High",
-         "date": "pas une date"},                                    # date illisible
+         "date": "pas une date"},                                    # rejete : date illisible
     ]
     monkeypatch.setattr(calendar_source.requests, "get",
                         lambda url, timeout=None: type("R", (), {
                             "raise_for_status": lambda self: None,
                             "json": lambda self: payload})())
     events = calendar_source.fetch_forexfactory()
-    assert [e["name"] for e in events] == ["Non-Farm Employment Change"]
+    assert [e["name"] for e in events] == [
+        "Non-Farm Employment Change", "CPI m/m", "Retail Sales"]
     assert events[0]["source"] == "ForexFactory"
+    assert [e["devise"] for e in events] == ["USD", "EUR", "USD"]  # devise conservee
     # L'offset US Eastern est bien converti en UTC (08:30 ET = 12:30 UTC en ete).
     assert calendar_source._parse_iso(events[0]["time_utc"]).hour == 12
+
+
+def test_liste_suivie_capture_les_oranges_mais_pas_les_low(monkeypatch):
+    """Liste suivie de Jonas (04/08) : les indicateurs suivis sont captures meme s'ils ne
+    sont pas rouges, mais ne deviennent BLOQUANTS qu'a partir d'orange.
+
+    Sans le palier orange, une semaine ordinaire promeut ~32 evenements — dont les PMI
+    nationaux europeens publies en cascade — et bloque ~24 % du temps calendaire. Ce test
+    existe pour qu'un elargissement futur de la liste ne reintroduise pas ca en silence.
+    """
+    payload = [
+        {"title": "ADP Non-Farm Employment Change", "country": "USD", "impact": "Medium",
+         "date": "2026-08-05T12:15:00+00:00"},                  # suivi + orange => BLOQUANT
+        {"title": "Spanish Manufacturing PMI", "country": "EUR", "impact": "Low",
+         "date": "2026-08-03T07:15:00+00:00"},                  # suivi + low  => capture seul
+        {"title": "Unemployment Rate", "country": "USD", "impact": "High",
+         "date": "2026-08-07T12:30:00+00:00"},                  # rouge hors liste => BLOQUANT
+        {"title": "Loan Officer Survey", "country": "USD", "impact": "Low",
+         "date": "2026-08-03T18:00:00+00:00"},                  # ni suivi ni rouge => rejete
+    ]
+    monkeypatch.setattr(calendar_source.requests, "get",
+                        lambda url, timeout=None: type("R", (), {
+                            "raise_for_status": lambda self: None,
+                            "json": lambda self: payload})())
+    events = calendar_source.fetch_forexfactory()
+    assert [e["name"] for e in events] == [
+        "ADP Non-Farm Employment Change", "Spanish Manufacturing PMI", "Unemployment Rate"]
+    # `impact` est ce que lit risk._macro_ok : seul "high" bloque.
+    assert [e["impact"] for e in events] == ["high", "low", "high"]
+    assert [e["impact_ff"] for e in events] == ["medium", "low", "high"]
+    assert events[0]["suivi"] == "ADP Employment Change"
+    assert events[2]["suivi"] is None            # rouge ordinaire, hors liste suivie
 
 
 def test_fetch_ff_en_echec_leve_mais_le_mode_fetch_degrade(monkeypatch, tmp_path):

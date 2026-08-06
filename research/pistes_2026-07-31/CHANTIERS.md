@@ -114,15 +114,18 @@ Aucune ne demande plus de dix minutes de réflexion, toutes bloquent quelque cho
 
 | # | Dette | Statut au 04/08 |
 |---|---|---|
-| C1 | Calendrier économique | **FERMÉ côté code** — `services/calendar_source.py`, Finnhub retiré. ⚠️ dates CPI/NFP à copier depuis bls.gov (403 sur fetch auto) |
-| C2 | Porte spread inerte | **ANALYSÉ, non codé** — c'était la demande. Recommandation : mesurer d'abord (`C2_spread_analyse.md`) |
+| C1 | Calendrier économique | **FERMÉ le 04/08 (soir)** — CPI/NFP 2026 renseignés (40 événements en primaire) + fetch FF élargi à **tous les rouges, toutes devises**. ⚠️ 2027 à compléter fin 2026 |
+| C2 | Porte spread inerte | **FERMÉ le 04/08 (soir)** — Jonas acte : reste inerte, journalisée sans décider, on tranchera sur mesure |
 | C3 | Bollinger | **FERMÉ** le 03/08 — `bb_*_1h`, journalisées, non décisionnelles |
 | C4 | Force S/R par touches | **FERMÉ** — constante supprimée (annulé par Jonas) |
 | C5 | Fraîcheur signal 4h | **FERMÉ** — constante supprimée (annulé par Jonas) |
 | C6 | Protections freqtrade | **FERMÉ** le 04/08 — `params.PROTECTIONS`, `docs/07 §7.1.1` |
-| C7 | Webhook Discord | action de Jonas (à régénérer, `.env`) |
+| C7 | Webhook Discord | **FERMÉ le 04/08 (soir)** — régénéré par Jonas, ancien supprimé, nouveau en `.env` |
 | C8 | `Untitled-1.py` | sans objet — fichier absent |
-| C9 | hyperopt/plot inutilisables | **toujours ouvert** — optuna et plotly absents du venv |
+| C9 | hyperopt/plot inutilisables | **FERMÉ le 04/08 (soir)** — `optuna` + `plotly` installés dans le venv |
+
+> **Au 2026-08-04 au soir : plus AUCUNE dette C ouverte.** Détail et arbitrages dans
+> `DECISIONS.md`, section « fermeture de TOUTES les dettes C ».
 
 ## Décisions A
 

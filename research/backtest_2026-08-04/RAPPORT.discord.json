@@ -1,0 +1,13 @@
+{
+  "title": "RECTIFICATIF — backtest AritV1 2021-2026",
+  "color": 15844367,
+  "username": "ARIT recherche",
+  "description": "**Correction du rapport envoye juste avant.** J'y affirmais que « l'entree ne se trompe jamais de sens : 79/79 trades partent dans le bon sens (MFE > 0) ». **C'est faux — c'est un artefact de mesure.**\n\nLe MAE (excursion defavorable) est **lui aussi a 79/79**. Des que le prix bouge, `max_rate` passe au-dessus de l'entree ET `min_rate` en dessous : tout trade va dans les deux sens. « MFE > 0 » ne mesure rien du tout.\n\nLa bonne comparaison est MFE **contre** MAE — et elle donne **47 %**, soit pile ou face.\n\n**Conclusion inversee : le checkpoint de juillet (« edge d'entree nul ») TIENT.** L'entree reste a reparer. La sortie detruit de la valeur en plus, et independamment.",
+  "fields": [
+    {"name": "La vraie mesure", "value": "MFE moyen **+1,66 %** · mediane **+0,62 %**\nMAE moyen **−1,14 %** · mediane **−0,48 %**\nRatio MFE/MAE : 1,46\n**Trades ou le bon sens a domine : 37/79 = 47 %**\n\nLe ratio moyen de 1,46 est tire par quelques gros gagnants (SOL) ; les medianes ne laissent qu'un avantage marginal.", "inline": false},
+    {"name": "Ce qui reste valide", "value": "Rien d'autre ne change dans le rapport :\n• PF **0,86**, **−293,34 USDT** (−2,93 %), win rate 35,4 %\n• trailing_stop_loss = **90 % des sorties, −527,29 USDT**\n• **15 trades de duree nulle**, MFE moyen +0,35 %, PnL **−225,52**\n• SOL +571,61 seul positif · BTC **−590,95**\n• drawdown 6,62 % sur **1 570 jours**", "inline": false},
+    {"name": "Les 3 reserves tiennent aussi", "value": "1. La **porte news est INERTE** dans ce run (macro_state.json = instantane du present, aucun evenement 2021-2026).\n2. **79 trades, c'est trop peu** pour conclure statistiquement.\n3. **Aucun check anti-biais** depuis startup_candle_count 200 → 999 (A1).", "inline": false},
+    {"name": "Prochaine etape", "value": "1. `scripts/check_bias.py` — savoir si ce backtest est seulement credible.\n2. Le trailing stop, en commencant par les 15 trades de duree nulle.\n3. L'entree reste le chantier de fond : 47 %, c'est le hasard.", "inline": false}
+  ],
+  "footer": "Rectificatif — le .md joint est la version corrigee, elle remplace la precedente"
+}

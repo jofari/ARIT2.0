@@ -155,7 +155,11 @@ FG_NEUTRAL_BACKTEST = 50          # PDR M02 — macro neutre backtest (>= FG_MUL
 # ----------------------------------------------------- 06 Vetos & donnees externes
 FG_CACHE_HOURS = 1                # PDR 06.5 — ⚠️ service = constantes locales (a unifier)
 CALENDAR_CACHE_MIN = 30           # PDR 06.5 — idem (miroir de spec, non consomme)
-NEWS_KEYWORDS = ("NFP", "nonfarm", "FOMC", "rate decision", "CPI")  # PDR 06.1
+# PDR 06.1 — ⚠️ NON CONSOMME depuis le 2026-08-04 : le fetch ForexFactory ne filtre plus par
+# nom (decision Jonas « tous les rouges »), il ne reste donc aucun appelant. Conserve comme
+# miroir de spec, au meme titre que FG_CACHE_HOURS/CALENDAR_CACHE_MIN ci-dessus. Le controle
+# des trois evenements qui comptent passe par calendar_source.KEY_EVENTS, pas par cette liste.
+NEWS_KEYWORDS = ("NFP", "nonfarm", "FOMC", "rate decision", "CPI")
 NEXT_EVENTS_HORIZON_H = 48        # M08 — 3 prochains events high <= 48 h
 NEXT_EVENTS_MAX = 3               # M08
 
