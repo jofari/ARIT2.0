@@ -256,6 +256,12 @@ def ev_evaluation(row, explain_dict) -> dict:
             contracts.MACRO_REGIME_COL: _get(row, contracts.MACRO_REGIME_COL),
             contracts.EQUITY_VETO_COL: bool(_get(row, contracts.EQUITY_VETO_COL, False)),
             contracts.EQUITY_VETO_REASON_COL: _get(row, contracts.EQUITY_VETO_REASON_COL),
+            # schema v3 (04/08, A2) : sens AUTORISE par la macro sur cette bougie.
+            # Declare depuis le 04/08 dans cio.explain et contracts (§8.1) mais JAMAIS
+            # ecrit ici — donc absent de tous les journaux, et le Test 1 de docs/01
+            # (« la macro donne-t-elle la direction ? ») n'etait pas mesurable, alors que
+            # c'est la raison d'etre de A2. Corrige le 2026-08-07.
+            "direction_macro": _get(row, "direction_macro"),
         },
         "scores": {
             "structure": _coerce(_get(row, "s_structure")),

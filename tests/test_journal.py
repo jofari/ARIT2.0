@@ -220,3 +220,22 @@ def test_macro_state_scores_hors_schema_sont_ignores(_base_dir, brut):
     _write_macro(_base_dir, t0.isoformat(), **{contracts.MACRO_SCORES_KEY: brut})
     state = journal.read_macro_state(now=t0 + timedelta(minutes=5))
     assert state[contracts.MACRO_SCORES_KEY] == {}
+
+
+# ------- schema v3 : direction_macro dans regime_inputs (correctif 2026-08-07) -------
+def test_evaluation_porte_direction_macro():
+    """Declare depuis le 04/08 dans cio.explain et contracts (par.8.1) mais jamais ECRIT :
+    la clef etait absente de TOUS les journaux, donc le Test 1 de docs/01 (« la macro
+    donne-t-elle la direction ? ») n'etait pas mesurable — la raison d'etre de A2."""
+    row = {"regime": "TREND", "conviction": 0.8, "seuil": 0.5,
+           contracts.MACRO_REGIME_COL: "PORTEUR", "direction_macro": contracts.DIR_LONG}
+    rec = journal.ev_evaluation(row, {"pair": "BTC/USDT:USDT", "decision": "signal"})
+    assert rec["regime_inputs"]["direction_macro"] == contracts.DIR_LONG
+
+
+def test_evaluation_direction_macro_absente_reste_none():
+    """Backtest sans la colonne : la clef EXISTE et vaut None, elle ne disparait pas —
+    sinon les journaux ne sont pas comparables entre eux."""
+    rec = journal.ev_evaluation({"regime": "RANGE"}, {"pair": "BTC/USDT:USDT"})
+    assert "direction_macro" in rec["regime_inputs"]
+    assert rec["regime_inputs"]["direction_macro"] is None
