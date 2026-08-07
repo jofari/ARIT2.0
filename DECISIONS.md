@@ -508,3 +508,56 @@ Le message du watchdog est **attendu** en dry-run : sans clefs, pas de lecture d
 ni de *flatten*, ce qui n'a aucun sens sur de l'argent papier. Aucune clef d'exchange réelle
 n'a été ajoutée pour un run en dry — ce serait un risque gratuit. Seule conséquence réelle,
 déjà corrigée ci-dessus : l'alerte de liveness ne devait pas dépendre de l'exposition.
+
+---
+
+## Dispositif d'absence — mis en place le 2026-08-07 au soir
+
+Jonas part se reposer (~3 semaines). Demande : « continue de chercher de l'edge sans moi
+et des améliorations possibles ».
+
+### Ce que j'ai refusé de programmer, et pourquoi
+
+**Chercher un edge sans surveillance est exactement ce qu'il ne faut pas automatiser.**
+`CHANTIERS.md` l'exige noir sur blanc : B6 impose le préenregistrement des hypothèses avec
+un compteur d'essais « honnêtement initialisé à ≥ 30 », B2 impose Benjamini-Hochberg. Un
+agent qui cherche pendant trois semaines **trouvera** quelque chose — et ce sera du bruit,
+avec l'apparence d'un résultat. Le mandat programmé est donc : **préparer et mesurer, jamais
+conclure**. Ce qui rend une future recherche d'edge légitime, pas la recherche elle-même.
+
+### Ce qui tourne sur la machine (local — voit les données réelles)
+
+| Mécanisme | Cadence | Rôle |
+|---|---|---|
+| `ARIT macro_state` | horaire | rafraîchit `macro_state.json` — sans elle le bot se fige en 2 h |
+| `ARIT download_macro` | 06:15 | alimente les 5 composants ; > 48 h ⇒ scores refusés ⇒ repos |
+| `ARIT veille` | 07:00 | écrit `research/veille_locale/AAAA-MM-JJ.md` : collecte + santé |
+| `ARIT_relance.cmd` | ouverture de session | relance les 4 process après un redémarrage |
+
+`veille_quotidienne.py` surveille les **quatre dépendances capables de figer le bot sans
+erreur** — heartbeat, `stale`, scores 06.2 absents, historique macro périmé. Ce sont
+précisément les pannes muettes du 07/08 : aucune ne se signale seule.
+
+**Lecture seule, et sans Discord.** Le script constate, il ne corrige rien : un dry-run non
+surveillé a besoin d'une trace, pas d'un pilote automatique. Et un résumé quotidien poussé
+irait contre la décision V2 (« critiques seulement ») — le watchdog reste le seul dispositif
+autorisé à interrompre Jonas.
+
+### ⏳ Ce qui reste à armer — UNE action de Jonas
+
+La routine cloud (vague 1 : B2, B4, B5, B6, deux fois par semaine, PR en draft, jamais sur
+`main`, jamais de logique de trading) est **écrite mais pas créée** :
+
+> `HTTP 401 — Connect your GitHub account before saving a routine that uses a GitHub repository.`
+
+Il faut connecter le compte GitHub (`/web-setup`, ou l'app GitHub sur le dépôt). Une fois
+fait, la routine se crée en une commande. Périmètre volontairement limité à B2/B4/B5/B6 :
+ce sont les seuls chantiers réalisables **sans les données locales**, `user_data/data/` et
+`user_data/backtest_results/` étant gitignorés donc absents d'un checkout cloud.
+
+### Observabilité ajoutée le même soir
+
+- **FreqUI** installée (`freqtrade install-ui` n'avait jamais été lancé) + overlay
+  `config.api.json` généré, gitignoré, sur `127.0.0.1:8080` uniquement.
+- **`scripts/suivi.py`** : montre les setups **envisagés puis refusés** avec l'écart au
+  seuil — ce que FreqUI ne montre pas, et qui est la matière première de B8/B9.
