@@ -55,7 +55,8 @@ class AritV1(IStrategy):
             df = features.compute_all(df)                    # colonnes 1h + scores (utilise *_4h)
             macro = journal.read_macro_state()               # fichier, jamais reseau
             live = self.dp.runmode.value in _LIVE_MODES      # live/dry vs backtest
-            df = df if live else regimes.attach_macro_regime(df, self._macro_daily())  # backtest
+            df = (macro_regime.attach_regime_now(df, macro) if live      # A2 : parite live
+                  else regimes.attach_macro_regime(df, self._macro_daily()))   # backtest
             df = cio.conviction(regimes.classify(df, macro if live else None))
             if live:
                 self._journal_evaluation(df, metadata.get("pair"), macro)

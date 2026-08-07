@@ -536,3 +536,37 @@ def regime_now(macro_state: dict) -> tuple[str, dict]:
     else:
         regime = params.MACRO_REGIMES[1]
     return regime, scores
+
+
+def attach_regime_now(df: pd.DataFrame, macro_state: dict) -> pd.DataFrame:
+    """LIVE : pose contracts.MACRO_REGIME_COL (SCALAIRE) depuis macro_state.json etendu.
+
+    Pendant live de `regimes.attach_macro_regime` (backtest). Le backtest joint un regime
+    PAR JOUR par merge_asof point-in-time ; le live n'a qu'un etat courant, donc le regime
+    est CONSTANT sur tout le df. C'est exactement ce qui retablit la parite A2 : sans cette
+    colonne, `cio.direction_macro` retombe sur son fail-safe long-only et le live n'est PAS
+    le meme produit que le backtest (docs/07 par.7.3, BLOQUANT declare du dry-run).
+
+    Ce module DECRIT, il ne decide pas : un macro_state vide, sans scores, ou avec le flag
+    `stale` donne HOSTILE (regime_now, 06.2-06.3) — mais c'est `regimes.classify` qui
+    traduit une DONNEE non fiable en « aucune entree ». Voir le fail-safe live la-bas :
+    depuis A2, HOSTILE seul ne bloque plus rien, il autorise le short.
+    """
+    df[contracts.MACRO_REGIME_COL] = regime_from_state(macro_state)[0]
+    return df
+
+
+def regime_from_state(macro_state: dict) -> tuple[str, dict]:
+    """macro_state.json 06.3 ETENDU -> (regime, scores), sans jamais melanger les schemas.
+
+    Extrait les 5 scores du sous-objet contracts.MACRO_SCORES_KEY et propage le seul
+    `stale` global. On NE passe PAS le dict 06.3 a plat a regime_now : sa clef
+    `fear_greed` y est l'indice BRUT 0-100, alors que regime_now attend un score
+    {-1,0,1} sous le meme nom — un F&G de 20 serait somme comme +20 et rendrait PORTEUR
+    a tous les coups. Sous-objet absent => aucun score => HOSTILE (fail-safe 06.2).
+    """
+    state = macro_state or {}
+    scores = state.get(contracts.MACRO_SCORES_KEY) or {}
+    payload = {key: scores[key] for key in contracts.MACRO_SCORE_KEYS if key in scores}
+    payload["stale"] = bool(state.get("stale"))
+    return regime_now(payload)

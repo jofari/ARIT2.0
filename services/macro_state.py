@@ -41,7 +41,11 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import calendar_source  # noqa: E402  (meme dossier services/, C1)
-from arit_lib import contracts, params  # noqa: E402
+import pandas as pd  # noqa: E402
+from arit_lib import contracts, macro_regime, params  # noqa: E402
+# `macro_regime` est PUR (contracts/params seulement) et n'est pas dans la liste d'imports
+# interdits ci-dessus : le reutiliser evite de dupliquer le scoring 06.2 dans le service,
+# ou les deux copies divergeraient en silence. Parite A2 (2026-08-07).
 
 logger = logging.getLogger(__name__)
 
@@ -115,13 +119,51 @@ def fetch_fear_greed() -> int:
     raise RuntimeError(f"fear_greed injoignable: {last_exc}")
 
 
+# --------------------------------------------------- scores macro 06.2 (parite A2)
+def component_scores(macro_dir, now):
+    """5 scores {-1,0,1} du jour depuis l'historique macro, ou None si inexploitable.
+
+    C'est la moitie manquante de la parite backtest/live : le backtest calcule ces scores
+    lui-meme (macro_regime.daily_with_equity_veto), le live ne les avait nulle part, donc
+    `direction_macro` retombait sur son fail-safe long-only alors que le backtest tournait
+    long+short (docs/07 par.7.3).
+
+    Renvoie None — jamais des zeros — si l'historique est absent, illisible ou plus vieux
+    que params.MACRO_STALE_HOURS. La distinction est critique : cinq zeros donnent une
+    somme de 0, donc NEUTRE, donc « long ET short autorises » sur une absence de donnee ;
+    None fait tomber regime_now en HOSTILE, que regimes.classify met au repos. Aucune
+    exception ne sort d'ici : le service doit toujours pouvoir ecrire son fichier.
+    """
+    try:
+        daily = macro_regime.daily_regimes(macro_regime.load_history(macro_dir))
+    except Exception as exc:                     # historique corrompu = donnee absente
+        logger.warning("macro_state: scores macro illisibles (%s)", exc)
+        return None
+    if daily is None or daily.empty:
+        logger.warning("macro_state: aucun historique macro dans %s", macro_dir)
+        return None
+
+    last = daily.index.max()
+    age_h = (_as_utc(now) - last.to_pydatetime()).total_seconds() / 3600.0
+    if age_h > params.MACRO_STALE_HOURS:
+        logger.warning("macro_state: historique macro perime (%.0f h > %d h) - "
+                       "lancer scripts/download_macro.py", age_h, params.MACRO_STALE_HOURS)
+        return None
+
+    row = daily.loc[last]
+    scores = {key: int(row[key]) for key in contracts.MACRO_SCORE_KEYS
+              if key in daily.columns and pd.notna(row[key])}
+    return scores or None
+
+
 # ----------------------------------------------------------------- build
-def build_state(events, fg, now) -> dict:
+def build_state(events, fg, now, scores=None) -> dict:
     """Schema EXACT PDR 06.3. `events` = sortie de fetch_calendar ; `fg` int ou None ; `now` UTC.
 
     risk_off = (fg < FG_RISK_OFF_BELOW) OU un event high dans la fenetre +/- NEWS_WINDOW_MIN.
-    next_events = les NEXT_EVENTS_MAX prochains high <= NEXT_EVENTS_HORIZON_H, tries. stale=False
-    (etat frais ; le stale global est gere par main() en cas d'echec total, cf. _stale()).
+    next_events = les NEXT_EVENTS_MAX prochains high <= NEXT_EVENTS_HORIZON_H, tries.
+    `scores` = sortie de component_scores (dict 06.2 ou None) : None => stale ET risk_off,
+    le bot cesse d'entrer (parite A2). Le stale d'AGE, lui, reste gere par main()/_stale().
     """
     now = _as_utc(now)
     horizon = now + timedelta(hours=params.NEXT_EVENTS_HORIZON_H)
@@ -141,12 +183,19 @@ def build_state(events, fg, now) -> dict:
     next_events = [event for _, event in dated[: params.NEXT_EVENTS_MAX]]
 
     risk_off = bool(in_window or (fg is not None and fg < params.FG_RISK_OFF_BELOW))
+    # Parite A2 : sans scores macro exploitables, l'etat est declare stale. Le lecteur
+    # (journal.read_macro_state) en deduit risk_off et regimes.classify met le bot au REPOS.
+    # C'est volontaire : un dry-run non surveille doit cesser d'entrer quand sa fonda n'est
+    # plus alimentee, au lieu de continuer sur un NEUTRE de facade (qui, depuis A2, autorise
+    # long ET short). `fear_greed` reste l'indice BRUT ici — le score du meme nom vit dans
+    # le sous-objet MACRO_SCORES_KEY, jamais a plat (cf. contracts).
     return {
         "updated_utc": now.isoformat(),
-        "risk_off": risk_off,
+        "risk_off": bool(risk_off or not scores),
         "fear_greed": fg,
         "next_events": next_events,
-        "stale": False,
+        "stale": not scores,
+        contracts.MACRO_SCORES_KEY: scores or {},
     }
 
 
@@ -166,6 +215,7 @@ def _fail_safe_state(now) -> dict:
         "fear_greed": None,
         "next_events": [],
         "stale": True,
+        contracts.MACRO_SCORES_KEY: {},   # aucun score => HOSTILE => repos (parite A2)
     }
 
 
@@ -231,9 +281,13 @@ def main() -> int:
     if not fg_ok:
         fg = (old or {}).get("fear_greed") if old else None
 
+    # Parite A2 : scores 06.2 du jour. Hors reseau (fichiers deposes par download_macro.py,
+    # tache QUOTIDIENNE separee) — ce run horaire ne fait que les relire.
+    scores = component_scores(_user_data_dir() / contracts.MACRO_DATA_DIR, now)
+
     if cal_ok or fg_ok:
-        state = build_state(events or [], fg, now)
-        exit_code = EXIT_OK if (cal_ok and fg_ok) else EXIT_PARTIAL
+        state = build_state(events or [], fg, now, scores)
+        exit_code = EXIT_OK if (cal_ok and fg_ok and scores) else EXIT_PARTIAL
     elif old is None:
         state = _fail_safe_state(now)
         exit_code = EXIT_ERROR

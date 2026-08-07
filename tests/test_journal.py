@@ -197,3 +197,26 @@ def test_macro_state_absent_is_failsafe(_base_dir):
     state = journal.read_macro_state(now=datetime(2026, 7, 6, 12, 0, tzinfo=UTC))
     assert state["risk_off"] is True
     assert state["stale"] is True
+    assert state[contracts.MACRO_SCORES_KEY] == {}     # parite A2 : aucun score => HOSTILE
+
+
+# -------------------------------------------- parite live A2 : traversee des scores 06.2
+def test_macro_state_fait_transiter_les_scores(_base_dir):
+    """Les 5 scores doivent atteindre macro_regime.regime_now via la strategie."""
+    t0 = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
+    scores = {"dxy": 1, "taux": 0, "stablecoins": -1, "funding": 0, "fear_greed": 1}
+    _write_macro(_base_dir, t0.isoformat(), **{contracts.MACRO_SCORES_KEY: scores})
+    state = journal.read_macro_state(now=t0 + timedelta(minutes=5))
+    assert state[contracts.MACRO_SCORES_KEY] == scores
+    # `fear_greed` de premier niveau reste l'indice BRUT : deux sens, deux emplacements.
+    assert state["fear_greed"] == 62
+
+
+@pytest.mark.parametrize("brut", [None, [], "porteur", 3])
+def test_macro_state_scores_hors_schema_sont_ignores(_base_dir, brut):
+    """Fichier bricole ou d'une version anterieure : on retombe sur {} (=> HOSTILE => repos),
+    jamais sur une valeur que regime_now tenterait d'indexer."""
+    t0 = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
+    _write_macro(_base_dir, t0.isoformat(), **{contracts.MACRO_SCORES_KEY: brut})
+    state = journal.read_macro_state(now=t0 + timedelta(minutes=5))
+    assert state[contracts.MACRO_SCORES_KEY] == {}

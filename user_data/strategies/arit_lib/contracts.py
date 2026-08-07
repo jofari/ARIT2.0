@@ -40,6 +40,11 @@ CDL_PREFIX = "cdl_"  # 11.3 / PDR 05.4 idee 9 — ~60 colonnes talib CDL*, journ
 MACRO_REGIME_COL = "macro_regime"          # colonne df + cle journal/evaluation
 MACRO_SCORE_KEYS = ("dxy", "taux", "stablecoins", "funding", "fear_greed")  # 06.2
 MACRO_DATA_DIR = "data/macro"              # series historiques (scripts/download_macro.py)
+# Parite live A2 (2026-08-07) : sous-objet de macro_state.json portant les 5 scores 06.2.
+# IMBRIQUE et non a plat parce que `fear_greed` porte deux sens incompatibles selon le
+# schema — indice BRUT 0-100 en 06.3, score {-1,0,1} en 06.2. Fusionner les deux ferait
+# lire un F&G de 20 comme un score +20 par macro_regime.regime_now (=> PORTEUR permanent).
+MACRO_SCORES_KEY = "macro_scores"          # 06.3 etendu -> macro_regime.regime_now
 
 # Bloc correlation actions c6/c7 (docs/06 §6.2.1, decision Jonas 2026-08-03 A4).
 # HORS de MACRO_SCORE_KEYS : ce n'est PAS un 6e composant de la somme, c'est un veto

@@ -92,7 +92,7 @@ def classify(df: pd.DataFrame, macro: dict | None = None) -> pd.DataFrame:
     (seules G1-G7 sortent). Cette fonction ne cree QUE ses 3 colonnes.
     """
     if contracts.MACRO_REGIME_COL in df.columns:
-        return _classify_macro(df)
+        return _classify_macro(df, macro)
     if macro is None:
         # Neutre backtest (PDR M02) : ni risk_off ni stale, F&G neutre (=> mult plein en TREND).
         macro = {"risk_off": False, "fear_greed": params.FG_NEUTRAL_BACKTEST, "stale": False}
@@ -110,9 +110,36 @@ def classify(df: pd.DataFrame, macro: dict | None = None) -> pd.DataFrame:
     return df
 
 
-def _classify_macro(df: pd.DataFrame) -> pd.DataFrame:
-    """Regime pilote par la colonne macro (backtest). Le +0,05 de seuil NEUTRE est applique
-    par cio (04 §4.2). Retrocompat : sans la colonne, classify() reste inchange.
+def donnee_non_fiable(macro: dict | None) -> bool:
+    """Le macro_state est-il inexploitable ? (fail-safe live, docs/06 par.6.1/6.3).
+
+    Vrai si `stale`, si `risk_off` (F&G < 25 OU event high-impact dans +/- 30 min), si F&G
+    est sous le seuil, OU si les 5 scores 06.2 sont absents. None-safe : `fear_greed` vaut
+    None des que la source est tombee (journal._fail_safe_macro), et None n'est pas
+    comparable a un int. `macro` None (backtest) => False : rien a juger.
+
+    Le test sur les SCORES est une defense en profondeur, pas un doublon du flag `stale` :
+    il ne suppose PAS que le producteur soit a jour. Un macro_state.json ecrit par un
+    macro_state.py d'avant la parite porte `stale: false` ET aucun score — regime_now rend
+    alors HOSTILE, qui depuis A2 AUTORISE le short. Sans cette clause, ce seul decalage de
+    version suffirait a faire shorter le bot en aveugle (constate le 2026-08-07).
+    """
+    if not macro:
+        return False
+    if macro.get("stale") or macro.get("risk_off"):
+        return True
+    if not macro.get(contracts.MACRO_SCORES_KEY):
+        return True
+    fg = macro.get("fear_greed")
+    return fg is not None and fg < params.FG_RISK_OFF_BELOW
+
+
+def _classify_macro(df: pd.DataFrame, macro: dict | None = None) -> pd.DataFrame:
+    """Regime pilote par la colonne macro (backtest ET live depuis la parite A2). Le +0,05
+    de seuil NEUTRE est applique par cio (04 §4.2). Retrocompat : sans la colonne,
+    classify() reste inchange.
+
+    `macro` = dict 06.3 en live (fail-safe de donnee ci-dessous), None en backtest.
 
     ⚠️ CHANGEMENT A2 (2026-08-04, hypothese v4 de docs/01) : la macro HOSTILE ne force
     PLUS RISK_OFF. Avant, HOSTILE = « aucune entree » — cohérent avec un bot long-only.
@@ -130,6 +157,14 @@ def _classify_macro(df: pd.DataFrame) -> pd.DataFrame:
     if contracts.EQUITY_VETO_COL in df.columns:
         equity_veto = df[contracts.EQUITY_VETO_COL].fillna(False).astype(bool)
         regime = regime.mask(equity_veto, "RISK_OFF")
+    # FAIL-SAFE LIVE (parite A2) — meme nature que le veto actions ci-dessus : un doute sur
+    # la DONNEE force RISK_OFF, il ne donne jamais d'avis directionnel. Indispensable depuis
+    # A2 : `regime_now` renvoie HOSTILE quand macro_state est stale ou sans scores, et
+    # HOSTILE ne bloque plus rien — il AUTORISE le short. Sans cette ligne, une source macro
+    # tombee ferait shorter le bot en aveugle au lieu de le mettre au repos.
+    # `macro` est None en backtest : le comportement backtest est strictement inchange.
+    if donnee_non_fiable(macro):
+        regime = pd.Series("RISK_OFF", index=df.index)
     is_trend = regime == "TREND"
     porteur = macro_col == _PORTEUR
     hostile = macro_col == _HOSTILE

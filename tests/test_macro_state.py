@@ -17,19 +17,33 @@ import macro_state  # noqa: E402
 UTC = timezone.utc
 NOW = datetime(2026, 7, 7, 12, 0, tzinfo=UTC)
 
+# Parite A2 : jeu de scores 06.2 EXPLOITABLE (somme 1 => NEUTRE). Sans lui, build_state
+# declare l'etat stale a dessein — c'est le fail-safe teste plus bas, pas le cas nominal.
+SCORES = {"dxy": 1, "taux": 0, "stablecoins": 0, "funding": 0, "fear_greed": 0}
+
 
 def _event(minutes_from_now, name="CPI US"):
     when = NOW + timedelta(minutes=minutes_from_now)
     return {"name": name, "time_utc": when.isoformat(), "impact": "high"}
 
 
+def _scores_ok(monkeypatch, scores=None):
+    """main() lit l'historique macro sur disque ; en test on fixe le resultat."""
+    monkeypatch.setattr(macro_state, "component_scores",
+                        lambda *a, **k: SCORES if scores is None else scores)
+
+
 # ----------------------------------------------------------------- build_state
 def test_build_state_schema_keys():
-    state = macro_state.build_state([], 50, NOW)
-    assert set(state) == {"updated_utc", "risk_off", "fear_greed", "next_events", "stale"}
+    state = macro_state.build_state([], 50, NOW, SCORES)
+    assert set(state) == {"updated_utc", "risk_off", "fear_greed", "next_events", "stale",
+                          macro_state.contracts.MACRO_SCORES_KEY}
     assert state["updated_utc"] == NOW.isoformat()
     assert state["stale"] is False
     assert state["fear_greed"] == 50
+    # `fear_greed` reste l'indice BRUT au premier niveau ; son SCORE 06.2 vit dans le
+    # sous-objet. Confondre les deux ferait sommer 50 comme un score (=> PORTEUR toujours).
+    assert state[macro_state.contracts.MACRO_SCORES_KEY]["fear_greed"] == 0
 
 
 def test_build_state_event_29_min_is_risk_off():
@@ -38,7 +52,7 @@ def test_build_state_event_29_min_is_risk_off():
 
 
 def test_build_state_event_31_min_not_risk_off():
-    state = macro_state.build_state([_event(31)], 50, NOW)
+    state = macro_state.build_state([_event(31)], 50, NOW, SCORES)
     assert state["risk_off"] is False
     # mais l'event reste dans next_events (<= 48 h)
     assert len(state["next_events"]) == 1
@@ -46,8 +60,41 @@ def test_build_state_event_31_min_not_risk_off():
 
 @pytest.mark.parametrize("fg,expected", [(24, True), (25, False), (44, False), (45, False)])
 def test_build_state_fear_greed_threshold(fg, expected):
-    state = macro_state.build_state([], fg, NOW)
+    state = macro_state.build_state([], fg, NOW, SCORES)
     assert state["risk_off"] is expected
+
+
+# ------------------------------------------------- parite A2 : scores macro (2026-08-07)
+@pytest.mark.parametrize("scores", [None, {}])
+def test_build_state_sans_scores_est_stale_et_risk_off(scores):
+    """Fail-safe central du dry-run non surveille : fonda non alimentee => le bot se met au
+    REPOS. Ecrire des zeros donnerait NEUTRE, donc long ET short autorises a l'aveugle."""
+    state = macro_state.build_state([], 50, NOW, scores)
+    assert state["stale"] is True
+    assert state["risk_off"] is True
+    assert state[macro_state.contracts.MACRO_SCORES_KEY] == {}
+
+
+def test_component_scores_none_si_historique_absent(tmp_path):
+    assert macro_state.component_scores(tmp_path / "vide", NOW) is None
+
+
+def test_component_scores_none_si_historique_perime(tmp_path, monkeypatch):
+    """Historique lisible mais vieux de > MACRO_STALE_HOURS => None, pas des zeros."""
+    import pandas as pd
+    vieux = NOW - timedelta(hours=macro_state.params.MACRO_STALE_HOURS + 24)
+    daily = pd.DataFrame({k: [0] for k in macro_state.contracts.MACRO_SCORE_KEYS},
+                         index=pd.to_datetime([vieux], utc=True))
+    monkeypatch.setattr(macro_state.macro_regime, "load_history", lambda d: daily)
+    monkeypatch.setattr(macro_state.macro_regime, "daily_regimes", lambda h: daily)
+    assert macro_state.component_scores(tmp_path, NOW) is None
+
+
+def test_component_scores_ne_leve_jamais(tmp_path, monkeypatch):
+    """Le service doit TOUJOURS pouvoir ecrire son fichier, meme historique corrompu."""
+    monkeypatch.setattr(macro_state.macro_regime, "load_history",
+                        lambda d: (_ for _ in ()).throw(ValueError("corrompu")))
+    assert macro_state.component_scores(tmp_path, NOW) is None
 
 
 def test_build_state_next_events_sorted_capped_and_horizon():
@@ -122,6 +169,7 @@ def test_main_ne_bloque_pas_quand_forexfactory_est_indisponible(tmp_path, monkey
     monkeypatch.setattr(macro_state.calendar_source, "load_events",
                         _cal(primaire, secondaire_ok=False))
     monkeypatch.setattr(macro_state, "fetch_fear_greed", lambda: 55)
+    _scores_ok(monkeypatch)
     code = macro_state.main()
     assert code == macro_state.EXIT_OK          # PAS un echec : la primaire suffit
     written = json.loads((tmp_path / macro_state.contracts.MACRO_STATE_FILE).read_text("utf-8"))
@@ -144,12 +192,13 @@ def test_main_journalise_les_trous_de_couverture(tmp_path, monkeypatch, caplog):
 # ----------------------------------------------------------------- main
 def test_main_partial_uses_old_value_on_source_failure(tmp_path, monkeypatch):
     macro_state.set_user_data_dir(tmp_path)
-    old = macro_state.build_state([], 60, NOW - timedelta(minutes=30))
+    old = macro_state.build_state([], 60, NOW - timedelta(minutes=30), SCORES)
     macro_state.write_atomic(old, tmp_path / macro_state.contracts.MACRO_STATE_FILE)
 
     monkeypatch.setattr(macro_state.calendar_source, "load_events", _cal([_event(120)]))
     monkeypatch.setattr(macro_state, "fetch_fear_greed",
                         lambda: (_ for _ in ()).throw(RuntimeError("down")))
+    _scores_ok(monkeypatch)
 
     code = macro_state.main()
     assert code == macro_state.EXIT_PARTIAL

@@ -155,6 +155,66 @@ def test_veto_actions_force_toujours_risk_off():
     assert np.isnan(out["seuil"].iloc[0])
 
 
+# ------------------------- fail-safe de DONNEE en live (parite A2, 2026-08-07) -------------
+SCORES_OK = {"dxy": 1, "taux": 0, "stablecoins": 0, "funding": 0, "fear_greed": 0}
+
+
+def _live(stale=False, risk_off=False, fear_greed=60, scores=SCORES_OK):
+    return {"risk_off": risk_off, "fear_greed": fear_greed, "stale": stale,
+            contracts.MACRO_SCORES_KEY: scores}
+
+
+@pytest.mark.parametrize("macro", [
+    _live(stale=True),                  # etat perime
+    _live(risk_off=True),               # news high-impact / F&G bas
+    _live(fear_greed=10),               # F&G sous le seuil
+    _live(scores={}),                   # producteur d'avant la parite : stale=false SANS scores
+    {"risk_off": False, "fear_greed": 60, "stale": False},   # clef de scores carrement absente
+])
+def test_donnee_non_fiable_force_risk_off_meme_en_hostile(macro):
+    """LE test de securite du dry-run non surveille.
+
+    Depuis A2, HOSTILE ne bloque plus rien : il AUTORISE le short. Or `regime_now` renvoie
+    justement HOSTILE quand macro_state est stale ou sans scores. Sans ce fail-safe, une
+    source macro tombee ferait shorter le bot en aveugle pendant des semaines au lieu de le
+    mettre au repos. On coupe donc les DEUX sens, comme le veto actions.
+    """
+    out = regimes.classify(_df_macro(30, 110, 100, 115, "HOSTILE"), macro)
+    assert out["regime"].iloc[0] == "RISK_OFF"
+    assert out["multiplicateur"].iloc[0] == params.MULT_RISK_OFF
+    assert out["multiplicateur_short"].iloc[0] == params.MULT_RISK_OFF
+    assert np.isnan(out["seuil"].iloc[0])
+
+
+def test_donnee_fiable_laisse_passer():
+    """Etat sain ET scores presents : le regime macro pilote normalement, rien n'est ecrase."""
+    out = regimes.classify(_df_macro(30, 110, 100, 115, "PORTEUR"), _live())
+    assert out["regime"].iloc[0] == "TREND"
+    assert out["multiplicateur"].iloc[0] == params.MULT_FULL
+
+
+def test_backtest_macro_none_inchange():
+    """Retrocompat stricte : en backtest `macro` vaut None, le fail-safe ne s'arme jamais."""
+    assert regimes.donnee_non_fiable(None) is False
+    out = regimes.classify(_df_macro(30, 110, 100, 115, "HOSTILE"), None)
+    assert out["regime"].iloc[0] == "TREND"            # exactement le comportement A2
+
+
+def test_donnee_non_fiable_est_none_safe():
+    """`fear_greed` vaut None des que la source tombe (journal._fail_safe_macro) : None
+    n'est pas comparable a un int, un TypeError ici crasherait l'evaluation."""
+    assert regimes.donnee_non_fiable(_live(fear_greed=None)) is False
+    assert regimes.donnee_non_fiable({}) is False          # dict vide = backtest, pas live
+
+
+def test_scores_absents_suffisent_a_declarer_non_fiable():
+    """Defense en profondeur : on ne suppose PAS que le producteur soit a jour. Un
+    macro_state.json ecrit par un macro_state.py d'avant la parite porte `stale: false` et
+    aucun score ; regime_now rend HOSTILE, qui depuis A2 autorise le short."""
+    assert regimes.donnee_non_fiable(_live(scores={})) is True
+    assert regimes.donnee_non_fiable(_live(scores=None)) is True
+
+
 def test_tendance_baissiere_devient_trend_et_pas_range():
     """A2 : avant, une tendance baissiere tombait dans le fallback RANGE — le short etait
     structurellement impossible. Elle est maintenant TREND avec trend_dir = -1."""

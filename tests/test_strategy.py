@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 import AritV1 as strat_mod
-from arit_lib import contracts, params
+from arit_lib import contracts, macro_regime, params
 
 Strat = strat_mod.AritV1
 T0 = pd.Timestamp("2024-01-01", tz="UTC")
@@ -324,7 +324,10 @@ def _fake_macro(monkeypatch, daily, veto=None):
                                   contracts.EQUITY_VETO_REASON_COL]])
         return joined, []
 
-    fake = type("M", (), {"daily_with_equity_veto": staticmethod(_daily_with_veto)})
+    # `attach_regime_now` (parite live A2) delegue a la VRAIE implementation : c'est le
+    # chemin live qu'on veut exercer, pas un stub qui le ferait passer par construction.
+    fake = type("M", (), {"daily_with_equity_veto": staticmethod(_daily_with_veto),
+                          "attach_regime_now": staticmethod(macro_regime.attach_regime_now)})
     monkeypatch.setattr(strat_mod, "macro_regime", fake)
 
 
@@ -373,18 +376,56 @@ def test_backtest_no_column_when_macro_files_absent(monkeypatch):
     assert "macro_unavailable" in kinds                      # log warning UNE fois
 
 
-def test_live_does_not_pose_macro_column(monkeypatch):
+def _live_strategie(monkeypatch, seen, macro_state):
+    """Instance en runmode dry_run, avec `macro_state` renvoye par read_macro_state."""
     _capture(monkeypatch)
-    seen = {}
     _capture_classify(monkeypatch, seen)
     _fake_macro(monkeypatch, pd.DataFrame({contracts.MACRO_REGIME_COL: ["PORTEUR"]},
                                           index=pd.to_datetime(["2024-01-02"], utc=True)))
+    monkeypatch.setattr(strat_mod.journal, "read_macro_state", lambda: macro_state)
     s = _inst()
     monkeypatch.setattr(s, "_journal_evaluation", lambda *a, **k: None)
     s.dp = _DP(_candles(), runmode="dry_run")
     s.config = {"user_data_dir": "user_data"}
-    s.populate_indicators(_candles(), {"pair": "BTC/USDT"})
-    assert seen["has_col"] is False                          # live/dry : jamais la colonne (M08)
+    return s.populate_indicators(_candles(), {"pair": "BTC/USDT"})
+
+
+def test_live_pose_la_colonne_macro_parite_a2(monkeypatch):
+    """Parite A2 (2026-08-07) : le live pose DESORMAIS le regime macro, comme le backtest.
+
+    Sans cette colonne, cio.direction_macro retombait sur son fail-safe long-only : le live
+    et le backtest etaient deux produits differents (BLOQUANT declare du dry-run, 07 §7.3).
+    """
+    seen = {}
+    out = _live_strategie(monkeypatch, seen, {
+        "fear_greed": 50, "stale": False,
+        contracts.MACRO_SCORES_KEY: {"dxy": 1, "taux": 1, "stablecoins": 0,
+                                     "funding": 0, "fear_greed": 0}})
+    assert seen["has_col"] is True                       # colonne posee AVANT classify
+    assert (out[contracts.MACRO_REGIME_COL] == "PORTEUR").all()      # somme +2 => PORTEUR
+
+
+def test_live_sans_scores_macro_est_hostile(monkeypatch):
+    """Fonda non alimentee (macro_state sans scores) => HOSTILE, jamais un NEUTRE de facade.
+
+    NEUTRE autoriserait long ET short a l'aveugle. La traduction de ce HOSTILE en « aucune
+    entree » est faite par le fail-safe de donnee de regimes.classify (teste en M02).
+    """
+    seen = {}
+    out = _live_strategie(monkeypatch, seen, {"fear_greed": 50, "stale": False})
+    assert (out[contracts.MACRO_REGIME_COL] == "HOSTILE").all()
+
+
+def test_live_fear_greed_brut_nest_jamais_lu_comme_un_score(monkeypatch):
+    """Garde-fou anti-collision de schema : `fear_greed` vaut 50 (indice BRUT 06.3) au
+    premier niveau. S'il etait somme comme un score, le total ferait +50 => PORTEUR a tous
+    les coups, donc long autorise en permanence quelle que soit la macro reelle."""
+    seen = {}
+    out = _live_strategie(monkeypatch, seen, {
+        "fear_greed": 50, "stale": False,
+        contracts.MACRO_SCORES_KEY: {"dxy": -1, "taux": -1, "stablecoins": 0,
+                                     "funding": 0, "fear_greed": 0}})
+    assert (out[contracts.MACRO_REGIME_COL] == "HOSTILE").all()      # somme -2 => HOSTILE
 
 
 # --------------------- C6 : protections freqtrade natives (07.1.1, 03.5) ---------------------

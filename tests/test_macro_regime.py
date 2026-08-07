@@ -190,6 +190,46 @@ def test_regime_now_stale_or_missing_is_hostile():
     assert macro_regime.regime_now(missing)[0] == HOSTILE
 
 
+# ------------------------------------------- parite live A2 (2026-08-07)
+SCORES_KEY = contracts.MACRO_SCORES_KEY
+
+
+def _state(scores, **extra):
+    return {"fear_greed": 50, "stale": False, SCORES_KEY: scores, **extra}
+
+
+def test_regime_from_state_ne_melange_pas_les_deux_schemas():
+    """Garde-fou anti-collision : `fear_greed` = indice BRUT 0-100 au premier niveau (06.3),
+    score {-1,0,1} dans le sous-objet (06.2). A plat, un F&G de 50 serait somme comme +50 et
+    rendrait PORTEUR quelle que soit la macro reelle — le pire biais long possible."""
+    hostile = {"dxy": -1, "taux": -1, "stablecoins": 0, "funding": 0, "fear_greed": 0}
+    regime, scores = macro_regime.regime_from_state(_state(hostile))
+    assert regime == HOSTILE            # -2, et surtout PAS +48
+    assert scores["fear_greed"] == 0    # le score, jamais l'indice brut
+
+
+def test_regime_from_state_propage_le_stale():
+    porteur = {"dxy": 1, "taux": 1, "stablecoins": 1, "funding": 1, "fear_greed": 1}
+    assert macro_regime.regime_from_state(_state(porteur))[0] == PORTEUR
+    assert macro_regime.regime_from_state(_state(porteur, stale=True))[0] == HOSTILE
+
+
+@pytest.mark.parametrize("state", [None, {}, {"fear_greed": 50}, _state({}), _state(None)])
+def test_regime_from_state_sans_scores_est_hostile(state):
+    """Sous-objet absent, vide ou nul => aucun score => HOSTILE (jamais NEUTRE, qui
+    autoriserait long ET short sur une absence de donnee)."""
+    assert macro_regime.regime_from_state(state)[0] == HOSTILE
+
+
+def test_attach_regime_now_pose_une_colonne_scalaire():
+    """Pendant live de attach_macro_regime : le live n'a qu'un etat courant, donc le regime
+    est CONSTANT sur tout le df (le backtest, lui, joint un regime par jour)."""
+    df = pd.DataFrame({"close": [1.0, 2.0, 3.0]})
+    porteur = {"dxy": 1, "taux": 1, "stablecoins": 0, "funding": 0, "fear_greed": 0}
+    out = macro_regime.attach_regime_now(df, _state(porteur))
+    assert list(out[RCOL]) == [PORTEUR] * 3
+
+
 # ------------------------------------------------------------------ integration reels
 def _macro_dir():
     return Path(__file__).resolve().parents[1] / "user_data" / "data" / "macro"

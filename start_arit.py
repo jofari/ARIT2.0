@@ -49,6 +49,24 @@ def bot_command() -> list[str]:
     return cmd
 
 
+def deja_lance(exe_name: str = "freqtrade.exe") -> bool:
+    """Un bot tourne-t-il deja ? (garde-fou de la relance automatique au demarrage).
+
+    Ce script est declenche a l'ouverture de session pour survivre aux redemarrages
+    Windows Update. Sans ce test, une simple fermeture/reouverture de session lancerait un
+    SECOND freqtrade sur la meme config : deux bots ecrivant le meme journal et la meme
+    base, donc des donnees de dry-run inexploitables. `tasklist` plutot que psutil : aucune
+    dependance nouvelle. En cas de doute (commande indisponible) on repond False, car ne
+    PAS relancer un bot mort coute plus cher qu'un doublon improbable.
+    """
+    try:
+        out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {exe_name}"],
+                             capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return exe_name.lower() in (out.stdout or "").lower()
+
+
 def launch(title: str, cmd: list[str]) -> None:
     """Ouvre une console Windows dediee, sans bloquer ce script."""
     try:
@@ -65,10 +83,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Lance les 4 process ARIT V1.")
     parser.add_argument("--no-bot", action="store_true",
                         help="lance seulement les 3 services (pas le bot freqtrade)")
+    parser.add_argument("--si-absent", action="store_true",
+                        help="ne rien lancer si un freqtrade tourne deja (relance au demarrage)")
     args = parser.parse_args()
 
     if not PYTHON.exists():
         sys.exit(f"venv introuvable : {PYTHON} (voir BUILD_NOTES)")
+    if args.si_absent and deja_lance():
+        print("[OK] un freqtrade tourne deja : rien a relancer.")
+        return
     for title, cmd in SERVICES:
         launch(title, cmd)
     if not args.no_bot:

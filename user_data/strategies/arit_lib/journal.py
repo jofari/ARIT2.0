@@ -384,6 +384,16 @@ def read_macro_state(now=None) -> dict:
         "next_events": data.get("next_events") or [],
         "stale": bool(data.get("stale", False)),
     }
+    # Parite A2 : les 5 scores macro (06.2) transitent vers macro_regime.regime_now.
+    # IMBRIQUES sous contracts.MACRO_SCORES_KEY, JAMAIS a plat : `fear_greed` existe dans
+    # les DEUX schemas avec deux sens incompatibles — indice BRUT 0-100 ici (06.3, lu par
+    # regimes.REGLES), score {-1,0,1} dans MACRO_SCORE_KEYS (06.2). A plat, regime_now
+    # sommerait un F&G de 20 comme +20 et renverrait PORTEUR en permanence.
+    # VOLONTAIREMENT hors de _MACRO_SCHEMA_KEYS : un macro_state.json d'avant la parite
+    # reste lisible, sans scores — regime_now bascule alors en HOSTILE (>= 3 manquants),
+    # que classify met au repos via le fail-safe de donnee.
+    scores = data.get(contracts.MACRO_SCORES_KEY)
+    state[contracts.MACRO_SCORES_KEY] = scores if isinstance(scores, dict) else {}
     updated = _parse_iso(state["updated_utc"])
     stale = (
         state["stale"]
@@ -404,4 +414,5 @@ def _fail_safe_macro() -> dict:
         "fear_greed": None,
         "next_events": [],
         "stale": True,
+        contracts.MACRO_SCORES_KEY: {},   # aucun score => regime_now HOSTILE (parite A2)
     }

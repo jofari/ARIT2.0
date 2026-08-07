@@ -32,15 +32,22 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("macro")
 
 
-def _get(url: str, **kw) -> requests.Response:
-    r = requests.get(url, headers=UA, timeout=TIMEOUT, **kw)
+def _get(url: str, headers=UA, **kw) -> requests.Response:
+    r = requests.get(url, headers=headers, timeout=TIMEOUT, **kw)
     r.raise_for_status()
     return r
 
 
 def dl_fred(sid: str, name: str) -> None:
-    """DXY broad (DTWEXBGS) / taux Fed effectif (DFF) — CSV date,valeur."""
-    csv = _get(FRED_CSV.format(sid=sid)).text
+    """DXY broad (DTWEXBGS) / taux Fed effectif (DFF) — CSV date,valeur.
+
+    En-tetes par DEFAUT de requests, jamais UA (2026-08-07) : fredgraph.csv met notre
+    User-Agent `ARIT-macro/1.0` au trou noir — ReadTimeout a 40 s, reproductible — alors
+    qu'il repond en 0,1 s sans en-tete personnalise. Panne SILENCIEUSE depuis le
+    2026-07-12 : dxy et taux, soit 2 des 5 composants 06.2, n'etaient plus rafraichis et
+    `daily_regimes` les scorait donc a 0 sans que rien ne le signale.
+    """
+    csv = _get(FRED_CSV.format(sid=sid), headers=None).text
     (OUT_DIR / f"{name}.csv").write_text(csv, encoding="utf-8")
     log.info("%s : %d lignes", name, csv.count("\n"))
 

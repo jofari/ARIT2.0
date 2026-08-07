@@ -316,3 +316,90 @@ aussi (~24 % du temps) ?
 
 ### État après cette session
 **Aucune dette C ouverte.** 320 tests verts, ruff propre.
+
+---
+
+## Session du 2026-08-07 — parité live/backtest + dry-run non surveillé
+
+**Contexte** : Jonas part en vacances et doit déconnecter. Objectif donné : fermer les
+chantiers et lancer le dry-run pendant son absence.
+
+### Décisions de Jonas (07/08)
+
+| # | Question posée | Réponse | Conséquence |
+|---|---|---|---|
+| V1 | Périmètre avant départ | **Minimum opérationnel + combler la parité live/backtest** | du code métier neuf embarqué sans surveillance ; recommandation inverse donnée et écartée en connaissance de cause |
+| V2 | Remontée Discord pendant l'absence | **Alertes critiques seulement** | le watchdog alerte sur bot mort / exposition anormale ; aucun résumé quotidien |
+
+> ⚠️ Sur V1 j'avais recommandé le périmètre réduit (ne pas toucher à la parité la veille
+> d'une déconnexion). Jonas a tranché pour le périmètre large. Compensation appliquée :
+> fail-safes durcis et 36 tests ajoutés (320 → 356).
+
+### Ce qui a été fait
+
+**1. Parité live/backtest comblée (le BLOCANT déclaré du dry-run).**
+`AritV1.py:58` ne posait la colonne macro qu'en backtest (`df if live`), donc
+`cio.direction_macro` retombait sur son fail-safe long-only : le live et le backtest étaient
+**deux produits différents** depuis A2. Désormais `macro_regime.attach_regime_now()` pose le
+régime en live, calculé par `regime_now()` depuis les 5 scores 06.2 que
+`services/macro_state.py` écrit maintenant dans `macro_state.json`.
+
+**2. Collision de schéma évitée — le piège le plus dangereux de la session.**
+`fear_greed` existe dans les DEUX schémas avec des sens incompatibles : indice **brut**
+0-100 en 06.3, score **{-1,0,1}** en 06.2. Passer le dict à plat à `regime_now()` aurait fait
+sommer un F&G de 50 comme +50 ⇒ **PORTEUR en permanence**, donc long autorisé quelle que soit
+la macro réelle. Les scores vivent donc dans un sous-objet `contracts.MACRO_SCORES_KEY`
+(`macro_scores`), jamais à plat. Verrouillé par
+`test_regime_from_state_ne_melange_pas_les_deux_schemas`.
+
+**3. Fail-safe de donnée en live (`regimes.donnee_non_fiable`).**
+Depuis A2, HOSTILE ne bloque plus rien — il **autorise le short**. Or `regime_now()` renvoie
+justement HOSTILE quand l'état est périmé ou sans scores. Sans garde-fou, une source macro
+tombée aurait fait **shorter le bot en aveugle pendant des semaines**. `classify` force
+désormais RISK_OFF (les deux sens coupés, comme le véto actions c6/c7) si l'état est `stale`,
+`risk_off`, si F&G < 25, **ou si les 5 scores sont absents**. Cette dernière clause est une
+défense en profondeur : elle ne suppose pas que le producteur soit à jour — cas constaté en
+vrai le 07/08, un `macro_state.json` d'ancienne version portant `stale: false` sans scores.
+
+**4. Bug FRED — panne silencieuse depuis le 2026-07-12.**
+`scripts/download_macro.py` envoyait `User-Agent: ARIT-macro/1.0` à toutes les sources.
+FRED met cet UA au trou noir : **ReadTimeout à 40 s, reproductible**, alors qu'il répond en
+**0,1 s sans en-tête**. Conséquence : `dxy` et `taux` — 2 des 5 composants macro — n'étaient
+plus rafraîchis depuis un mois, et `daily_regimes` les scorait à 0 **sans que rien ne le
+signale**. `dl_fred` n'envoie plus d'UA. Les 8 fichiers macro sont à jour au 07/08.
+
+**5. Opérationnel — le dry-run pouvait tourner 2 h puis ne plus rien faire.**
+`services/macro_state.py` est un one-shot **par design** (docstring : « lancé par le Task
+Scheduler toutes les heures ») — mais **la tâche planifiée n'avait jamais été créée**.
+`start_arit.py` le lançait une fois ; passé `CALENDAR_STALE_HOURS = 2`, l'état devenait stale
+⇒ RISK_OFF ⇒ **plus aucune entrée**, sans alerte. Le watchdog ne rattrape pas ce cas : il
+surveille le heartbeat, il ne relance aucun service. Créé :
+
+| Mécanisme | Rôle |
+|---|---|
+| Tâche `ARIT macro_state` (horaire) | rafraîchit `macro_state.json` — sans elle le bot se fige |
+| Tâche `ARIT download_macro` (quotidienne 06:15) | alimente les 5 composants ; historique > 48 h ⇒ scores refusés ⇒ repos |
+| `%APPDATA%\...\Startup\ARIT_relance.cmd` | relance les 4 process après un redémarrage Windows Update |
+| `start_arit.py --si-absent` | garde-fou anti-doublon (`tasklist`) : ne relance rien si un freqtrade tourne |
+
+> La tâche « à l'ouverture de session » a été refusée par Windows (**Accès refusé** — un
+> déclencheur `AtLogOn` exige l'élévation). Contournée par le dossier Démarrage, qui ne
+> demande aucun droit. Supprimer `ARIT_relance.cmd` suffit à désactiver la relance.
+
+### Ce qui reste ouvert — à lire au retour
+
+1. **Le dry-run exige que le PC reste allumé ET la session ouverte.** Les 4 process vivent
+   dans des consoles utilisateur ; le dossier Démarrage ne se déclenche qu'à l'ouverture de
+   session. Un redémarrage sans reconnexion automatique = tout est arrêté jusqu'au retour.
+2. **Données OHLCV futures toujours manquantes** pour 3 paires sur 4 (seul BTC en 4h/5m).
+   Sans elles, aucun backtest futures et `check_bias.py` ne peut pas re-tourner. N'empêche
+   pas le dry-run (freqtrade télécharge le live lui-même), empêche la **validation**.
+3. **Chantiers B1→B17 et D1→D4 intacts** — dont le walk-forward (B13/D2), prérequis déclaré
+   du dry-run. A8 toujours reporté. Le dry-run lancé produit des **données**, il ne valide
+   aucune hypothèse.
+4. **`user_data/decisions/` était vide** : c'est précisément le jeu d'évaluations dont
+   dépendent B8 (N ≥ 400 signaux), B9 (audit d'IC) et toute piste ML. C'est le gain principal
+   de cette absence.
+
+### État après cette session
+**356 tests verts** (320 → 356), ruff propre. Parité live/backtest **comblée**.

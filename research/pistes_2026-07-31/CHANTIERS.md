@@ -146,3 +146,41 @@ La liste `E` ci-dessus reste valable, avec deux entrées **nouvelles et priorita
    4h et 5m. Il faut les 4 paires en 5m/1h/4h/1d. Sans elles, aucun backtest en futures,
    et `check_bias.py` ne peut pas re-tourner sur la nouvelle config.
 3. (rappel) Hypothèse signée : **fait** (A7) — ce point de la liste E est levé.
+
+---
+
+# MISE À JOUR DU 2026-08-07 — parité comblée, dry-run lancé
+
+`DECISIONS.md` (racine), section « Session du 2026-08-07 », fait foi.
+
+## Bloquants du dry-run — état
+
+| # (liste du 04/08) | Bloquant | Statut au 07/08 |
+|---|---|---|
+| 1 | Parité backtest/live rompue par A2 | **FERMÉ** — `macro_state` écrit les 5 scores 06.2, `macro_regime.attach_regime_now()` pose le régime en live, fail-safe `regimes.donnee_non_fiable` |
+| 2 | Données OHLCV futures manquantes | **OUVERT** — seul BTC en 4h/5m. Bloque les backtests et `check_bias.py`, PAS le dry-run |
+| 3 | Hypothèse signée (A7) | levé depuis le 04/08 |
+
+De la liste `E` d'origine : A7 fait ; **walk-forward (B13/D2) toujours pas fait** ; drawdown
+toujours borné en profondeur seulement ; gate matériel désormais explicite (voir ci-dessous).
+
+## Bloquants OPÉRATIONNELS — ils n'étaient dans aucune liste
+
+Découverts le 07/08 en traçant le chemin live. Ils étaient invisibles parce que la liste `E`
+ne couvrait que les blocages *scientifiques*.
+
+| Constat | Effet | Traitement |
+|---|---|---|
+| `macro_state.py` est un one-shot et **la tâche horaire n'existait pas** | après 2 h : stale ⇒ RISK_OFF ⇒ **plus aucune entrée**, sans alerte | tâche `ARIT macro_state` créée |
+| Historique macro périmé (12/07) | 5 composants stale | tâche `ARIT download_macro` créée |
+| FRED refusait notre User-Agent | `dxy` + `taux` non rafraîchis **depuis un mois, en silence** | UA retiré de `dl_fred` |
+| Rien ne survivait à un redémarrage | 4 consoles perdues à la première mise à jour Windows | `ARIT_relance.cmd` (dossier Démarrage) + `--si-absent` |
+
+⚠️ **Gate matériel, désormais précis** : le dry-run exige le PC allumé **et la session
+ouverte**. Un redémarrage sans reconnexion automatique arrête tout jusqu'au retour.
+
+## Ce que cette absence produit
+
+Des **évaluations journalisées** (`user_data/logs/decisions/`), qui étaient à zéro. C'est le
+prérequis de B8 (N ≥ 400 signaux), B9 (audit d'IC des 5 scores) et de toute piste ML. Le
+dry-run ne valide **aucune** hypothèse : il collecte.
