@@ -438,3 +438,37 @@ d'une déconnexion, sans personne pour le surveiller, est exactement le risque q
 ce que Jonas a décliné en choisissant « critiques seulement ».
 
 À traiter au retour, avec le reste de M09.
+
+### Correctif du 07/08 (2) — le watchdog ne pouvait PAS alerter en dry-run
+
+Signalé par Jonas depuis la console du watchdog :
+`WARNING:__main__:watchdog: clefs ccxt absentes - mode alerte seule`.
+
+Le message lui-même est **normal** en dry-run (pas de clés ⇒ pas de lecture d'exposition,
+pas de *flatten* — ce qui n'a aucun sens sur de l'argent papier). Mais en tirant le fil :
+
+```python
+def is_breach(age, holdings) -> bool:
+    return age > HEARTBEAT_MAX_S and bool(holdings)   # <-- "and bool(holdings)"
+```
+
+Sans clés ccxt, `open_exposure` renvoie **toujours** `[]`, donc `is_breach` est **toujours
+faux**, donc le watchdog **n'alerte jamais** — même bot mort. La décision V2 (« alertes
+critiques seulement ») était **structurellement vide** : trois semaines de silence garanti,
+que le bot tourne ou qu'il soit mort depuis le deuxième jour.
+
+Corrigé en **séparant prévenir et agir**, plutôt qu'en affaiblissant M10 :
+
+| Fonction | Condition | Rôle |
+|---|---|---|
+| `is_breach` (inchangée) | heartbeat vieux **ET** exposition | déclenche le **flatten** — on ne liquide que ce qui existe |
+| `bot_silencieux` (nouvelle) | heartbeat vieux, **sans condition d'exposition** | déclenche l'**alerte** |
+
+`surveiller_liveness()` n'émet qu'**une** alerte par épisode + une à la reprise : sans ça, un
+bot mort le 2e jour d'une absence de trois semaines produirait ~30 000 messages Discord.
+Même garde anti-faux-positif que le flatten (`CONFIRM_READS` lectures). 6 tests ajoutés.
+
+⚠️ **Non résolu à cette heure** : `freqtrade` tourne mais n'écrit **aucun heartbeat**
+(fichier toujours daté du 31/07) et n'a créé ni base dry-run ni journal du jour. Le bot n'a
+donc pas atteint sa première boucle. À diagnostiquer avant de considérer le dry-run comme
+lancé — un bot qui ne bat pas ne collecte rien.

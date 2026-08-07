@@ -184,8 +184,27 @@ def flatten(ccxt_client, holdings) -> None:
 
 # ---------------------------------------------------- logique anti-faux-positif
 def is_breach(age, holdings) -> bool:
-    """Condition de breach : heartbeat trop vieux ET exposition non nulle (M10)."""
+    """Condition de breach : heartbeat trop vieux ET exposition non nulle (M10).
+
+    Reste le declencheur du FLATTEN : on ne liquide que ce qui existe. Ne pas confondre
+    avec `bot_silencieux`, qui declenche l'ALERTE et n'exige aucune exposition.
+    """
     return age > HEARTBEAT_MAX_S and bool(holdings)
+
+
+def bot_silencieux(age) -> bool:
+    """Heartbeat trop vieux, INDEPENDAMMENT de l'exposition (correctif 2026-08-07).
+
+    Pourquoi separer : en dry-run il n'y a aucune position reelle, et sans clefs ccxt
+    (« mode alerte seule ») `open_exposure` renvoie toujours []. `is_breach` etait donc
+    TOUJOURS faux et le watchdog n'alertait JAMAIS, meme bot mort — un dry-run non
+    surveille serait reste muet pendant des semaines.
+
+    Le flatten, lui, continue d'exiger une exposition (`is_breach`) : liquider n'a de sens
+    que s'il y a quelque chose a liquider. On separe donc « prevenir » de « agir », au lieu
+    d'affaiblir M10.
+    """
+    return age > HEARTBEAT_MAX_S
 
 
 def next_consecutive(breached, consecutive) -> int:
@@ -224,14 +243,36 @@ def _handle_breach(client, holdings, age) -> None:
         alert(LEVEL_CRITICAL, f"flatten declenche sur: {detail}")
 
 
+def surveiller_liveness(age, muet_depuis, alerte_posee) -> tuple:
+    """Etat de l'alerte « bot silencieux ». -> (muet_depuis, alerte_posee).
+
+    Une SEULE alerte par episode, et une seule a la reprise : sans ca, un bot mort le 2e
+    jour d'une absence de trois semaines produirait ~30 000 messages Discord. Meme garde
+    anti-faux-positif que le flatten (CONFIRM_READS lectures a LOOP_S d'intervalle).
+    """
+    muet_depuis = next_consecutive(bot_silencieux(age), muet_depuis)
+    if ready_to_act(muet_depuis) and not alerte_posee:
+        alert(LEVEL_CRITICAL, f"bot SILENCIEUX depuis {int(age)}s "
+                              f"(heartbeat > {HEARTBEAT_MAX_S}s) - dry-run a l'arret ?")
+        return muet_depuis, True
+    if muet_depuis == 0 and alerte_posee:
+        alert(LEVEL_WARNING, "bot de nouveau vivant (heartbeat frais)")
+        return muet_depuis, False
+    return muet_depuis, alerte_posee
+
+
 def main_loop() -> None:
     """Boucle 60 s : controle heartbeat + exposition, 2 lectures avant d'agir (M10)."""
     client = _make_client()
     consecutive = 0
+    muet_depuis, alerte_posee = 0, False
     while True:
         try:
             age = heartbeat_age(_heartbeat_path())
             holdings = open_exposure(client) if client is not None else []
+            # ALERTE : independante de l'exposition (sinon muette en dry-run, cf.
+            # bot_silencieux). FLATTEN : exige toujours une exposition (is_breach).
+            muet_depuis, alerte_posee = surveiller_liveness(age, muet_depuis, alerte_posee)
             consecutive = next_consecutive(is_breach(age, holdings), consecutive)
             if ready_to_act(consecutive):
                 _handle_breach(client, holdings, age)

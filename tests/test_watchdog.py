@@ -150,3 +150,56 @@ def test_alerte_sans_webhook_est_signalee_pas_silencieuse(monkeypatch, caplog):
     with caplog.at_level("ERROR"):
         watchdog.alert(watchdog.LEVEL_CRITICAL, "bot mort")
     assert "ALERTE NON ENVOYEE" in caplog.text
+
+
+# ---- alerte de liveness independante de l'exposition (correctif 2026-08-07) ----
+def test_bot_silencieux_nexige_aucune_exposition():
+    """LE correctif : en dry-run sans clefs ccxt, holdings est TOUJOURS vide, donc
+    is_breach TOUJOURS faux — le watchdog n'alertait jamais, meme bot mort."""
+    vieux = watchdog.HEARTBEAT_MAX_S + 1
+    assert watchdog.is_breach(vieux, []) is False        # inchange : pas de flatten a vide
+    assert watchdog.bot_silencieux(vieux) is True        # mais on ALERTE quand meme
+
+
+def test_bot_silencieux_faux_si_heartbeat_frais():
+    assert watchdog.bot_silencieux(watchdog.HEARTBEAT_MAX_S - 1) is False
+
+
+def _alertes(monkeypatch):
+    recu = []
+    monkeypatch.setattr(watchdog, "alert", lambda lvl, msg: recu.append((lvl, msg)))
+    return recu
+
+
+def test_liveness_alerte_une_seule_fois_par_episode(monkeypatch):
+    """Un bot mort le 2e jour d'une absence de 3 semaines ne doit pas produire
+    ~30 000 messages Discord."""
+    recu = _alertes(monkeypatch)
+    vieux = watchdog.HEARTBEAT_MAX_S + 1
+    muet, pose = 0, False
+    for _ in range(50):
+        muet, pose = watchdog.surveiller_liveness(vieux, muet, pose)
+    assert len(recu) == 1
+    assert recu[0][0] == watchdog.LEVEL_CRITICAL
+    assert "SILENCIEUX" in recu[0][1]
+
+
+def test_liveness_attend_la_confirmation(monkeypatch):
+    """Anti-faux-positif : CONFIRM_READS lectures avant d'alerter, comme le flatten."""
+    recu = _alertes(monkeypatch)
+    vieux = watchdog.HEARTBEAT_MAX_S + 1
+    muet, pose = watchdog.surveiller_liveness(vieux, 0, False)
+    assert recu == []                                    # 1re lecture : on n'alerte pas
+    muet, pose = watchdog.surveiller_liveness(vieux, muet, pose)
+    assert len(recu) == 1                                # 2e lecture : alerte
+
+
+def test_liveness_signale_la_reprise(monkeypatch):
+    recu = _alertes(monkeypatch)
+    vieux, frais = watchdog.HEARTBEAT_MAX_S + 1, 0.0
+    muet, pose = 0, False
+    for _ in range(3):
+        muet, pose = watchdog.surveiller_liveness(vieux, muet, pose)
+    muet, pose = watchdog.surveiller_liveness(frais, muet, pose)
+    assert pose is False
+    assert [lvl for lvl, _ in recu] == [watchdog.LEVEL_CRITICAL, watchdog.LEVEL_WARNING]
