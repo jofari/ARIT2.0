@@ -152,9 +152,17 @@ def alert(level, msg) -> None:
                      "ALERTE NON ENVOYEE", WEBHOOK_ENV)
         return
     try:
-        requests.post(url, json={"content": line}, timeout=HTTP_TIMEOUT_S)
+        rep = requests.post(url, json={"content": line}, timeout=HTTP_TIMEOUT_S)
     except Exception as exc:
-        logger.error("watchdog: webhook echec (%s)", exc)
+        logger.error("watchdog: webhook echec (%s) - ALERTE NON ENVOYEE", exc)
+        return
+    # Le code HTTP n'etait pas verifie (2026-08-07) : un webhook revoque (401), supprime
+    # (404) ou limite (429) renvoie une reponse SANS lever, donc l'alerte disparaissait en
+    # silence. Meme classe de panne que celles corrigees ce jour — un filet de securite ne
+    # doit jamais echouer sans le dire. L'URL n'est JAMAIS journalisee (c'est un secret).
+    if rep.status_code >= 300:
+        logger.error("watchdog: webhook refuse (HTTP %s) - ALERTE NON ENVOYEE : %s",
+                     rep.status_code, (rep.text or "")[:200])
 
 
 def flatten(ccxt_client, holdings) -> None:

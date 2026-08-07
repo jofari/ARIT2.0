@@ -194,6 +194,42 @@ def test_liveness_attend_la_confirmation(monkeypatch):
     assert len(recu) == 1                                # 2e lecture : alerte
 
 
+def _post_qui_repond(monkeypatch, code, texte=""):
+    class _Rep:
+        status_code = code
+        text = texte
+    monkeypatch.setattr(watchdog, "_webhook_url", lambda: "https://exemple/hook")
+    monkeypatch.setattr(watchdog.requests, "post", lambda *a, **k: _Rep())
+
+
+def test_webhook_refuse_est_journalise(monkeypatch, caplog):
+    """Un webhook revoque (401) / supprime (404) / limite (429) renvoie une reponse SANS
+    lever : l'alerte disparaissait en silence. Un filet de securite ne doit jamais
+    echouer sans le dire."""
+    _post_qui_repond(monkeypatch, 401, "Unauthorized")
+    with caplog.at_level("ERROR"):
+        watchdog.alert(watchdog.LEVEL_CRITICAL, "bot mort")
+    assert "ALERTE NON ENVOYEE" in caplog.text
+    assert "401" in caplog.text
+
+
+def test_webhook_accepte_ne_journalise_pas_d_erreur(monkeypatch, caplog):
+    _post_qui_repond(monkeypatch, 204)          # Discord repond 204 sur succes
+    with caplog.at_level("ERROR"):
+        watchdog.alert(watchdog.LEVEL_WARNING, "test")
+    assert "ALERTE NON ENVOYEE" not in caplog.text
+
+
+def test_webhook_injoignable_est_journalise(monkeypatch, caplog):
+    monkeypatch.setattr(watchdog, "_webhook_url", lambda: "https://exemple/hook")
+    def _boom(*a, **k):
+        raise OSError("reseau coupe")
+    monkeypatch.setattr(watchdog.requests, "post", _boom)
+    with caplog.at_level("ERROR"):
+        watchdog.alert(watchdog.LEVEL_CRITICAL, "bot mort")
+    assert "ALERTE NON ENVOYEE" in caplog.text
+
+
 def test_liveness_signale_la_reprise(monkeypatch):
     recu = _alertes(monkeypatch)
     vieux, frais = watchdog.HEARTBEAT_MAX_S + 1, 0.0
