@@ -118,3 +118,35 @@ def test_flatten_enabled_env(monkeypatch):
     assert watchdog._flatten_enabled() is False
     monkeypatch.delenv(watchdog.FLATTEN_ENV, raising=False)
     assert watchdog._flatten_enabled() is False
+
+
+# ------------- webhook : environnement OU .env (correctif 2026-08-07) -------------
+def test_webhook_prend_l_environnement_en_priorite(monkeypatch):
+    monkeypatch.setenv(watchdog.WEBHOOK_ENV, "https://exemple/hook-env")
+    assert watchdog._webhook_url() == "https://exemple/hook-env"
+
+
+def test_webhook_retombe_sur_le_fichier_env(monkeypatch, tmp_path):
+    """LE correctif : les secrets ne vivent que dans .env et rien ne les chargeait dans
+    l'environnement des services lances par start_arit.py. alert() sortait en SILENCE."""
+    monkeypatch.delenv(watchdog.WEBHOOK_ENV, raising=False)
+    env = tmp_path / ".env"
+    env.write_text('# commentaire\nAUTRE=x\n'
+                   f'{watchdog.WEBHOOK_ENV}="https://exemple/hook-fichier"\n', encoding="utf-8")
+    monkeypatch.setattr(watchdog, "__file__", str(tmp_path / "services" / "watchdog.py"))
+    assert watchdog._webhook_url() == "https://exemple/hook-fichier"
+
+
+def test_webhook_absent_partout_est_none(monkeypatch, tmp_path):
+    monkeypatch.delenv(watchdog.WEBHOOK_ENV, raising=False)
+    monkeypatch.setattr(watchdog, "__file__", str(tmp_path / "services" / "watchdog.py"))
+    assert watchdog._webhook_url() is None
+
+
+def test_alerte_sans_webhook_est_signalee_pas_silencieuse(monkeypatch, caplog):
+    """Une alerte non envoyee doit laisser une trace : c'est la panne la plus couteuse
+    possible pour un filet de securite, elle ne doit jamais etre muette."""
+    monkeypatch.setattr(watchdog, "_webhook_url", lambda: None)
+    with caplog.at_level("ERROR"):
+        watchdog.alert(watchdog.LEVEL_CRITICAL, "bot mort")
+    assert "ALERTE NON ENVOYEE" in caplog.text

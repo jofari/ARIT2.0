@@ -403,3 +403,38 @@ surveille le heartbeat, il ne relance aucun service. Créé :
 
 ### État après cette session
 **356 tests verts** (320 → 356), ruff propre. Parité live/backtest **comblée**.
+
+### Correctif du 07/08 au soir — la remontée Discord était morte
+
+Découvert en vérifiant la décision V2 juste après le lancement.
+
+**`watchdog.alert()` sortait en silence.** Il lisait `DISCORD_WEBHOOK_URL` dans
+`os.environ` (`services/watchdog.py`), mais la variable n'existe **dans aucune portée**
+Windows — ni `User`, ni `Machine`, ni process. Les secrets ne vivent que dans `.env`, et
+**rien ne chargeait `.env`** dans l'environnement des services lancés par `start_arit.py`.
+Le watchdog tournait, ne trouvait pas d'URL, et retournait sur `if not url: return`. C'est
+la panne la plus coûteuse possible pour un filet de sécurité : muette.
+
+Corrigé par `watchdog._webhook_url()` — environnement d'abord, sinon relecture directe de
+`.env`. **Lecture inline, sans import** : l'invariant M10 nº1 interdit tout import du projet
+à ce fichier et assume explicitement la duplication. Une alerte non envoyée journalise
+désormais `ALERTE NON ENVOYEE` au lieu de disparaître. 4 tests ajoutés.
+
+Le secret n'a **pas** été recopié dans les variables d'environnement Windows : le registre
+les expose à tout process enfant et à tout dump, alors que `.env` est la source unique
+documentée.
+
+### Constat non corrigé — `services/discord_bot.py` ne démarre pas
+
+Le fichier n'a **aucun point d'entrée** : ni `if __name__ == "__main__"`, ni `client.run()`,
+ni instanciation de `Client`. C'est une bibliothèque de fonctions (testée) que
+`start_arit.py` lance comme un service — le process se termine donc aussitôt. Vérifié après
+lancement : seuls `watchdog.py` et `freqtrade` tournent.
+
+**Volontairement non corrigé le 07/08** : écrire et brancher un service Discord la veille
+d'une déconnexion, sans personne pour le surveiller, est exactement le risque qu'on cherche
+à éviter. Sans conséquence sur la décision V2 : les alertes critiques viennent du
+**watchdog**, pas de ce bot. Ce que M09 apporterait — le digest quotidien — est précisément
+ce que Jonas a décliné en choisissant « critiques seulement ».
+
+À traiter au retour, avec le reste de M09.

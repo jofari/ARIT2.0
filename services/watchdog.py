@@ -115,12 +115,41 @@ def open_exposure(ccxt_client) -> list:
 
 
 # ----------------------------------------------------------------- actions
+def _webhook_url():
+    """URL du webhook : environnement d'abord, sinon .env lu DIRECTEMENT.
+
+    Lecture inline et non `services/env_local.py` : M10 invariant 1 interdit tout import du
+    projet a ce fichier, et assume explicitement la duplication (cf. ses constantes). Le
+    dernier filet ne doit dependre de rien.
+
+    Sans cette relecture, `alert()` sortait en SILENCE (2026-08-07) : les secrets ne vivent
+    que dans `.env`, que rien ne chargeait dans l'environnement des services lances par
+    start_arit.py. Le watchdog tournait, ne voyait pas d'URL, et n'alertait jamais — la
+    panne la plus couteuse possible pour un filet de securite.
+    """
+    url = os.environ.get(WEBHOOK_ENV)
+    if url:
+        return url.strip()
+    try:
+        lignes = (Path(__file__).resolve().parents[1] / ".env").read_text(
+            encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for ligne in lignes:
+        ligne = ligne.strip()
+        if ligne.startswith(f"{WEBHOOK_ENV}="):
+            return ligne.split("=", 1)[1].strip().strip('"').strip("'") or None
+    return None
+
+
 def alert(level, msg) -> None:
     """Webhook Discord direct + log local (le watchdog est auditable, M10 invariant 3)."""
     line = f"[watchdog][{level}] {msg}"
     logger.warning(line)
-    url = os.environ.get(WEBHOOK_ENV)
+    url = _webhook_url()
     if not url:
+        logger.error("watchdog: aucun webhook (%s absent de l'env ET de .env) - "
+                     "ALERTE NON ENVOYEE", WEBHOOK_ENV)
         return
     try:
         requests.post(url, json={"content": line}, timeout=HTTP_TIMEOUT_S)
