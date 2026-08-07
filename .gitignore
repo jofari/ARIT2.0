@@ -45,3 +45,8 @@ RAPPORT_TRADES*.html
 # interet : elle marche sans reseau et survit a un clone). Seul le cache ForexFactory,
 # qui est de la donnee fetchee et rafraichie chaque semaine, est ignore.
 user_data/calendar/forexfactory_week.json
+
+# Veille locale du dry-run (scripts/veille_quotidienne.py) : constats horodates
+# dependant de user_data/, donc non reproductibles hors de la machine de Jonas.
+# research/veille/ (SANS _locale) reste versionne : livrables de la vague 1.
+research/veille_locale/
