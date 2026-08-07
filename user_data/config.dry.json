@@ -1,6 +1,8 @@
 {
     "dry_run": true,
     "dry_run_wallet": 10000,
+    "initial_state": "running",
+    "logfile": "user_data/logs/freqtrade.log",
     "stake_currency": "USDT",
     "stake_amount": "unlimited",
     "tradable_balance_ratio": 0.99,

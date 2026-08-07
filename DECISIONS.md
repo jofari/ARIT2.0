@@ -472,3 +472,39 @@ Même garde anti-faux-positif que le flatten (`CONFIRM_READS` lectures). 6 tests
 (fichier toujours daté du 31/07) et n'a créé ni base dry-run ni journal du jour. Le bot n'a
 donc pas atteint sa première boucle. À diagnostiquer avant de considérer le dry-run comme
 lancé — un bot qui ne bat pas ne collecte rien.
+
+### Correctif du 07/08 (3) — LE bug qui rendait tout le reste inutile
+
+Diagnostic du heartbeat manquant, en relançant freqtrade au premier plan :
+
+```
+freqtrade.worker - INFO - Changing state to: STOPPED
+freqtrade.worker - INFO - Bot heartbeat. PID=14768, state='STOPPED'
+```
+
+Le bot démarrait **parfaitement** — stratégie résolue, wallets synchronisés, 4 paires,
+protections chargées — puis passait en état **STOPPED** et y restait.
+
+**Cause** : `user_data/config.dry.json` ne contenait pas `initial_state`, et le défaut de
+freqtrade est `stopped`. L'omission ne produit **aucune erreur** : les logs ont l'air sains,
+le process tourne, il n'évalue simplement rien. Et sans FreqUI (`config.api.json` absent) ni
+API REST, **rien ne pouvait le démarrer** : il serait resté figé toute l'absence.
+
+C'est ce qui explique tout le reste — pas de heartbeat, pas de base dry-run, pas de journal
+du jour.
+
+**Corrigé** : `"initial_state": "running"` + `"logfile": "user_data/logs/freqtrade.log"`.
+Le logfile n'est pas cosmétique : sans lui, un run non surveillé est indiagnosticable a
+posteriori — il a fallu relancer au premier plan pour voir cette ligne.
+
+**`tests/test_config_dry.py` créé** (5 tests) : aucun test ne validait la config déployée,
+c'est précisément pour ça que le bug était invisible. Verrouillés désormais : `dry_run`
+vrai, `initial_state` running, logfile présent, futures + paires perpétuelles, aucune clef
+API en dur.
+
+### Note — « clefs ccxt absentes » n'est PAS un problème
+
+Le message du watchdog est **attendu** en dry-run : sans clefs, pas de lecture d'exposition
+ni de *flatten*, ce qui n'a aucun sens sur de l'argent papier. Aucune clef d'exchange réelle
+n'a été ajoutée pour un run en dry — ce serait un risque gratuit. Seule conséquence réelle,
+déjà corrigée ci-dessus : l'alerte de liveness ne devait pas dépendre de l'exposition.
