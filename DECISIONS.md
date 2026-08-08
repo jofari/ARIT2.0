@@ -561,3 +561,36 @@ ce sont les seuls chantiers réalisables **sans les données locales**, `user_da
   `config.api.json` généré, gitignoré, sur `127.0.0.1:8080` uniquement.
 - **`scripts/suivi.py`** : montre les setups **envisagés puis refusés** avec l'écart au
   seuil — ce que FreqUI ne montre pas, et qui est la matière première de B8/B9.
+
+### Routine cloud ARMÉE — 2026-08-08
+
+GitHub connecté par Jonas, la routine est créée et active.
+
+| | |
+|---|---|
+| Nom | **ARIT — vague 1 méthodologie (absence Jonas)** |
+| ID | `trig_01LarM6hDoUtTrESnVqGRxdM` |
+| Cadence | lundi et jeudi, 06:00 UTC (08:00 Paris) |
+| Prochaine | 2026-08-10 08:03 Paris |
+| Modèle | `claude-opus-5` |
+| Suivi | https://claude.ai/code/routines/trig_01LarM6hDoUtTrESnVqGRxdM |
+
+**Connecteurs MCP retirés** (`mcp_connections: []`). L'API avait rattaché
+automatiquement Gmail, Google Calendar et Canva ; un agent autonome tournant trois
+semaines sans surveillance n'a aucun besoin d'accéder à une boîte mail. Il ne dispose que
+du dépôt et de ses outils de fichiers.
+
+**Garde-fous inscrits dans le prompt** : jamais de push sur `main` (branche
+`veille/vague1` + PR en draft), aucune modification de `user_data/strategies/**`,
+`services/**`, `download_macro.py` ni des configs — un dry-run tourne sur la machine de
+Jonas et rien ne doit pouvoir l'atteindre — et interdiction de **conclure** sur l'edge.
+Périmètre : B6 d'abord (préenregistrement), puis B2, B4, B5.
+
+**Mémoire entre exécutions** : `research/veille/JOURNAL.md`. Chaque run repart de zéro,
+lit ce fichier, continue le travail entamé et y ajoute une entrée datée. Les livrables
+vont dans `research/veille/` (versionné), jamais dans `research/veille_locale/`
+(gitignoré, réservé à la veille locale).
+
+Une exécution de vérification a été déclenchée le 08/08 à 17:37 (session
+`cse_01NVY6e4gu2z8rnoGAS7SMP2`) plutôt que d'attendre trois semaines pour découvrir un
+éventuel échec.
