@@ -184,3 +184,45 @@ ouverte**. Un redémarrage sans reconnexion automatique arrête tout jusqu'au re
 Des **évaluations journalisées** (`user_data/logs/decisions/`), qui étaient à zéro. C'est le
 prérequis de B8 (N ≥ 400 signaux), B9 (audit d'IC des 5 scores) et de toute piste ML. Le
 dry-run ne valide **aucune** hypothèse : il collecte.
+
+## MISE À JOUR DU 2026-08-08 — bloquant nº2 fermé, et ce que le dry-run peut/ne peut pas produire
+
+**Données OHLCV futures : FERMÉ.** Les 4 paires sont désormais en 5m/1h/4h/1d
+(24 fichiers, 69 Mo). 4h : 12 273 bougies par paire du 2021-01-01 au 2026-08-08 ;
+BTC 5m : 727 458 bougies. Débloque les backtests futures et `check_bias.py`.
+
+### Le dry-run ne produira PAS de statistiques de trades — c'est arithmétique
+
+79 trades sur 2 040 jours = **0,039 trade/jour**. Sur trois semaines :
+
+> **0,81 trade attendu.** Zéro est le résultat le plus probable, pas une anomalie.
+
+Attendre des sorties, des `r_final` ou des MFE/MAE de ce dry-run était exclu dès le
+départ. Le chantier « sortie » continue de reposer sur les 79 trades du backtest, qui
+portent déjà `mae_r`/`mfe_r`.
+
+### Ce qu'il produit, en revanche, est exploitable
+
+~420 **évaluations** (≈ 20/jour après une captation mesurée à 83 %). Chacune est un
+vecteur de features complet et horodaté : 5 scores, 63 motifs de bougie, `rr_dispo`,
+ADX, EMA50/200, régime macro, `direction_macro`, conviction, seuil.
+
+⚠️ **Le prix est reconstituable** : `close_4h = ema50_4h + close_vs_ema`, les deux étant
+dans `regime_inputs`. C'est ce qui rend chaque évaluation raccordable à un rendement
+futur, donc étiquetable par triple barrière **sans aucun trade**. Sans cette propriété,
+trois semaines de collecte seraient inexploitables.
+
+Alimente directement **B1** (modèle nul, mesuré sur bougies), **B9** (IC des 5 scores :
+corrélation score ↔ rendement futur) et toute méta-labellisation.
+
+**À faire au retour** : relancer un `freqtrade download-data` pour étendre l'OHLCV
+jusqu'à la date du retour — les données s'arrêtent au 2026-08-08, il faut le futur des
+évaluations pour les étiqueter.
+
+### Captation à 83 % — constaté, non corrigé
+
+Sur 6 blocs 4h : 20 paires-évaluations sur 24. `_journal_evaluation` n'écrit que si
+`new_4h` est vrai sur la dernière ligne ; selon l'ordre de rafraîchissement des paires,
+certaines passent à côté. **Non corrigé volontairement** : la garde `new_4h` existe pour
+empêcher deux évaluations du même setup (docs/11 §11.2), un correctif naïf créerait des
+doublons. À traiter au retour, avec la mesure en main.
