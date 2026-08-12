@@ -74,11 +74,11 @@ Aucune ne demande plus de dix minutes de réflexion, toutes bloquent quelque cho
 
 ---
 
-## D. Branche macro (MacroFlip) — quatre chantiers identifiés, aucun lancé
+## D. Branche macro (MacroFlip) — quatre chantiers identifiés, D1 abandonné le 12/08
 
 | # | Chantier | Gain mesuré |
 |---|---|---|
-| D1 | **Passer les jambes longues en spot** au lieu du perpétuel | **+267 % → +579 %** — le seul levier déjà mesuré et jamais appliqué |
+| D1 | ~~**Passer les jambes longues en spot** au lieu du perpétuel~~ | **FERMÉ — ABANDONNÉ le 12/08 par Jonas.** Le +267 % → +579 % n'est pas un edge : il mesure l'alternance bull/bear de la période. Motif complet : `DECISIONS.md` § 12/08 |
 | D2 | Walk-forward des 5 seuils macro (calibrer 2020-2022, tester 2023-2026) | prérequis explicite avant tout dry-run |
 | D3 | Ablation des 5 composants macro (lequel porte le signal ?) | — |
 | D4 | Augmenter n (ETH/SOL/BNB, ou variante flat-neutre à 134 trades) | p = 0,095 sur 12 trades est indéfendable |

@@ -605,6 +605,53 @@ Une exécution de vérification a été déclenchée le 08/08 à 17:37 (session
 
 ---
 
+## Session du 2026-08-12 — D1 ABANDONNÉ (décision de Jonas)
+
+| # | Décision de Jonas | État |
+|---|---|---|
+| D1 | **Passer les jambes longues en spot : abandonné, aucun intérêt.** La surperformance mesurée ne vient pas du spot, elle vient de l'alternance **bull run / bear run** de la période | **fermé — abandonné** |
+
+### Le motif, et pourquoi il est recevable
+
+Le chiffre qui portait D1 depuis un mois — **+267 % → +579 %** — comparait deux courbes sur
+2020-2026, une période dominée par un bull run majeur. Une jambe longue en spot **conserve
+l'actif** ; sur une période où l'actif est multiplié, elle capte mécaniquement cette hausse.
+Ce n'est pas la stratégie qui s'améliore, c'est le **bêta** qui entre dans la mesure.
+
+C'est exactement le biais que le projet s'interdit ailleurs : *sur un substrat à espérance
+nulle, tout ce qui augmente l'exposition longue paraît positif tant que le marché monte*.
+Le raisonnement qui a fermé C2 (porte spread) ferme D1 pour la même raison.
+
+### Ce que ça généralise — critère de rejet à réutiliser
+
+> Tout gain mesuré en direction longue sur 2020-2026 doit être comparé au **buy-and-hold**
+> de la même période, pas à zéro. Ce qui ne bat pas le hold ne mesure pas un edge, il mesure
+> le marché.
+
+À appliquer d'office à toute candidate du banc d'essai (F1) : sans cette référence, un banc
+qui compare des stratégies longues entre elles couronnera la plus exposée.
+
+### Résidu factuel, consigné sans rouvrir D1
+
+Un écart spot/perp subsiste indépendamment du bull/bear : la jambe longue en perpétuel
+**paie le funding** quand celui-ci est positif, ce qui est le régime habituel en tendance
+haussière. Cet écart-là est un coût mécanique, pas du bêta. Il est noté ici pour ne pas être
+redécouvert dans six mois — **il ne justifie pas de rouvrir D1** : le sens du coût est déjà
+capté par la mesure « funding = 86 % du profit » de MacroFlip, et D1 telle qu'elle était
+formulée reposait sur un chiffre qui, lui, ne mesurait rien.
+
+### Conséquence sur la liste D
+
+D1 sort. **D2 (walk-forward des 5 seuils macro) devient le chantier D le plus urgent** — il
+est déjà déclaré prérequis du dry-run depuis juillet et n'a jamais été fait.
+
+⚠️ **Collision de noms, comme pour C6 en août** : le `D1` fermé ici est celui de la liste D
+de `CHANTIERS.md` (MacroFlip). Les `D1-D6` de `for claude build/REPRISE.md` et
+`RAPPORT_PROTOCOLE_AB.md` sont une numérotation **différente** (décisions d'un rapport de
+juillet) et ne sont pas concernés.
+
+---
+
 ## Session du 2026-08-12 — idée déposée par Jonas : banc d'essai de stratégies (F1)
 
 > **Statut : DÉPOSÉ, NON TRANCHÉ.** Aucune ligne de code écrite. Cette section existe pour
