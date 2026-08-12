@@ -234,6 +234,7 @@ doublons. À traiter au retour, avec la mesure en main.
 | # | Idée | Origine | Statut | Détail |
 |---|---|---|---|---|
 | F1 | **Banc d'essai de stratégies** — un module qui fait tourner d'autres stratégies que AritV1 sur le même protocole, pour comparer les rendements et **diversifier les formes d'investissement** (mean-reversion, portage/funding, macro seule, spot vs perp) | Jonas, 12/08 | **déposé, non tranché** | `DECISIONS.md` § « Session du 2026-08-12 » |
+| F2 | **Observabilité à distance du dry-run** — aujourd'hui nulle : FreqUI est sur `127.0.0.1`, toutes les traces sont gitignorées, et le seul signal distant est l'absence d'alerte Discord (qui ne distingue pas « bot sain » de « session Windows fermée »). Pistes : bot **Telegram natif** de freqtrade (`/status`, `/profit`, `/daily`, aucun port ouvert) — c'est aussi ce que M09 devait apporter — ou **Tailscale / Cloudflare Tunnel** (FreqUI reste sur `127.0.0.1` et devient joignable sans exposition publique). ❌ **Jamais** `listen_ip_address: 0.0.0.0` + redirection de port : l'API porte `/forceexit`, `/forcebuy`, `/stop` | Jonas, 12/08 | **déposé, non tranché** | `DECISIONS.md` § « Observabilité ajoutée le même soir » |
 
 ⚠️ F1 a trois prérequis non négociables, écrits dans `DECISIONS.md` : B2 (correction
 Benjamini-Hochberg), B5 (hold-out scellé), B6 (`EXPERIMENTS.jsonl`). Un banc d'essai sans

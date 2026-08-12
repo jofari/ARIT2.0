@@ -562,6 +562,14 @@ ce sont les seuls chantiers réalisables **sans les données locales**, `user_da
 - **`scripts/suivi.py`** : montre les setups **envisagés puis refusés** avec l'écart au
   seuil — ce que FreqUI ne montre pas, et qui est la matière première de B8/B9.
 
+> ⚠️ **Angle mort constaté le 12/08 : l'observabilité est intégralement locale.** Jonas,
+> depuis une autre machine, n'a accès à **rien** — FreqUI est sur `127.0.0.1`, et toutes les
+> traces du dry-run sont gitignorées (`user_data/decisions/`, `logs/`, la base dry-run,
+> `research/veille_locale/`). Le seul signal distant est l'**absence** d'alerte Discord du
+> watchdog, qui ne distingue pas « le bot va bien » de « la session Windows est fermée
+> depuis trois jours, watchdog compris ». Ce n'est pas un bug : c'est le dispositif tel que
+> décidé (V2, « critiques seulement »), dont la conséquence n'avait pas été énoncée.
+
 ### Routine cloud ARMÉE — 2026-08-08
 
 GitHub connecté par Jonas, la routine est créée et active.
