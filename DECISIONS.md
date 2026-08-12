@@ -594,3 +594,77 @@ vont dans `research/veille/` (versionné), jamais dans `research/veille_locale/`
 Une exécution de vérification a été déclenchée le 08/08 à 17:37 (session
 `cse_01NVY6e4gu2z8rnoGAS7SMP2`) plutôt que d'attendre trois semaines pour découvrir un
 éventuel échec.
+
+---
+
+## Session du 2026-08-12 — idée déposée par Jonas : banc d'essai de stratégies (F1)
+
+> **Statut : DÉPOSÉ, NON TRANCHÉ.** Aucune ligne de code écrite. Cette section existe pour
+> que l'idée ne meure pas dans une conversation ; elle attend un arbitrage de Jonas.
+
+### L'idée, telle que formulée
+
+Un **module « stratégie »** qui permette de tester **d'autres stratégies que celle
+actuellement appliquée** (AritV1), afin de :
+1. trouver celle qui a le **meilleur rendement** ;
+2. **diversifier les formes d'investissement** (ne pas dépendre d'une seule mécanique).
+
+### Pourquoi ça tombe au bon moment
+
+Le diagnostic du 04/08 est sans appel : l'entrée d'AritV1 n'a **aucun edge directionnel**
+(MFE > MAE sur 47 % des trades = pile ou face), et la seule paire positive du dernier
+backtest est SOL — retirer SOL rend le système franchement perdant. Continuer à réparer
+une seule mécanique dont le substrat est à espérance nulle est un pari sur une seule carte.
+Un banc d'essai transforme « réparer AritV1 » en « chercher quelle famille de signal porte
+de l'information », ce qui est la vraie question ouverte depuis le 19/07.
+
+L'infrastructure existe déjà et n'est pas exploitée : `freqtrade backtesting` accepte
+`--strategy-list`, le journal JSONL décrit chaque décision, `research/` accueille déjà les
+runs indexés, et `optuna` + `plotly` sont installés depuis C9.
+
+### Périmètre proposé (à valider, pas à coder en l'état)
+
+| Brique | Rôle |
+|---|---|
+| Socle commun | `arit_lib` reste partagé (risque, journal, contrats). Une stratégie candidate ne réécrit **que** son signal d'entrée/sortie |
+| Registre | une liste déclarée de stratégies candidates, chacune isolée dans son fichier, aucune n'ayant le droit de toucher `AritV1.py` |
+| Banc | un runner qui lance les N candidates sur la **même** période, les mêmes paires, le même `--timeframe-detail 5m` et `--enable-protections`, et sort un tableau comparable |
+| Verdict | métriques imposées identiques pour toutes : PF, Sharpe, MDD **et durée du DD**, N trades, MFE vs MAE, dégradation IS→OOS |
+| Diversification | mesurer la **corrélation des courbes d'équity** entre candidates : deux stratégies rentables et corrélées à 0,9 n'apportent rien |
+
+Familles envisageables pour la diversification (à préenregistrer une par une, pas en bloc) :
+mean-reversion (opposé structurel d'AritV1 qui est un suiveur), portage / funding (déjà
+identifié comme 86 % du profit sur MacroFlip), macro seule sans couche technique, spot vs
+perpétuel (rejoint D1, +267 % → +579 % mesuré et jamais appliqué).
+
+### Les trois risques, dits avant et pas après
+
+1. **P-hacking industrialisé.** Un banc d'essai est une machine à multiplier les tests. Le
+   compteur d'essais est déjà à ≥ 30 (B6) et la correction Benjamini-Hochberg (B2) n'a
+   jamais été appliquée. **Sans budget de tests déclaré à l'avance, ce module produira des
+   gagnants qui sont du bruit** — et il en produira d'autant plus qu'il est efficace.
+   ⇒ **B2 + B5 (hold-out scellé) + B6 (EXPERIMENTS.jsonl) sont des prérequis, pas des
+   compléments.** Le banc doit refuser de tourner sur le hold-out.
+2. **Interdit n°5.** Le banc ne doit jamais devenir un contournement de l'interdiction
+   d'hyperopter G1-G7 et les poids : comparer des stratégies ≠ optimiser des seuils.
+3. **Ordre de priorité.** La parité live/backtest — bloquant historique — a été **comblée le
+   07/08**, donc F1 n'est plus derrière elle. Ce qui passe devant maintenant : la **routine
+   cloud vague 1** (armée le 08/08) traite justement B2/B4/B5/B6, c'est-à-dire les prérequis
+   du banc. F1 se branche naturellement **derrière elle**, pas en parallèle. Reste aussi le
+   trou de données OHLCV futures (3 paires sur 4) : sans elles, un banc comparerait les
+   candidates sur BTC seul, or c'est précisément la paire la plus perdante du dernier run.
+
+### Ce que ça débloque / ce que ça coûte
+
+Débloque : une réponse chiffrée à « faut-il réparer AritV1 ou en changer », et un support
+concret à la diversification demandée. Coûte : M (plusieurs jours), et la discipline
+statistique ci-dessus, sans laquelle le gain est négatif.
+
+### À valider par toi
+
+1. On ouvre F1 ? Si oui, **avant ou après** la fin de la routine cloud vague 1 (B2/B4/B5/B6) ?
+2. D'accord pour que B2/B5/B6 soient des **prérequis bloquants** du banc ?
+3. Quelles familles tu veux voir en premier (mean-reversion, portage/funding, macro seule,
+   spot vs perp) ?
+4. Le dry-run tourne pendant ton absence et remplit `user_data/decisions/`. Ces évaluations
+   servent-elles de premier jeu de comparaison pour le banc, ou on reste sur backtest seul ?

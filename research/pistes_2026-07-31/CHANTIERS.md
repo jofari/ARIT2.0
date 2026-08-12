@@ -226,3 +226,19 @@ Sur 6 blocs 4h : 20 paires-évaluations sur 24. `_journal_evaluation` n'écrit q
 certaines passent à côté. **Non corrigé volontairement** : la garde `new_4h` existe pour
 empêcher deux évaluations du même setup (docs/11 §11.2), un correctif naïf créerait des
 doublons. À traiter au retour, avec la mesure en main.
+
+---
+
+# F. Idées déposées, non tranchées
+
+| # | Idée | Origine | Statut | Détail |
+|---|---|---|---|---|
+| F1 | **Banc d'essai de stratégies** — un module qui fait tourner d'autres stratégies que AritV1 sur le même protocole, pour comparer les rendements et **diversifier les formes d'investissement** (mean-reversion, portage/funding, macro seule, spot vs perp) | Jonas, 12/08 | **déposé, non tranché** | `DECISIONS.md` § « Session du 2026-08-12 » |
+
+⚠️ F1 a trois prérequis non négociables, écrits dans `DECISIONS.md` : B2 (correction
+Benjamini-Hochberg), B5 (hold-out scellé), B6 (`EXPERIMENTS.jsonl`). Un banc d'essai sans
+budget de tests déclaré est une machine à fabriquer du bruit statistiquement gagnant.
+Ces trois-là sont précisément le périmètre de la **routine cloud vague 1** armée le 08/08 :
+F1 se branche derrière elle. Second frein, matériel celui-là : les OHLCV futures manquent
+pour 3 paires sur 4, donc un banc lancé aujourd'hui comparerait les candidates sur BTC seul
+— la paire la plus perdante du run du 04/08.
