@@ -243,3 +243,60 @@ Ces trois-là sont précisément le périmètre de la **routine cloud vague 1** 
 F1 se branche derrière elle. Second frein, matériel celui-là : les OHLCV futures manquent
 pour 3 paires sur 4, donc un banc lancé aujourd'hui comparerait les candidates sur BTC seul
 — la paire la plus perdante du run du 04/08.
+
+---
+
+# MISE À JOUR DU 2026-08-12 (soir) — B1, B2 et B9 fermés · le dataset existe
+
+`DECISIONS.md` § « Session du 2026-08-12 (soir) » fait foi. Résumé de ce qui change dans les
+tableaux ci-dessus.
+
+## Le prérequis caché de toute la vague 2 : il n'y avait aucune évaluation
+
+L'évènement `evaluation` — le seul portant le vecteur de features complet — n'est journalisé
+qu'en live (`AritV1.py:61`, `if live:`). Le dry-run n'a jamais tenu une boucle. Décompte sur
+tout `user_data/logs/decisions/` : **0 évaluation**. B8, B9 et toute piste ML étaient donc
+sans données, contrairement à ce qu'annonçait la mise à jour du 08/08.
+
+Résolu par le **rejeu hors-ligne** (`analysis/dataset.py`), qui applique les mêmes fonctions
+pures d'`arit_lib` à 5 ans d'OHLCV : **56 890 évaluations en 69 secondes**, étiquetées par
+triple barrière, hold-out B5 matérialisé en colonne `split`.
+
+## État révisé des chantiers B
+
+| # | Chantier | Statut au 12/08 |
+|---|---|---|
+| B1 | Modèle nul de franchissement de barrière | **FERMÉ** — long E[R] = −0,0123 (p(TP) 33,08 %) · short E[R] = −0,0370 (32,87 %), sur 42 902 bougies |
+| B2 | MDE + budget de tests + Benjamini-Hochberg | **APPLIQUÉ pour la première fois** — `analysis/mesures.py`, FDR 0,10, 29 tests sur 38 survivent. Rétroactif sur juillet : toujours à faire |
+| B5 | Sceller le hold-out 2025-01 → 2026-07 | **APPLIQUÉ** — colonne `split`, 13 932 évaluations scellées, exclues de toute mesure |
+| B8 | `--export signals`, N ≥ 400 signaux | **sans objet sous cette forme** — le rejeu donne 56 890 évaluations. ⚠️ mais seulement **78 signaux** en 5 ans (50 longs + 28 shorts) : le critère d'abandon « N < 250 ⇒ l'edge technique est non testable » est **franchi** |
+| B9 | Audit d'information des 5 scores (IC) | **FERMÉ — critère de passage REMPLI.** 9 features avec \|IC\| ≥ 0,04, signe stable, survivant à BH. Meilleure : `s_structure` (+0,0851) |
+
+## Ce que B9 révèle et qui n'était pas dans le plan
+
+`produit_pondere` (la somme Σ poids·score) a un IC de **+0,0642**, **inférieur à `s_structure`
+seul (+0,0851)** : l'agrégation à poids figés dégrade le meilleur signal en y mélangeant
+`s_sr` (IC −0,0497) et `s_patterns` (−0,0162), qui tirent à l'envers avec des poids positifs.
+
+⇒ B10 (« dé-biaiser le score de volume ») n'est plus le chantier de scoring prioritaire :
+`s_volume` a l'IC le plus faible de tous (+0,0170) et ne mérite pas d'être réparé en premier.
+Ce qui compte est **l'agrégation**, pas un composant.
+
+## Le vrai goulot, révisé
+
+La liste `E` (« ce qui bloque le dry-run ») décrivait des blocages scientifiques. Le blocage
+réel est plus simple et n'y figurait pas :
+
+> **0,16 % des évaluations produisent un signal.** 78 entrées en cinq ans sur quatre paires.
+> Aucun walk-forward (B13/D2), aucune correction de tests multiples, aucun modèle ne peut
+> conclure quoi que ce soit sur 78 observations — quelle que soit la qualité de la méthode.
+
+Augmenter le nombre d'entrées **mesurables** passe donc devant B13/D2 dans l'ordre réel des
+priorités. C'est la question G4 posée à Jonas dans `DECISIONS.md`.
+
+## Conséquence sur F1 (banc d'essai)
+
+Les trois prérequis non négociables de F1 étaient B2, B5 et B6. **B2 et B5 sont faits**
+(`analysis/mesures.py` et la colonne `split`). Reste **B6** (`research/EXPERIMENTS.jsonl`,
+préenregistrement, compteur d'essais honnêtement initialisé à ≥ 30) — c'est désormais le seul
+verrou méthodologique devant le banc.

@@ -723,3 +723,161 @@ statistique ci-dessus, sans laquelle le gain est négatif.
    spot vs perp) ?
 4. Le dry-run tourne pendant ton absence et remplit `user_data/decisions/`. Ces évaluations
    servent-elles de premier jeu de comparaison pour le banc, ou on reste sur backtest seul ?
+
+---
+
+## Session du 2026-08-12 (soir) — G0 : le dataset qui manquait, et ce qu'il mesure
+
+Contexte : Jonas ouvre neuf chantiers d'un coup (boucle d'auto-amélioration, ML au CIO / à
+la documentation / au position manager, quantitatif, interface graphique, banc multi-stratégie,
+tracking retail vs institutionnel, agrégateur de news). Aucun n'était réalisable : ils
+dépendent tous d'un jeu de données qui **n'existait pas**. Cette session le crée et le mesure.
+
+### Constat 1 — le dispositif d'absence a entièrement disparu
+
+Vérifié le 12/08 sur la machine, pas dans la doc :
+
+| Élément armé le 07-08/08 | État constaté le 12/08 |
+|---|---|
+| Tâches `ARIT macro_state` / `download_macro` / `veille` | **aucune** (`Get-ScheduledTask` : 0 résultat) |
+| `%APPDATA%\...\Startup\ARIT_relance.cmd` | **absent** (seul `Ollama.lnk`) |
+| Process freqtrade / watchdog | **aucun** |
+| `user_data/logs/freqtrade.log` | **jamais créé** |
+| `research/veille_locale/`, `research/veille/` | **inexistants** |
+| `macro_state.json` | figé au 04/08 — **8 jours périmé** |
+| Journal de décisions | rien après le `2026-08-04.jsonl` |
+
+Le code des commits du 07-08/08 est intact (git l'a préservé) ; c'est l'**état hors-git** qui
+a disparu — tâches Windows, fichier de démarrage, logs, données collectées. Conséquence
+sèche : **les trois semaines de collecte prévues ont produit zéro donnée.**
+
+⚠️ Rien n'a été relancé : remettre en route un dry-run engage la machine de Jonas et lui
+appartient. À décider (G2 ci-dessous).
+
+### Constat 2 — l'évènement `evaluation` n'a JAMAIS existé, dans aucun run
+
+Le plus coûteux des trois, et il était invisible. `AritV1.py:61` :
+
+```python
+if live:
+    self._journal_evaluation(df, metadata.get("pair"), macro)
+```
+
+L'évènement `evaluation` est le **seul** qui porte le vecteur de features complet (5 scores,
+~63 motifs de bougie, régime, macro, conviction, seuil, RR). Il n'est écrit qu'en live. Le
+live n'a jamais tenu une boucle. Décompte sur la totalité de `user_data/logs/decisions/` :
+
+> `{'entry': 95, 'gate_check': 1427, 'gestion': 4084, 'system': 10}` — **`evaluation` : 0**
+
+Donc B8 (N ≥ 400 signaux), B9 (audit d'IC des 5 scores) et **toute** piste ML étaient sans
+données, alors que `CHANTIERS.md` annonçait « ~420 évaluations » comme acquis de l'absence.
+
+### Ce qui a été livré — collecter par REJEU, pas par dry-run
+
+Jonas proposait de « supprimer des paramètres et des sécurités en dry-run pour permettre plus
+d'entrées ». Le besoin est le bon (il n'y a pas de quoi apprendre), le moyen non : un dry-run
+produit ~20 évaluations/jour et dégrader le live casserait la parité backtest/live comblée le
+07/08. Le rejeu hors-ligne donne le même vecteur, sur 5 ans d'histoire, sans toucher à la
+production.
+
+| Fichier | Rôle |
+|---|---|
+| `analysis/dataset.py` | rejoue `features → regimes → cio` avec les **mêmes fonctions pures** d'`arit_lib`, étiquette chaque évaluation par triple barrière (SL structurel, TP +1,5R) et écrit une table SQLite de 121 colonnes |
+| `analysis/mesures.py` | répond à B1, B9 et B2 sur cette table |
+
+**Résultat : 56 890 évaluations en 69 secondes** (BTC 15 131 · ETH 14 654 · SOL 12 902 ·
+BNB 14 203), là où le projet en avait zéro depuis un an.
+
+Trois garanties structurelles, parce que ce dataset va servir à décider :
+1. **Zéro look-ahead côté features** — le merge 4h/1d passe par
+   `freqtrade.strategy.merge_informative_pair` (le décalage de la production, pas une
+   réimplémentation) ; le régime macro est joint par `attach_macro_regime`, déjà décalé +1 j ;
+   le fichier `macro_state.json` n'est **pas** lu (le lire poserait l'état d'aujourd'hui sur
+   une bougie de 2021).
+2. **Cibles isolées par nom** — toute colonne qui regarde le futur est préfixée `y_`. Un
+   entraînement qui exclut `y_%` ne peut pas fuiter par inattention.
+3. **Hold-out matérialisé (B5)** — colonne `split`, `holdout` à partir du 2025-01-01, exclue
+   de toutes les mesures ci-dessous. 13 932 évaluations mises sous scellé.
+
+### B1 — FERMÉ. Le modèle nul, enfin mesuré
+
+Espérance d'une entrée prise **au hasard** avec la géométrie du système, sur 42 902 bougies au
+lieu de 128 trades :
+
+| Sens | n | p(TP) | p(SL) | E[R] |
+|---|---|---|---|---|
+| long | 42 902 | 33,08 % | 50,85 % | **−0,0123** |
+| short | 42 902 | 32,87 % | 53,01 % | **−0,0370** |
+
+Le substrat est à espérance nulle, légèrement négative. Ce n'était jusqu'ici qu'une phrase de
+doctrine ; c'est maintenant un chiffre, et c'est la référence contre laquelle tout taux de
+réussite doit être lu.
+
+### Le sélecteur d'entrée ne bat pas le hasard — et il est intestable
+
+Binomial exact, unilatéral, contre le p(TP) nul ci-dessus :
+
+| Sens | n | p(TP) | nul | E[R] | p-value | verdict |
+|---|---|---|---|---|---|---|
+| long | **50** | 36,00 % | 33,08 % | −0,080 | 0,381 | non significatif |
+| short | **28** | 39,29 % | 32,87 % | +0,089 | 0,296 | non significatif |
+
+Le diagnostic du 04/08 (« edge d'entrée nul ») est confirmé, cette fois contre un modèle nul
+solide. Mais le chiffre qui compte est **n = 50 et n = 28 sur cinq ans et quatre paires** :
+0,16 % des évaluations donnent un signal. Aucune campagne, aucun walk-forward, aucun modèle ne
+peut rien conclure de 78 observations. **Le problème n° 1 d'ARIT n'est pas que son entrée soit
+mauvaise, c'est qu'elle soit trop rare pour être mesurable.** C'est exactement ce que Jonas
+avait senti en demandant « plus d'entrées ».
+
+### B9 — PASSÉ, et il change la priorité du ML. B2 appliqué pour la première fois
+
+38 tests d'IC de Spearman, corrigés Benjamini-Hochberg à FDR = 0,10 (29 survivent). Critère de
+passage déclaré **avant** la mesure dans `CHANTIERS.md` : |IC| ≥ 0,04 et signe stable entre les
+deux cibles. **9 features passent.**
+
+| Feature | IC vs ret_96h | IC vs r_long | B9 |
+|---|---|---|---|
+| `s_structure` | +0,0518 | **+0,0851** | ✅ |
+| `conviction` | +0,0706 | +0,0637 | ✅ |
+| `trend_dir` | +0,0353 | +0,0646 | ✅ |
+| `produit_pondere` | +0,0348 | +0,0642 | ✅ |
+| `adx4h` | +0,0464 | +0,0321 | ✅ |
+| `s_sr` | −0,0051 | **−0,0497** | ✗ (signe stable, mais **négatif**) |
+| `s_patterns` | −0,0022 | −0,0162 | ✗ |
+| `rr_dispo` | +0,0003 | **−0,0592** | ✗ (signe **instable**) |
+
+Il y a donc de l'information dans les features — faible (IC ~0,05-0,085) mais réelle, et avec
+43 000 observations la largeur compense. Le scoring n'est **pas** vide : le critère d'abandon
+de B9 (« tous < 0,04 ⇒ changer de famille de signal ») n'est pas déclenché.
+
+**Le constat qui décide où mettre le ML** : `produit_pondere` — la somme Σ poids·score — a un
+IC de **+0,0642**, soit **moins bon que `s_structure` seul (+0,0851)**. L'agrégation à poids
+figés dégrade le meilleur signal disponible, parce qu'elle y mélange `s_sr` (IC −0,0497) et
+`s_patterns` (−0,0162) avec des poids positifs. Deux des cinq scores tirent à l'envers.
+
+⇒ Le premier point d'insertion du ML n'est ni le CIO macro, ni le position manager : c'est
+**l'agrégation des scores**, là où de l'information mesurée est détruite par une pondération
+arbitraire. `cio.py` l'annonce d'ailleurs en tête depuis le début (« V2 remplacera
+conviction() derrière la MÊME interface »).
+
+⚠️ **Et c'est un arbitrage de Jonas, pas une évidence technique** : l'interdit n° 5 dit
+« G1-G7 et les poids jamais hyperoptés ». Mesurer un IC n'est pas hyperopter ; remplacer
+l'agrégation par un modèle appris, si. Question ouverte G1 ci-dessous.
+
+### Deux anomalies à ne pas laisser filer
+
+1. **`rr_dispo` a un IC de −0,0592 contre `y_r_long`, avec un signe instable.** C'est la porte
+   `rr_min` (RR ≥ 1,5), l'un des filtres les plus contraignants du système : elle pourrait
+   sélectionner contre le rendement. Non conclu — un IC de rang sur une variable tronquée par
+   sa propre porte demande un traitement à part.
+2. **`s_sr` et `s_patterns` entrent dans la somme avec un poids positif et un IC négatif.**
+   C'est mesurable sans rien recoder : leur retrait est une ablation, pas une optimisation.
+
+### Questions ouvertes pour Jonas — G1 à G4
+
+| # | Question | Pourquoi elle bloque |
+|---|---|---|
+| G1 | Autorise-t-on un modèle appris à remplacer l'agrégation Σ poids·score de `cio.conviction` ? | c'est le point d'insertion ML n° 1 mesuré, et il touche l'interdit n° 5 |
+| G2 | Relance-t-on le dry-run, et avec quel mécanisme de survie aux redémarrages ? | il est mort depuis le 05/08 ; le rejeu le remplace pour la donnée, pas pour la parité |
+| G3 | Le retrait de `s_sr` et `s_patterns` de la somme : ablation à mesurer maintenant ? | deux scores sur cinq tirent à l'envers |
+| G4 | Ordre des neuf chantiers : la priorisation proposée (rareté des entrées d'abord, ML ensuite) est-elle la bonne ? | tout le reste en dépend |
