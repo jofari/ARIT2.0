@@ -21,7 +21,7 @@ regarder : le regarder, c'est le bruler.
 
 Usage :
   & C:\\Users\\jofar\\venvs\\arit\\Scripts\\python.exe analysis/mesures.py
-      [--db analysis/out/arit.sqlite] [--fdr 0.10]
+      [--db analysis/out/arit_analyse.sqlite] [--fdr 0.10]
 """
 
 import argparse
@@ -34,7 +34,7 @@ import pandas as pd
 from scipy import stats
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-DB_DEFAUT = REPO / "analysis" / "out" / "arit.sqlite"
+DB_DEFAUT = REPO / "analysis" / "out" / "arit_analyse.sqlite"
 
 TP1_R = 1.5              # PDR 03.3 — la cible du systeme, donc l'unite du modele nul
 IC_SEUIL = 0.04          # CHANTIERS.md B9 — critere de passage declare AVANT la mesure

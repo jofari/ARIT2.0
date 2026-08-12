@@ -2,9 +2,10 @@
 
 Pourquoi ce fichier existe (constat du 2026-08-12) : l'evenement `evaluation` — le SEUL
 qui porte le vecteur de features complet (5 scores, ~63 motifs de bougie, regime, macro,
-conviction, seuil, RR) — n'est journalise QUE en live (`AritV1.py:61`, `if live:`). Le
-dry-run etant a l'arret depuis le 05/08, il en existe **zero** dans tout le projet. Sans
-ces vecteurs, B9 (IC des 5 scores) et toute piste ML sont litteralement sans donnees.
+conviction, seuil, RR) — n'est journalise QUE en live (`AritV1.py:61`, `if live:`), et le
+dry-run etait a l'arret : il en existait **zero** dans tout le projet. Corrige en production
+depuis le 12/08 (le backtest journalise desormais), mais le rejeu reste la voie rapide :
+69 s pour 7 ans, contre un backtest complet.
 
 Ce script ne touche PAS au code de production : il rejoue le pipeline avec les MEMES
 fonctions pures d'`arit_lib` (features -> regimes -> cio), donc sans divergence possible,
@@ -23,7 +24,7 @@ a choisir quoi que ce soit. La colonne est ecrite ici pour que l'oubli soit impo
 
 Usage :
   & C:\\Users\\jofar\\venvs\\arit\\Scripts\\python.exe analysis/dataset.py
-      [--pairs BTC/USDT:USDT ETH/USDT:USDT] [--horizon-h 96] [--db analysis/out/arit.sqlite]
+      [--pairs BTC/USDT:USDT ETH/USDT:USDT] [--horizon-h 96] [--db analysis/out/arit_analyse.sqlite]
 """
 
 import argparse
@@ -47,7 +48,7 @@ logger = logging.getLogger("dataset")
 
 DATA_DIR = REPO / "user_data" / "data" / "binance" / "futures"
 MACRO_DIR = REPO / "user_data" / "data" / contracts.MACRO_DATA_DIR.split("/")[-1]
-DB_DEFAUT = REPO / "analysis" / "out" / "arit.sqlite"
+DB_DEFAUT = REPO / "analysis" / "out" / "arit_analyse.sqlite"
 
 PAIRS_DEFAUT = ("BTC/USDT:USDT", "ETH/USDT:USDT", "SOL/USDT:USDT", "BNB/USDT:USDT")
 HORIZON_H_DEFAUT = 96          # 4 j = 24 bougies 4h : au-dela, un setup 4h n'a plus de sens

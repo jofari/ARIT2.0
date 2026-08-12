@@ -228,6 +228,30 @@ def _append_line(path: Path, record: dict, event_type: str) -> None:
     logger.error("journal.write echec ecriture (%s): %s", event_type, last_exc)
 
 
+# ------------------------------------------------ selection des lignes (M06 -> M07)
+def lignes_evaluation(df, live: bool) -> list:
+    """Lignes du DataFrame pour lesquelles M07 doit ecrire une 'evaluation'.
+
+    LIVE : la derniere ligne seulement, et seulement si elle ouvre une bougie 4h — une
+    evaluation par boucle, comportement d'origine (docs/08, decision Jonas 2026-07-08).
+
+    BACKTEST : TOUTES les cloture 4h du df. Avant le 2026-08-12, `AritV1` n'appelait la
+    journalisation qu'en live ; l'evenement `evaluation` — le SEUL qui porte le vecteur de
+    features complet — n'existait donc dans AUCUN journal du projet, et B9 comme toute piste
+    ML etaient sans donnees. La garde `new_4h` (docs/11 §11.2) reste la seule regle : jamais
+    deux evaluations du meme setup 4h.
+
+    Retourne une liste (pas un generateur) : l'appelant est un callback freqtrade, on ne
+    laisse pas une lecture de DataFrame trainer au-dela de l'appel.
+    """
+    if df is None or len(df) == 0 or "new_4h" not in df.columns:
+        return []
+    marques = df["new_4h"].fillna(False).astype(bool).tolist()
+    if live:
+        return [df.iloc[-1]] if marques[-1] else []
+    return [df.iloc[i] for i, marque in enumerate(marques) if marque]
+
+
 # ----------------------------------------------------- builders typees (M06)
 def ev_evaluation(row, explain_dict) -> dict:
     """Evenement 'evaluation' (chaque cloture 4h, par paire). Seul evenement portant les cdl_*.

@@ -58,8 +58,7 @@ class AritV1(IStrategy):
             df = (macro_regime.attach_regime_now(df, macro) if live      # A2 : parite live
                   else regimes.attach_macro_regime(df, self._macro_daily()))   # backtest
             df = cio.conviction(regimes.classify(df, macro if live else None))
-            if live:
-                self._journal_evaluation(df, metadata.get("pair"), macro)
+            self._journal_evaluation(df, metadata.get("pair"), macro, live)
         except Exception as exc:                             # une feature ne crashe jamais le bot
             journal.write("system", journal.ev_system("indicators_error", {"error": str(exc)}))
         return df
@@ -232,22 +231,24 @@ class AritV1(IStrategy):
         if ts is None or pd.isna(ts):
             ts = row.get("date")
         return contracts.make_signal_id(pair, pd.Timestamp(ts).to_pydatetime())
-    def _journal_evaluation(self, df, pair, macro) -> None:
-        # 'evaluation' /cloture 4h (11.1) ; fusionne fear_greed/macro_stale dans explain (T2->M07).
-        # Scope live/dry (appele depuis populate_indicators) : decision Jonas 2026-07-08, docs/08.
-        if pair is None or len(df) == 0 or not bool(df.iloc[-1].get("new_4h")):
+    def _journal_evaluation(self, df, pair, macro, live) -> None:
+        # 'evaluation' /cloture 4h (11.1) ; scope elargi au BACKTEST le 12/08 (journal.py).
+        if pair is None:
             return
-        row = df.iloc[-1]
-        # A2 : un no_signal ne doit pas masquer un signal short. La raison porte le SENS
-        # signale, c'est ce qui rend le Test 1 de docs/01 lisible dans le journal.
-        sig = [d for d, col in ((contracts.DIR_LONG, "signal_long"),
-                                (contracts.DIR_SHORT, "signal_short")) if bool(row.get(col))]
-        exp = {"pair": pair, "signal_id": self._signal_id(pair, row),
-               "decision": "signal" if sig else "no_signal",
-               "raison": "/".join(sig) if sig else row.get("regime"),
-               "close_vs_ema": cio.explain(row)["regime_inputs"]["close_vs_ema"],
-               "fear_greed": macro.get("fear_greed"), "macro_stale": macro.get("stale")}
-        self._log("evaluation", row, exp)
+        for row in journal.lignes_evaluation(df, live):
+            # A2 : un no_signal ne doit pas masquer un signal short. La raison porte le SENS
+            # signale, c'est ce qui rend le Test 1 de docs/01 lisible dans le journal.
+            sig = [d for d, col in ((contracts.DIR_LONG, "signal_long"),
+                                    (contracts.DIR_SHORT, "signal_short")) if bool(row.get(col))]
+            # macro_state.json porte l'etat COURANT : l'ecrire sur une bougie de 2021 serait du
+            # look-ahead. Le contexte macro point-in-time est deja dans la row en backtest.
+            exp = {"pair": pair, "signal_id": self._signal_id(pair, row),
+                   "decision": "signal" if sig else "no_signal",
+                   "raison": "/".join(sig) if sig else row.get("regime"),
+                   "close_vs_ema": cio.explain(row)["regime_inputs"]["close_vs_ema"],
+                   "fear_greed": macro.get("fear_greed") if live else None,
+                   "macro_stale": macro.get("stale") if live else None}
+            self._log("evaluation", row, exp)
     def _journal_exit(self, trade) -> None:
         state = self._trade_state(trade)
         r = (gestion.r_multiple(trade.close_rate, trade.open_rate, state.initial_sl, state.sign)

@@ -881,3 +881,93 @@ l'agrégation par un modèle appris, si. Question ouverte G1 ci-dessous.
 | G2 | Relance-t-on le dry-run, et avec quel mécanisme de survie aux redémarrages ? | il est mort depuis le 05/08 ; le rejeu le remplace pour la donnée, pas pour la parité |
 | G3 | Le retrait de `s_sr` et `s_patterns` de la somme : ablation à mesurer maintenant ? | deux scores sur cinq tirent à l'envers |
 | G4 | Ordre des neuf chantiers : la priorisation proposée (rareté des entrées d'abord, ML ensuite) est-elle la bonne ? | tout le reste en dépend |
+
+---
+
+## Session du 2026-08-12 (nuit) — G5 à G8 : les deux bases, et le journal réparé
+
+### Décisions de Jonas
+
+| # | Décision | État |
+|---|---|---|
+| G5 | **Journaliser les évaluations en backtest** (retirer le `if live:` d'`AritV1.py:61`) — « pour ARIT v1 oui » | **appliqué** |
+| G6 | **Deux bases séparées**, une par nature de rapport : débogage d'un côté, analyse/ML de l'autre | **appliqué** |
+| G7 | Réserve sur le périmètre backtest : « ça pourrait créer un surplus de données inutiles et du bruit avec la modification du fonctionnement des marchés actuels » | **traitée par la mesure, voir ci-dessous** |
+| G8 | VPS prévu pour Hermes Agent **+ ARIT 24/24** | acté, non codé |
+
+### G7 — la réserve était juste, mais pas là où on l'attendait
+
+Testée plutôt que débattue : IC de Spearman par période, contre `y_r_long`.
+
+| Feature | 2019-2021 | 2022-2023 | 2024-2026 | Verdict |
+|---|---|---|---|---|
+| `s_structure` | +0,0831* | +0,0910* | +0,0630* | stable |
+| `conviction` | +0,0557* | +0,0727* | +0,0471* | stable |
+| `adx4h` | +0,0269* | +0,0362* | +0,0433* | stable, **croissant** |
+| `rr_dispo` | −0,0704* | −0,0458* | −0,0557* | stable **négatif** |
+| `s_sr` | −0,0687* | −0,0345* | −0,0386* | stable **négatif** |
+| `trend_dir` | +0,0718* | +0,0676* | **+0,0086** | **EFFONDRÉ** |
+
+L'information de `s_structure`, `conviction` et `adx4h` tient sur sept ans, ETF spot compris :
+tronquer l'historique coûterait les deux tiers du dataset sans gagner en pertinence. Mais
+`trend_dir` s'est effondré — le suivi de tendance naïf a été arbitragé depuis 2024, et c'est
+une des conditions de `signal_long`.
+
+⇒ **Le remède retenu n'est pas de tronquer, c'est d'exiger la stabilité inter-périodes** comme
+critère de rétention d'une feature. À câbler dans `mesures.py`.
+
+### G5 — ce que le changement de production coûte, mesuré
+
+`journal.lignes_evaluation(df, live)` (fonction pure, `journal.py`) porte la règle :
+live = la dernière ligne si elle ouvre une bougie 4h ; backtest = toutes les clôtures 4h.
+`AritV1._journal_evaluation` boucle dessus.
+
+Piège évité : `macro_state.json` porte l'état **courant**. L'écrire sur une bougie de 2021
+serait du look-ahead — en backtest `fear_greed` et `macro_stale` restent donc vides, le
+contexte macro point-in-time étant déjà dans la row. Verrouillé par
+`test_journal_evaluation_backtest_nutilise_pas_letat_macro_courant`.
+
+Coût réel mesuré sur un backtest d'un mois × 4 paires : **1 724 évaluations, 0 doublon**,
+2 224 octets par ligne, +3,9 Mo de journal. Les 720 du mois demandé sont exactes
+(30 j × 6 × 4) ; le reste est le warm-up de 999 bougies. Extrapolé : **~135 Mo pour 7 ans**.
+
+⚠️ `AritV1.py` passe de 259 à 260 lignes. Le contrat `< 250` était **déjà violé de 9 lignes
+avant cette session** — dette à traiter à part (une PR = une feature).
+
+### G6 — les deux bases
+
+| Base | Produite par | Grain | Répond à |
+|---|---|---|---|
+| `analysis/out/arit_debug.sqlite` | `analysis/ingest.py` (JSONL) | 1 évènement = 1 ligne | **pourquoi ce trade est passé, ou non** |
+| `analysis/out/arit_analyse.sqlite` | `analysis/dataset.py` (rejeu) | 1 évaluation étiquetée | mesures statistiques, ML, contrefactuels |
+
+Le bot n'écrit **jamais** en base : il écrit du JSONL append-only, `ingest.py` ingère à part.
+Une écriture SQL dans un callback serait de l'I/O bloquante dans le chemin de trading
+(docs/11 §11.5), et `journal.py` garantit que le trading ne s'arrête jamais pour un problème
+de journal. Le JSONL reste la source de vérité, donc la base est reconstructible à volonté.
+
+Ingestion **incrémentale** (`ingestion_state` retient l'offset par fichier) et **idempotente**.
+Vue `pourquoi` : LEFT JOIN depuis les évaluations, pour que les setups **refusés** — ceux qui
+n'ont ni gate_check ni entry — restent visibles. C'est précisément eux qu'on veut lire.
+
+### Deux trous du journal, découverts par l'ingestion
+
+Aucun n'est corrigé — ce sont des correctifs de production à part entière.
+
+**1. `ev_gestion` et `ev_gate_check` ne posent aucun `ts_utc`.** `journal.write` leur donne
+donc l'heure **réelle** d'exécution. En backtest, des milliers d'évènements de marché
+distincts partagent la même seconde, la même paire et le même `signal_id` : **on ne peut pas
+placer une décision de porte dans le temps simulé**. Conséquence directe sur l'ingestion — une
+clé métier `(ts_utc, pair, signal_id, règle)` en détruisait 5 073 sur 5 521. D'où la clé par
+**empreinte SHA-1 du contenu**, verrouillée par
+`test_deux_evenements_de_meme_cle_metier_sont_conserves`.
+
+**2. `exit` n'est écrit nulle part : 95 `entry`, 0 `exit` sur tout l'historique du journal.**
+`_journal_exit` n'est déclenché que par `order_filled` quand `not trade.is_open`, condition
+jamais remplie. Le journal ne contient donc **aucun résultat de trade** : ni `r_final`, ni
+`mae_r`, ni `mfe_r`, ni cause de sortie. Le rapport « pourquoi » s'arrête à l'entrée, et tout
+le chantier « gestion » reste aveugle côté journal.
+
+### État
+
+400 tests verts (390 → 400), ruff propre.

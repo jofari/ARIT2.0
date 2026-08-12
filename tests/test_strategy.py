@@ -289,7 +289,7 @@ def test_journal_evaluation_merges_macro(monkeypatch):
         "conviction": [0.8, 0.8], "seuil": [0.5, 0.5], "rr_dispo": [2.0, 2.0],
         "date": [T0, T0 + pd.Timedelta(hours=4)],
     })
-    s._journal_evaluation(df, "BTC/USDT", {"fear_greed": 55, "stale": False})
+    s._journal_evaluation(df, "BTC/USDT", {"fear_greed": 55, "stale": False}, True)
     evals = [p for et, p in events if et == "evaluation"]
     assert evals, "une ligne 'evaluation' doit etre ecrite a la cloture 4h"
     ri = evals[0]["regime_inputs"]
@@ -302,8 +302,50 @@ def test_journal_evaluation_skipped_when_not_new_4h(monkeypatch):
     s = _inst()
     df = pd.DataFrame({"new_4h": [False], "signal_long": [True], "regime": ["TREND"],
                        "date": [T0]})
-    s._journal_evaluation(df, "BTC/USDT", {"fear_greed": 55, "stale": False})
+    s._journal_evaluation(df, "BTC/USDT", {"fear_greed": 55, "stale": False}, True)
     assert not events   # pas de nouvelle bougie 4h => aucune ligne
+
+
+def _df_deux_cloture_4h():
+    """df 1h portant DEUX cloture 4h (lignes 1 et 3) — support des tests de scope."""
+    n = 4
+    return pd.DataFrame({
+        "new_4h": [False, True, False, True], "signal_long": [False] * n,
+        "signal_short": [False] * n, "regime": ["TREND"] * n,
+        "adx_4h": [30.0] * n, "ema50_4h": [100.0] * n, "ema200_4h": [90.0] * n,
+        "close_4h": [105.0] * n,
+        "s_structure": [1.0] * n, "s_momentum": [0.5] * n, "s_sr": [1.0] * n,
+        "s_patterns": [0.3] * n, "s_volume": [0.5] * n,
+        "conviction": [0.8] * n, "seuil": [0.5] * n, "rr_dispo": [2.0] * n,
+        "date": [T0 + pd.Timedelta(hours=i) for i in range(n)],
+    })
+
+
+def test_journal_evaluation_backtest_ecrit_toutes_les_cloture_4h(monkeypatch):
+    """Le scope BACKTEST est la raison d'etre du changement du 12/08 : sans lui, l'evenement
+    `evaluation` n'existait dans AUCUN journal du projet (0 sur ~5 600 lignes)."""
+    events = _capture(monkeypatch)
+    _inst()._journal_evaluation(_df_deux_cloture_4h(), "BTC/USDT", {}, False)
+    evals = [p for et, p in events if et == "evaluation"]
+    assert len(evals) == 2, "backtest : une evaluation par cloture 4h, pas seulement la derniere"
+
+
+def test_journal_evaluation_backtest_nutilise_pas_letat_macro_courant(monkeypatch):
+    """macro_state.json porte l'etat d'AUJOURD'HUI : l'ecrire sur une bougie de 2021 serait du
+    look-ahead. En backtest ces deux champs doivent rester vides, quoi que porte le fichier."""
+    events = _capture(monkeypatch)
+    _inst()._journal_evaluation(_df_deux_cloture_4h(), "BTC/USDT",
+                                {"fear_greed": 55, "stale": False}, False)
+    ri = [p for et, p in events if et == "evaluation"][0]["regime_inputs"]
+    assert ri["fear_greed"] is None and ri["macro_stale"] is False
+
+
+def test_journal_evaluation_live_ne_prend_que_la_derniere_ligne(monkeypatch):
+    """Live : une evaluation par boucle (docs/08). Deux cloture 4h dans le df ne doivent PAS
+    produire deux lignes — sinon chaque boucle re-journaliserait tout l'historique charge."""
+    events = _capture(monkeypatch)
+    _inst()._journal_evaluation(_df_deux_cloture_4h(), "BTC/USDT", {}, True)
+    assert len([p for et, p in events if et == "evaluation"]) == 1
 
 
 # ----------------------------------- Macro Analyst V1.1 : pose de la colonne en backtest
