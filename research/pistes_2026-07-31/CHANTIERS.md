@@ -300,3 +300,130 @@ Les trois prérequis non négociables de F1 étaient B2, B5 et B6. **B2 et B5 so
 (`analysis/mesures.py` et la colonne `split`). Reste **B6** (`research/EXPERIMENTS.jsonl`,
 préenregistrement, compteur d'essais honnêtement initialisé à ≥ 30) — c'est désormais le seul
 verrou méthodologique devant le banc.
+
+---
+
+# H. ML, quantitatif et boucle d'amélioration — les neuf chantiers du 12/08
+
+> ⚠️ **Numérotation** : ces chantiers sont notés `H`, **pas** `G`. Les `G1-G8` de `DECISIONS.md`
+> sont des *questions et décisions* (G1 autorisation ML sur l'agrégation, G5 journal backtest,
+> G6 deux bases…), pas des chantiers. Troisième collision de noms évitée après C6 et D1.
+
+Le 12/08 Jonas ouvre neuf chantiers d'un coup. Aucun n'était réalisable ce jour-là : tous
+dépendaient d'un jeu de données qui n'existait pas (`evaluation` n'était journalisé qu'en live,
+et le live n'a jamais tenu une boucle — **0 évaluation** sur tout l'historique). Le rejeu
+hors-ligne du 12/08 au soir (`analysis/dataset.py`, 56 890 évaluations étiquetées) lève ce
+préalable commun. Les neuf redeviennent instruisables ; ils ne sont pas pour autant à ouvrir
+en même temps.
+
+| # | Chantier (formulation de Jonas) | Faisable aujourd'hui ? | Verrou |
+|---|---|---|---|
+| H1 | **Boucle d'auto-amélioration** | ⚠️ partiellement — **à retravailler avec précaution**, voir § H1 | B6 absent, et le précédent du 07/08 |
+| H2 | **ML au CIO** (conviction / agrégation des scores) | ✅ données prêtes | **G1 non tranché** — touche l'interdit n° 5 |
+| H3 | **ML à la documentation** | ✅ hors chemin de trading | aucun, mais aucun gain sur l'edge |
+| H4 | **ML au position manager** (gestion) | ❌ **aveugle** | `exit` n'est écrit nulle part : 95 `entry`, **0 `exit`** — ni `r_final`, ni `mae_r`, ni `mfe_r` |
+| H5 | **Quantitatif** (le socle de maths) | ✅ c'est le chantier le plus mûr | rien — détail § H5 |
+| H6 | **Interface graphique** | ✅ mais FreqUI + `scripts/suivi.py` existent déjà | l'observabilité est **locale**, c'est ça le vrai manque (F2) |
+| H7 | **Banc multi-stratégie** | ⚠️ = **F1**, déjà déposé | B6 ; + OHLCV futures désormais complètes (fermé le 08/08) |
+| H8 | **Tracking retail vs institutionnel** | ❌ donnée absente | flux ETF / CVD taker / OI : source externe, aucune n'est câblée |
+| H9 | **Agrégateur de news** | ❌ et à cadrer | **interdit n° 1** : aucun LLM dans le chemin de trading. Utilisable en amont, jamais en décision |
+
+**Ordre proposé** (c'est la question G4, non tranchée) : **H5 d'abord**, parce que le goulot
+mesuré n'est pas la qualité de l'entrée mais sa **rareté** — 78 signaux en 5 ans sur 4 paires,
+soit 0,16 % des évaluations. Aucun modèle, aucun walk-forward, aucune boucle ne conclut quoi
+que ce soit sur 78 observations. **H2 ensuite** (point d'insertion ML mesuré). **H1 en dernier**,
+et seulement une fois B6 en place — une boucle branchée avant le compteur d'essais est une
+machine à fabriquer du bruit gagnant.
+
+---
+
+## H1 — Boucle d'auto-amélioration : ce qui doit être retravaillé, et pourquoi
+
+L'idée est bonne et c'est la plus dangereuse des neuf. Deux précédents, tous deux du projet :
+
+1. **07/08** — un dispositif autonome a été armé pour trois semaines (tâches Windows, veille,
+   relance au démarrage). Vérifié le 12/08 **sur la machine, pas dans la doc** : plus aucune
+   tâche, plus de fichier de démarrage, plus de process, `macro_state.json` figé depuis 8 jours.
+   Les trois semaines de collecte ont produit **zéro donnée**, sans une seule alerte.
+   ⇒ *Une boucle qui n'a pas de preuve d'existence vérifiable n'existe pas.*
+2. **08/08** — la routine cloud vague 1 (B2/B4/B5/B6) a été armée et n'a rien livré :
+   `research/veille/` et `research/veille_locale/` sont **inexistants** au 12/08.
+   ⇒ *Une boucle sans livrable versionné ne laisse aucune trace de son échec.*
+
+### Les sept gardes, à écrire avant la première ligne de code
+
+| # | Garde | Raison, tirée d'un fait du projet |
+|---|---|---|
+| 1 | **Elle mesure, elle ne conclut jamais.** Sortie = mesure + PR en draft ; la décision reste humaine | « un agent qui cherche pendant trois semaines *trouvera* quelque chose » (07/08) |
+| 2 | **Préenregistrement obligatoire** : refuser de tourner si l'hypothèse n'est pas déclarée dans `research/EXPERIMENTS.jsonl` **avant** la mesure | B6 — le seul verrou encore ouvert |
+| 3 | **Compteur d'essais global et persistant**, initialisé à ≥ 30, jamais remis à zéro entre runs ; FDR Benjamini-Hochberg appliqué sur la famille **cumulée**, pas par exécution | B2 ; une boucle multiplie les tests par construction |
+| 4 | **Hold-out inaccessible physiquement** : le chargeur refuse `split == 'holdout'`, la boucle n'a pas de chemin pour l'atteindre | B5 — 13 932 évaluations scellées ne valent que si rien ne peut les lire |
+| 5 | **Zéro contact avec la production** : jamais de push sur `main`, jamais `user_data/strategies/**`, `services/**`, ni les configs ; jamais les poids G1-G7 | interdit n° 5 + un dry-run tourne sur la machine de Jonas |
+| 6 | **Heartbeat vérifié + livrable versionné** à chaque exécution, sinon la panne est muette | les deux précédents ci-dessus |
+| 7 | **Quota et critère d'arrêt déclarés** (N tests/semaine, arrêt si le budget FDR est épuisé) | sans quota, « efficace » veut dire « produit plus de faux positifs » |
+
+### Ce qui reste à trancher sur H1
+
+- Où elle tourne : cloud (routine, ne voit pas `user_data/data/` ni `backtest_results/`, tous
+  deux gitignorés) ou local (voit tout, meurt au redémarrage — précédent du 07/08).
+- Ce qu'elle a le droit de faire tourner : mesures sur `arit_analyse.sqlite` seulement, ou aussi
+  des backtests (donc du temps machine et un risque de p-hacking bien supérieur).
+- Sa mémoire entre runs : `research/veille/JOURNAL.md` était prévu, jamais créé.
+
+---
+
+## H2 — ML au CIO : le point d'insertion est mesuré, l'autorisation ne l'est pas
+
+Le premier point d'insertion du ML n'est ni la macro ni la gestion : c'est **l'agrégation des
+scores**. `produit_pondere` (Σ poids·score) a un IC de **+0,0642**, soit **moins bon que
+`s_structure` seul (+0,0851)**. L'agrégation à poids figés détruit de l'information mesurée, en
+mélangeant `s_sr` (IC **−0,0497**) et `s_patterns` (−0,0162) avec des poids **positifs**.
+
+⚠️ **Mesurer un IC n'est pas hyperopter ; remplacer l'agrégation par un modèle appris, si.**
+C'est l'interdit n° 5, donc **un arbitrage de Jonas — question G1, ouverte.**
+
+Un cran avant le ML, et sans le toucher : **l'ablation de `s_sr` et `s_patterns`** (question G3)
+est une soustraction, pas une optimisation — elle ne franchit aucun interdit et se mesure sur le
+dataset existant.
+
+### Gardes ML, non négociables (elles valent pour H2 comme pour H4)
+
+- **Purged K-fold + embargo** : les labels de triple barrière se chevauchent (fenêtre 96 h), les
+  observations ne sont pas indépendantes. Une CV naïve surestime toujours.
+- **Pondération par unicité** des échantillons chevauchants.
+- **Aucune colonne `y_`** en entrée — la convention de nommage du dataset existe pour ça.
+- **Stabilité inter-périodes exigée** comme critère de rétention (voir Q2) : `trend_dir` avait un
+  IC de +0,0718 en 2019-2021 et **+0,0086 en 2024-2026** — le suivi de tendance naïf a été
+  arbitragé, et c'est une des conditions de `signal_long`.
+- Entraînement sur les **43 000 évaluations** hors hold-out, jamais sur les 78 signaux.
+
+---
+
+## H5 — Le chantier quantitatif, décomposé
+
+C'est le plus mûr des neuf : les données existent, aucun interdit n'est touché, et il contient le
+seul chantier qui débloque tous les autres (Q1).
+
+| # | Sous-chantier | Effort | Pourquoi il compte | Statut |
+|---|---|---|---|---|
+| **Q1** | **Courbe N(seuil) : combien de signaux, et à quelle espérance, si on desserre chaque porte une à une** (`rr_min`, conviction, ADX, régime) | M | **le goulot n° 1 du projet** : 78 signaux en 5 ans. Rien n'est mesurable avant | à ouvrir |
+| Q2 | Câbler la **stabilité inter-périodes** dans `mesures.py` comme critère de rétention de feature | S | `stabilite()` ne teste aujourd'hui que la cohérence **entre cibles**, pas entre **périodes**. G7 l'a montré à la main | à câbler |
+| Q3 | **`rr_dispo`** : IC −0,0592 vs `y_r_long`, signe instable, sur une variable **tronquée par sa propre porte** | M | un des filtres les plus contraignants pourrait sélectionner **contre** le rendement. Demande un traitement de biais de sélection, pas un IC de rang | non conclu |
+| Q4 | **Ablation `s_sr` + `s_patterns`** (question G3) | S | deux scores sur cinq tirent à l'envers avec un poids positif | question ouverte |
+| Q5 | **B4** — posterior bayésien de l'espérance, Kelly, risque de ruine | S | annoncé dans la routine cloud du 08/08, qui **n'a rien livré** | **toujours à faire** |
+| Q6 | **B7** — dépendance de queue des 4 paires | M | le nombre réel de paris indépendants (~1,2, pas 4) conditionne tout dimensionnement | ouvert |
+| Q7 | **B13 / D2** — walk-forward, ancré, **purgé et avec embargo** | M | prérequis du dry-run depuis juillet, jamais fait. D2 (5 seuils macro) est le plus urgent de la liste D depuis l'abandon de D1 | ouvert |
+| Q8 | **B11** (HAR-RV vs ATR, QLIKE + Diebold-Mariano) et **B12** (stops fractionnaires, frais inclus) | M | critères de passage/abandon déjà écrits en vague 2 | ouverts |
+| Q9 | **Deflated Sharpe / PSR** + référence **buy-and-hold** imposée à toute candidate | S | décision du 12/08 : « ce qui ne bat pas le hold ne mesure pas un edge, il mesure le marché ». Sans ça, F1 couronnera la plus exposée | à imposer avec F1 |
+| Q10 | Étendre le **modèle nul B1 par régime** (macro, volatilité) | S | E[R] nul = −0,0123 long / −0,0370 short **en moyenne** ; par régime, la référence change | extension |
+
+---
+
+## Ce que cette section change dans l'ordre des priorités
+
+1. **Q1 (rareté des entrées)** passe devant B13/D2 et devant tout le ML. C'est la question G4.
+2. **H4 (ML gestion) est bloqué par un bug de journal, pas par la méthode** : `_journal_exit`
+   n'est déclenché que par `order_filled` quand `not trade.is_open`, condition **jamais remplie**.
+   Tant qu'il n'y a pas un seul `exit`, le chantier « gestion » n'a aucune cible à apprendre.
+3. **B6 est le dernier verrou méthodologique** et il bloque désormais **deux** chantiers, pas un :
+   F1/H7 (banc) **et** H1 (boucle). C'est le prochain à fermer.
