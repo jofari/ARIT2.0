@@ -971,3 +971,41 @@ le chantier « gestion » reste aveugle côté journal.
 ### État
 
 400 tests verts (390 → 400), ruff propre.
+
+---
+
+## Session du 2026-08-16 — les dettes C fermées s'affichaient encore comme ouvertes
+
+Constat de Jonas : « tous ces chantiers étaient censés être fermés, pourquoi s'affichent-ils
+toujours ». Vérifié — il a raison, et la cause n'est pas un oubli de fermeture.
+
+### La cause : `CHANTIERS.md` est append-only, ses tableaux ne l'étaient pas
+
+C1-C9 ont bien été fermés le 04/08 au soir. Mais la fermeture a été écrite dans une **section
+ajoutée en bas** du fichier (« MISE À JOUR DU 2026-08-04 »), sans jamais amender le tableau
+d'origine du 31/07, resté 40 lignes plus haut avec ses statuts `jamais tranché` / `jamais codé`.
+
+Toute lecture séquentielle — un humain qui scrolle, un outil qui parse les tableaux — voit donc
+la version périmée **avant** la version à jour, et recompte des dettes fermées comme ouvertes.
+Le même défaut touchait le tableau A (A1-A7 signés), le tableau B (B1/B2/B5/B8/B9 fermés le
+12/08) et la liste E (points 1 et 5 levés).
+
+⚠️ `D1` avait échappé au piège parce qu'il avait été **barré en place** (`~~…~~` + « FERMÉ —
+ABANDONNÉ ») le 12/08. C'est la seule différence de traitement, et elle explique tout.
+
+### Règle retenue
+
+> **Un statut se corrige à l'endroit où il a été écrit, pas seulement dans une section plus
+> bas.** Une ligne fermée est barrée en place et porte sa date de fermeture ; ce qui n'est pas
+> barré est ouvert. Une mise à jour ajoutée en bas complète le détail, elle ne remplace jamais
+> l'amendement en place.
+
+Appliqué le 16/08 aux tableaux A, B, C et à la liste E, plus un bandeau en tête du fichier qui
+dit que `DECISIONS.md` fait foi. Aucune décision de fond n'est modifiée : seuls les statuts
+affichés rejoignent l'état réel.
+
+### Effet sur le décompte
+
+Les fantômes retirés (9 dettes C + 5 chantiers B + 7 décisions A + 2 points E = **23 lignes**)
+ne sont plus comptés comme en attente. Ce qui reste réellement ouvert : B3, B4, B6, B7,
+B10-B13 · D2-D4 · E2, E3, E4 · F1, F2 · G1-G4 · H1-H9 · Q1-Q10.

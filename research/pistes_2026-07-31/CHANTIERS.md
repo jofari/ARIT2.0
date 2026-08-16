@@ -1,5 +1,14 @@
 # ARIT — état des chantiers au 2026-07-31
 
+> ⚠️ **CE FICHIER EST APPEND-ONLY. Les tableaux A à E datent du 31/07 ; les statuts réels sont
+> dans les sections « MISE À JOUR DU … » plus bas et dans `DECISIONS.md` (racine), qui fait foi.**
+> Ne jamais compter les lignes de A-E comme « ouvertes » sans lire les mises à jour : les statuts
+> périmés ont déjà été recomptés à tort comme des décisions en attente. Depuis le 16/08, chaque
+> ligne fermée est **barrée en place** — si elle n'est pas barrée, elle est ouverte.
+>
+> Raccourci : **C = tout fermé (04/08)** · **B1/B2/B5/B8/B9 fermés (12/08)** · **D1 abandonné (12/08)** ·
+> **A1-A7 appliqués, A8 reporté** · reste ouvert : B3/B4/B6/B7/B10-B13, D2-D4, E2/E3/E4, F1/F2, G1-G4, H1-H9, Q1-Q10.
+
 Inventaire de **tout ce qui est ouvert** : décisions en attente, chantiers de mesure, dettes
 techniques, et ce qui bloque le dry-run. Rien de ce qui suit n'est appliqué.
 
@@ -9,20 +18,22 @@ n'a **jamais tourné en dry-run**.
 
 ---
 
-## A. Décisions en attente de ta signature — c'est le vrai goulot
+## A. Décisions en attente de ta signature — ✅ signées, sauf A8
 
-Aucune ne demande plus de dix minutes de réflexion, toutes bloquent quelque chose en aval.
+> ✅ **A1, A3, A4 appliqués le 03/08 · A2 (long ET short) appliqué le 04/08 · A5 acté sans code ·
+> A6 appliqué (risque constant 1,16 %) · A7 signé (`docs/01` v4).** Seule **A8 reste reportée par
+> Jonas**. Détail : § « MISE À JOUR DU 2026-08-04 » plus bas.
 
-| # | Décision | Mesuré ? | Ce que ça débloque | Depuis |
+| # | Décision | Statut | Ce que ça débloque | Depuis |
 |---|---|---|---|---|
-| A1 | `startup_candle_count` : 200 → **999** | ✅ 3 fenêtres, 2 paires | des backtests dont l'EMA200 journalière n'est pas fausse de 9,55 % | 31/07 |
-| A2 | Retirer `pivot_high`/`pivot_low` bruts du DataFrame | ✅ audit look-ahead | un `check_bias.py` qui sort en code 0 | 31/07 |
-| A3 | Bloc corrélation : `SP500` → **`NASDAQ100`** | ⚠️ à re-vérifier | évite une dégradation **silencieuse** dans ~13 mois | 31/07 |
-| A4 | Fusionner ou non le bloc corrélation macro | ✅ 15 tests, module livré | la question fail-open / fail-safe reste ouverte | 30/07 |
-| A5 | Véto macro HOSTILE **seul** (sans la pénalité NEUTRE) | ✅ B : −19,1 % → −7,0 %, DD 24,9 % → 10,6 % | un filtre de régime qui marche | 17/07 |
-| A6 | Sizing : risque **constant** au lieu du risque par conviction | ✅ Kelly = 1,16 %, MDE par bande = +0,61R | un sizing justifiable | 31/07 |
-| A7 | Choisir l'hypothèse d'edge de remplacement (H1 géométrie / H2 durée / H3 régime) | — | tout le reste : sans hypothèse signée, aucune campagne n'a de critère de succès | 19/07 |
-| A8 | G-set v2 (supprimer G1/G2/G3/G5/G6, garder G4+G7) | ✅ mais **à re-mesurer** après réparation de l'entrée | — | 19/07 |
+| ~~A1~~ | ~~`startup_candle_count` : 200 → **999**~~ | ✅ appliqué 03/08 | des backtests dont l'EMA200 journalière n'est pas fausse de 9,55 % | 31/07 |
+| ~~A2~~ | ~~Retirer `pivot_high`/`pivot_low` bruts du DataFrame~~ | ✅ appliqué 04/08 (avec le short) | un `check_bias.py` qui sort en code 0 | 31/07 |
+| ~~A3~~ | ~~Bloc corrélation : `SP500` → **`NASDAQ100`**~~ | ✅ appliqué 03/08 | évite une dégradation **silencieuse** dans ~13 mois | 31/07 |
+| ~~A4~~ | ~~Fusionner ou non le bloc corrélation macro~~ | ✅ appliqué 03/08 | la question fail-open / fail-safe reste ouverte | 30/07 |
+| ~~A5~~ | ~~Véto macro HOSTILE **seul**~~ | ✅ acté sans code | un filtre de régime qui marche | 17/07 |
+| ~~A6~~ | ~~Sizing : risque **constant**~~ | ✅ appliqué (1,16 %) | un sizing justifiable | 31/07 |
+| ~~A7~~ | ~~Choisir l'hypothèse d'edge de remplacement~~ | ✅ **signée 04/08** (`docs/01` v4) | tout le reste — c'était le point 1 de la liste E | 19/07 |
+| **A8** | G-set v2 (supprimer G1/G2/G3/G5/G6, garder G4+G7) | 🔴 **reporté par Jonas**, à re-mesurer après réparation de l'entrée | — | 19/07 |
 
 ---
 
@@ -32,20 +43,20 @@ Aucune ne demande plus de dix minutes de réflexion, toutes bloquent quelque cho
 
 | # | Chantier | Effort | Ce que ça produit |
 |---|---|---|---|
-| B1 | Modèle nul de franchissement de barrière | S | l'edge devient `Δp`, mesurable sur 70 915 bougies au lieu de 128 trades |
-| B2 | MDE + budget de tests + correction Benjamini-Hochberg, **rétroactifs** | S | quelles conclusions de juillet sont recevables |
+| ~~B1~~ | ~~Modèle nul de franchissement de barrière~~ | S | ✅ **FERMÉ 12/08** — long E[R] = −0,0123 · short −0,0370, sur 42 902 bougies |
+| ~~B2~~ | ~~MDE + budget de tests + correction Benjamini-Hochberg~~ | S | ✅ **APPLIQUÉ 12/08** (`analysis/mesures.py`, FDR 0,10) — ⚠️ rétroactif sur juillet : reste à faire |
 | B3 | Lire `wallet_stats` de tous les zips existants | S | profondeur **et durée** du drawdown, sans re-run |
 | B4 | Posterior bayésien de l'espérance, puis Kelly et risque de ruine | S | le sizing chiffré face aux bornes actuelles |
-| B5 | Sceller le hold-out 2025-01 → 2026-07 | S | la seule p-value future à laquelle croire |
-| B6 | `research/EXPERIMENTS.jsonl` + préenregistrement des hypothèses | S | le compteur d'essais, initialisé honnêtement à ≥ 30 |
+| ~~B5~~ | ~~Sceller le hold-out 2025-01 → 2026-07~~ | S | ✅ **APPLIQUÉ 12/08** — colonne `split`, 13 932 évaluations scellées |
+| **B6** | `research/EXPERIMENTS.jsonl` + préenregistrement des hypothèses | S | 🔴 **OUVERT — dernier verrou méthodologique.** Bloque F1/H7 **et** H1 |
 | B7 | Dépendance de queue des 4 paires | M | le nombre réel de paris indépendants (~1,2, pas 3) |
 
 ### Vague 2 — élargir l'échantillon et auditer l'existant
 
 | # | Chantier | Critère de passage | Critère d'abandon |
 |---|---|---|---|
-| B8 | `--export signals` + `--rejected-signals`, joints aux `ev_gate_check` | **N ≥ 400 signaux** | N < 250 ⇒ l'edge technique est non testable, basculer sur la macro |
-| B9 | Audit d'information des 5 scores (IC sur 70 915 barres) | ≥ 1 score avec IC ≥ 0,04, signe stable | tous < 0,04 ⇒ le scoring est vide, changer de famille de signal |
+| ~~B8~~ | ~~`--export signals` + `--rejected-signals`~~ | **N ≥ 400 signaux** | ✅ **SANS OBJET 12/08** (rejeu = 56 890 évaluations) — 🔴 mais **78 signaux en 5 ans** : le critère d'abandon « N < 250 » est **FRANCHI** |
+| ~~B9~~ | ~~Audit d'information des 5 scores (IC)~~ | ≥ 1 score IC ≥ 0,04 | ✅ **FERMÉ 12/08 — critère REMPLI.** 9 features \|IC\| ≥ 0,04 survivant à BH. Meilleure : `s_structure` (+0,0851) |
 | B10 | Dé-biaiser le score de volume de l'heure et du jour | IC normalisé > IC brut | sinon garder l'existant |
 | B11 | Volatilité conditionnelle (EWMA → HAR-RV) | bat ATR(14) en QLIKE hors échantillon | Diebold-Mariano non significatif ⇒ garder l'ATR |
 | B12 | Stops fractionnaires en 5m, **frais inclus** | espérance nette > 0 à 15 bps | change de signe entre 6 et 15 bps ⇒ mort |
@@ -58,19 +69,23 @@ Aucune ne demande plus de dix minutes de réflexion, toutes bloquent quelque cho
 
 ---
 
-## C. Dettes techniques — des choses qui ne marchent pas aujourd'hui
+## C. Dettes techniques — ✅ TOUTES FERMÉES le 2026-08-04
 
-| # | Dette | Statut |
+> ✅ **Aucune dette C ouverte depuis le 04/08 au soir.** Le tableau ci-dessous décrit l'état
+> du **31/07** et n'est conservé que pour l'historique. Statuts à jour : § « MISE À JOUR DU
+> 2026-08-04 » plus bas, et `DECISIONS.md` § « fermeture de TOUTES les dettes C ».
+
+| # | Dette (constat du 31/07) | Statut réel |
 |---|---|---|
-| C1 | **`FINNHUB_KEY` vide** → le calendrier économique ne fonctionne pas, la porte « news » est inerte ou bloquante selon l'état du fichier macro | jamais tranché |
-| C2 | **Porte « spread » inerte** (`spread_frac = None` en permanence) ; `spread_state.py` validé le 09/07, jamais codé | jamais codé |
-| C3 | Bollinger déclaré dans `params.py` avec « à câbler » | depuis le 09/07 |
-| C4 | Force des supports/résistances par nombre de touches : constante définie, jamais implémentée | depuis le 13/07 |
-| C5 | Fraîcheur du signal 4h : constante définie, **non appliquée** | depuis le 13/07 |
-| C6 | Protections freqtrade (cooldown, stoploss guard) : spécifiées, jamais implémentées — et elles vivent désormais **dans la stratégie**, plus en config | depuis 2024.10 côté freqtrade |
-| C7 | **Webhook Discord à régénérer** — il a transité en clair dans une conversation | signalé le 19/07 |
-| C8 | `Untitled-1.py` parasite à la racine | signalé le 22/07 |
-| C9 | `hyperopt` et les commandes de tracé **inutilisables** dans le venv (optuna et plotly absents) | constaté le 31/07 |
+| C1 | ~~**`FINNHUB_KEY` vide** → le calendrier économique ne fonctionne pas, la porte « news » est inerte ou bloquante selon l'état du fichier macro~~ | **FERMÉ 04/08** — ⚠️ résidu : calendrier 2027 à compléter fin 2026 |
+| C2 | ~~**Porte « spread » inerte** (`spread_frac = None` en permanence) ; `spread_state.py` validé le 09/07, jamais codé~~ | **FERMÉ 04/08** — inerte par décision de Jonas, journalisée sans décider |
+| C3 | ~~Bollinger déclaré dans `params.py` avec « à câbler »~~ | **FERMÉ 03/08** |
+| C4 | ~~Force des supports/résistances par nombre de touches~~ | **FERMÉ** — constante supprimée (annulé par Jonas) |
+| C5 | ~~Fraîcheur du signal 4h : constante définie, non appliquée~~ | **FERMÉ** — constante supprimée (annulé par Jonas) |
+| C6 | ~~Protections freqtrade (cooldown, stoploss guard)~~ | **FERMÉ 04/08** — `params.PROTECTIONS`, `docs/07 §7.1.1` |
+| C7 | ~~**Webhook Discord à régénérer**~~ | **FERMÉ 04/08** — régénéré, ancien supprimé |
+| C8 | ~~`Untitled-1.py` parasite à la racine~~ | **sans objet** — fichier absent |
+| C9 | ~~`hyperopt` et les commandes de tracé inutilisables dans le venv~~ | **FERMÉ 04/08** — `optuna` + `plotly` installés |
 
 ---
 
@@ -87,12 +102,17 @@ Aucune ne demande plus de dix minutes de réflexion, toutes bloquent quelque cho
 
 ## E. Ce qui bloque le dry-run, dans l'ordre
 
-1. **Aucune hypothèse d'edge signée** (A7) — sans elle, un dry-run n'a pas de critère de succès.
-2. **Walk-forward jamais fait** (B13, D2) — identifié comme prérequis dans deux rapports.
+> État du 31/07. Révisions successives : § 04/08, § 07/08, § 08/08 plus bas. Statuts à jour ci-dessous.
+
+1. ~~**Aucune hypothèse d'edge signée** (A7)~~ — ✅ **levé le 04/08** (A7 signé, `docs/01` v4).
+2. **Walk-forward jamais fait** (B13, D2) — 🔴 **toujours ouvert**. Mais depuis le 12/08 il passe
+   **derrière Q1** : 78 signaux en 5 ans, aucun walk-forward ne conclut sur 78 observations.
 3. **Drawdown mal borné** : le gate ne contraint que la profondeur, alors que le produit B passe
-   **2 812 jours sous l'eau** (7,7 ans).
+   **2 812 jours sous l'eau** (7,7 ans). 🔴 **toujours ouvert** (c'est B3).
 4. **Gate matériel** : capital réel ⇒ machine allumée en permanence. Un laptop ne suffit pas.
-5. Webhook à régénérer (C7) avant la phase canari.
+   🔴 **ouvert et confirmé par les faits** : le dispositif du 07/08 a produit zéro donnée en
+   trois semaines. Réponse envisagée = le VPS (G8), non codé.
+5. ~~Webhook à régénérer (C7) avant la phase canari~~ — ✅ **fait le 04/08**.
 
 ---
 
