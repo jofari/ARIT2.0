@@ -2,7 +2,7 @@
 
 > **La macro détermine la DIRECTION de la position (long ou short).
 > La technique détermine le MOMENT d'entrée et le MOMENT de sortie.**
-> (Formulation de Jonas, intégrée telle quelle — décision A7 du 03/08, cf. `DECISIONS.md`.)
+> (Formulation de Jonas, intégrée telle quelle — décision A7 du 03/08, appliquée ici ; historique : `git log -S "A7" -- DECISIONS.md`.)
 
 Exemple donné par Jonas : BTC atteint un seuil intéressant, la macro est haussière, les
 indicateurs techniques (volume, MACD, RSI, positionnement) sont majoritairement haussiers

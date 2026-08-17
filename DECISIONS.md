@@ -1,1011 +1,226 @@
-# DECISIONS.md — journal des arbitrages de Jonas
+# DECISIONS.md — décisions OUVERTES de Jonas
 
-> **But** : un arbitrage de Jonas ne doit JAMAIS vivre uniquement dans une conversation.
-> Toute décision est écrite ici le jour où elle est prise, avec ce qu'elle implique et son
-> état d'application. Ce fichier est versionné : il survit à un `/clear`, à un changement de
-> modèle et à une réinstallation.
->
-> **Règle** : une décision n'est « fermée » que quand la colonne *État* dit `appliqué` et
-> cite le commit. `acté` = tranché mais pas encore codé. `reporté` = volontairement remis.
->
-> Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/CHANTIERS.md`.
+> **But** : un arbitrage de Jonas ne doit jamais vivre uniquement dans une conversation.
+> Ce fichier ne contient QUE ce qui attend encore quelque chose — une réponse de Jonas, ou du
+> code à écrire. Il se lit en entier en début de session, avant tout code.
+
+## Règle de tenue — PURGE IMMÉDIATE (posée le 2026-08-17 par Jonas)
+
+1. **Une décision actée disparaît d'ici.** Dès qu'elle est appliquée (code + commit), fermée,
+   abandonnée ou sans objet, sa section est **supprimée du fichier dans la même session** — pas
+   barrée, pas déplacée en bas, pas archivée ici.
+2. **On supprime la décision, pas la connaissance.** Avant de supprimer, ce que la décision a
+   produit de durable part à sa destination pérenne : un paramètre → `docs/` · un piège ou une
+   mesure → `for claude build/BUILD_NOTES.md` · un rapport → `research/` · un travail restant →
+   `research/pistes_2026-07-31/CHANTIERS.md`. **Si rien n'a été déplacé, la suppression est
+   prématurée.**
+3. **La trace reste dans git.** L'historique complet des décisions fermées du 03/08 au 16/08 vit
+   dans les versions antérieures de ce fichier : `git log -p -- DECISIONS.md`, ou
+   `git log -S "A7" -- DECISIONS.md` pour retrouver une décision précise. Tout renvoi d'un autre
+   fichier vers une section fermée de `DECISIONS.md` se résout là.
+4. **Un fichier vide est le but**, pas un signe d'oubli : ce qui n'est pas écrit ici n'attend rien
+   de Jonas.
+5. Corollaire pour les fichiers append-only (`CHANTIERS.md`, `BUILD_NOTES.md`) : là-bas un statut
+   se corrige **à l'endroit où il a été écrit** (barré en place, avec sa date). Ici il n'y a plus
+   de statut à corriger, seulement une section à retirer.
+
+**Vocabulaire** : `à trancher` = Jonas n'a pas répondu · `acté` = tranché, code encore à écrire ·
+`reporté` = volontairement remis. Ces trois états restent dans ce fichier. `appliqué`, `fermé`,
+`abandonné`, `sans objet` en sortent immédiatement.
+
+Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/CHANTIERS.md`.
 
 ---
 
-## Session du 2026-08-03 — réponses aux décisions A1-A8 et C1-C8
+## Sommaire des décisions ouvertes
 
-Source : arbitrages donnés par Jonas le 03/08 au soir, en réponse à l'inventaire
-`research/pistes_2026-07-31/CHANTIERS.md`.
-
-### A — Décisions de conception
-
-| # | Décision de Jonas | État | Trace |
+| # | Objet | État | Depuis |
 |---|---|---|---|
-| A1 | `startup_candle_count` = **999** bougies, pour la précision | appliqué | `325a906` |
-| A2 | Retirer les fractals bruts du DataFrame **+ autoriser le bot à shorter (long ET short)** | pivots : appliqué `39bc8cc` · short : **appliqué le 04/08** | voir A2-bis et session 04/08 |
-| A3 | Indice actions = **NASDAQ100** (pas SP500) | appliqué | `7406a83` |
-| A4 | Bloc corrélation macro **fusionné**, en fail-safe | appliqué | `0e3b0e4` |
-| A5 | Véto macro HOSTILE seul : **non, pas seul** → la pénalité NEUTRE est CONSERVÉE | acté, aucun code à changer | `cio.py:31` inchangé |
-| A6 | Sizing : **risque constant à 1,16 %** (Kelly plein) pour la V1 | appliqué | `docs/03 §3.1.0` + `params.RISK_CONSTANT_PCT` |
-| A7 | Hypothèse d'edge : **H1 + une partie de H2** — voir la formulation ci-dessous | appliqué (signé) | `docs/01_edge.md` v4 |
-| A8 | G-rules : à retravailler, mais **priorité aux autres paramètres** | reporté | — |
-
-#### A2-bis — le short (décision du 03/08)
-
-Jonas : « long et short ». Ce n'est pas un drapeau. Périmètre réel :
-`can_short = False` (`AritV1.py:42`) et `user_data/config.dry.json` sans `trading_mode`
-(donc **spot** par défaut). Il faut passer en `futures` / `isolated`, rendre la géométrie
-SL/TP symétrique, revoir le sens du véto macro, le sizing, les 7 règles G, et une partie
-des 231 tests.
-
-⚠️ **Cette décision est une dépendance de A7, pas une option** : si la macro donne la
-direction, un signal macro baissier est inexploitable sans short.
-
-#### A6-bis — risque constant à 1,16 %
-
-Jonas a choisi **le Kelly plein (1,16 %)** en connaissance du fait que le PDR impose
-½ Kelly. Conséquence obligatoire : **amender `docs/03_risque.md` AVANT de toucher
-`risk.py`** — sinon on viole l'interdit n°4 (« aucune valeur magique, tout paramètre
-vit dans `docs/` d'abord »). Remplace l'interpolation conviction-dépendante de
-`risk.py:107`.
-
-Le risque **adaptatif** (piloté par le module quant) est explicitement renvoyé à plus
-tard : chantier V2, à ouvrir après la V1.
-
-#### A7-bis — l'hypothèse d'edge retenue (formulation de Jonas, 03/08)
-
-> **La macro détermine la DIRECTION de la position (long ou short). La technique
-> détermine le MOMENT d'entrée et le moment de sortie.**
->
-> Exemple donné : BTC atteint un seuil intéressant, la macro est haussière, les
-> indicateurs techniques (volume, gamma, MACD, RSI) sont majoritairement haussiers
-> → entrée en position.
-
-Composition : **H1** (l'edge est dans la géométrie du couple stop/cible, seule déviation
-positive au modèle nul, z = 1,74) **+ une partie de H2** (le régime macro conditionne,
-p = 0,095, le seul signal non-bruit).
-
-Ce que ça implique et qui reste à trancher :
-- il faut un **critère de falsification chiffré** pour que `docs/01_edge.md` soit signable
-  (le doc actuel exige « si B ≤ A : hypothèse invalidée, pas de rationalisation ») ;
-- « gamma » n'existe pas nativement en crypto spot (c'est une grandeur d'options) —
-  à remplacer ou à définir ;
-- la séparation direction/timing change le rôle du score de conviction : il ne sélectionne
-  plus la direction, il ne fait plus que temporiser.
-
-### C — Dettes techniques
-
-| # | Décision de Jonas | État |
-|---|---|---|
-| C1 | Calendrier éco : **JSON statique annuel embarqué (FOMC + BLS) en source primaire**, ForexFactory hebdo en secondaire, fetch async 1×/semaine, cache local, **jamais appelé depuis le pipeline temps réel**. Échec du fetch FF ⇒ on continue sur la primaire sans dégrader le blocage des trois événements qui comptent. Remplace `FINNHUB_KEY`. | à coder |
-| C2 | Spread state : **mesurer d'abord les conséquences** avant de décider | analyse à faire |
-| C3 | Bollinger : **câbler d'urgence** | appliqué le 03/08 (`bb_*_1h`, journalisées, non décisionnelles) |
-| C4 | Force S/R par nombre de touches : **annulé** | à retirer |
-| C5 | Fraîcheur du signal 4h : **annulé** | à retirer |
-| C6 | Jonas visait le **bloc corrélation c6/c7** (livré par A4). Le C6 de `CHANTIERS.md` — les **protections freqtrade** — était donc resté ouvert. | **appliqué le 04/08** — `params.PROTECTIONS`, `docs/07 §7.1.1` |
-| C7 | Webhook Discord : **régénérer** | action de Jonas |
-| C8 | `Untitled-1.py` : supprimer si problématique | **sans objet** — vérifié, le fichier n'existe plus |
-
-### B — Chantiers de mesure
-
-Aucune réponse donnée sur B1-B17. Restent ouverts tels quels dans `CHANTIERS.md`.
+| A8 | G-rules à retravailler | reporté (priorité aux autres paramètres) | 03/08 |
+| A2-ter | **Levier** en futures (aujourd'hui 1.0) | à trancher | 04/08 |
+| A2-quater | Véto actions c6/c7 en régime HOSTILE | à trancher | 04/08 |
+| A2-quinquies | RISK_OFF sur Fear & Greed < 25 | à trancher | 04/08 |
+| C1-bis | Palier orange du calendrier éco | à trancher | 04/08 |
+| C1-ter | Dates CPI/NFP **2027** à saisir | acté, échéance fin 2026 | 04/08 |
+| F1 | Banc d'essai de stratégies | déposé, non tranché | 12/08 |
+| G1 | Modèle appris à la place de l'agrégation Σ poids·score | à trancher | 12/08 |
+| G2 | Relance du dry-run, et sa survie aux redémarrages | à trancher | 12/08 |
+| G3 | Ablation de `s_sr` et `s_patterns` | à trancher | 12/08 |
+| G4 | Ordre des neuf chantiers H1-H9 | à trancher | 12/08 |
+| G8 | VPS (Hermes Agent + ARIT 24/24) | acté, non codé | 12/08 |
 
 ---
 
-## Écarts constatés entre les réponses et l'état réel du code
+## A8 — G-rules : reporté
 
-Consignés parce qu'ils se reproduiront si on ne les note pas :
-
-1. **A7 n'avait PAS été appliqué** contrairement au souvenir de Jonas : `docs/01_edge.md`
-   n'a pas bougé depuis le 06/07 (`d5b0340`) et H1/H2/H3 n'existaient que comme propositions
-   dans `research/pistes_2026-07-31/RAPPORT.md:571-591`.
-2. **C6 était une collision de noms** : le `c6` du bloc corrélation macro (livré) contre le
-   `C6` des protections freqtrade (jamais codé).
-3. **A5 était à moitié fait sans que ce soit dit** : la règle de décision n'a pas bougé, mais
-   l'instrumentation qui permet de trancher A5 par filtrage d'un seul run a été livrée avec
-   A4 (journal schéma v1 → v2, `contracts.py:105`).
+Jonas, 03/08 : les 7 règles G sont **à retravailler, mais la priorité va aux autres paramètres**.
+Rien à coder tant que ce n'est pas rouvert. ⚠️ Interdit n° 5 : G1-G7 et les poids ne sont **jamais**
+hyperoptés — la reprise se fera par mesure, pas par optimisation.
 
 ---
 
-## Session du 2026-08-04 — application de C6 et du short (A2)
+## A2-ter — LEVIER : décision de risque non signée
 
-Aucune décision NOUVELLE de Jonas ce jour : cette session applique des arbitrages déjà
-signés le 03/08. Ce qui suit est l'état d'application, plus les points que l'application a
-révélés et qui n'étaient couverts par aucune réponse.
+Le short impose les futures. Le défaut freqtrade est conservé (`leverage() → 1.0`,
+`AritV1.py:32`), donc l'exposition reste celle du spot. Un levier > 1 appartient à Jonas.
 
-### C6 — protections freqtrade : FERMÉ
-Câblées dans `params.PROTECTIONS`, consommées par `AritV1.protections`. Vérifié **sur le
-freqtrade installé (2026.6)**, pas sur la doc : la liste vit dans la STRATÉGIE, plus dans
-`config.json`. Valeurs et justification : `docs/07 §7.1.1`.
-
-Point important démontré au passage : **le natif et le custom ne sont pas redondants**.
-`StoplossGuard` compte les sorties au stop quel que soit leur R ; `risk.cb_sequential_state`
-compte toute clôture ≤ −0,8R (donc aussi G6/G7) et exige qu'elles soient consécutives. Le
-sizing ÷2 pendant 5 trades reste hors de portée de toute protection native.
-
-⚠️ **`--enable-protections` devient obligatoire en backtest** (07.2). Sans le drapeau,
-freqtrade ignore silencieusement les protections : le backtest ne mesure plus le même
-produit que le dry-run.
-
-### A2 — le short : CODÉ, non mesuré
-Livré de bout en bout : features baissières miroirs, direction macro, géométrie symétrique
-(SL/TP/R/MAE/MFE/G1-G7), sizing, journal v3, `trading_mode: futures`. Specs :
-`docs/03 §3.7`, `docs/05 §5.6`, `docs/08 §8.6`, `docs/11 §11.7`. 297 tests verts, ruff
-propre, `AritV1.py` ramené à 248 lignes (il était à 262, hors contrat depuis A4).
-
-Deux bugs LATENTS trouvés en codant, qui auraient cassé le short en silence :
-1. `order_filled` rejetait les entrées short. Un short entre en **SELL** ; le code lisait
-   tout `ft_order_side == "sell"` comme une sortie G4 partielle et sortait avant d'écrire
-   le `custom_data`. Aucun short n'aurait eu de `initial_sl` — donc aucune gestion.
-2. `make_signal_id` ne normalisait pas le `:` des paires perpétuelles, contrairement à ce
-   que promettait sa docstring. `BTC/USDT:USDT` produisait un `signal_id` contenant `:`,
-   illégal en nom de fichier Windows ⇒ `OSError` à la création de `veto/<id>.intent`.
-
-### Trois décisions que l'application a rendues nécessaires — À VALIDER
-
-- **A2-ter — LEVIER.** Le short impose les futures. J'ai gardé le défaut freqtrade
-  (`leverage() → 1.0`), donc l'exposition reste celle du spot. Un levier > 1 est une
-  décision de risque qui t'appartient. Conséquence si on reste à 1 : quand la distance de
-  stop est très serrée, le stake calculé dépasse l'équité, freqtrade le plafonne, et le
-  risque réel devient **inférieur** à 1,16 % sans le dire. (`docs/03 §3.7.4`)
-- **A2-quater — véto actions c6/c7 en HOSTILE.** J'ai gardé le véto actions comme un
-  coupe-circuit des DEUX sens (il force toujours RISK_OFF), alors que HOSTILE, lui,
-  autorise désormais le short. Raison : le bloc c6/c7 est un fail-safe de corrélation, pas
-  un avis directionnel. Si tu penses qu'une cassure du NASDAQ corrélée au BTC est un signal
-  de SHORT et pas un signal de « ne rien faire », c'est à changer — et ça se teste seul,
-  le véto est ablatable par construction (A4).
-- **A2-quinquies — RISK_OFF sur Fear & Greed < 25.** Même question : la peur extrême reste
-  aujourd'hui un « on ne trade pas ». En v4 elle pourrait être un signal de short. Non
-  touché, faute de réponse.
-
-### Bloquants découverts, à traiter avant tout dry-run
-1. **Parité backtest/live rompue** (`docs/11 §11.7`) : le régime macro V1.1 n'existe qu'en
-   backtest. En live, `macro_state.json` ne le porte pas ⇒ **le live est long-only alors que
-   le backtest est long+short**. C'est M08 qu'il faut compléter, et c'est prioritaire : sans
-   ça, le dry-run ne teste pas le produit qu'on a mesuré.
-2. **Données OHLCV futures manquantes** : `user_data/data/binance/futures/` ne contient que
-   BTC en 4h et 5m. Il faut les 4 paires en 5m/1h/4h/1d avant tout backtest en futures :
-   `freqtrade download-data --exchange binance --trading-mode futures -p BTC/USDT:USDT
-   ETH/USDT:USDT SOL/USDT:USDT BNB/USDT:USDT -t 5m 1h 4h 1d --timerange 20200101-`
-3. **`check_bias.py` n'a pas pu tourner** sur la nouvelle config (mêmes données manquantes).
-   Le zéro-look-ahead des colonnes A2 est prouvé au niveau feature par recalcul sur données
-   tronquées (`test_colonnes_baissieres_ne_repeignent_pas`), ce qui est fort mais **n'est
-   pas** le `lookahead-analysis` de bout en bout. À relancer dès les données présentes.
-
-### C1 — calendrier économique : CODÉ (couverture CPI/NFP à compléter)
-`services/calendar_source.py` + `user_data/calendar/economic_calendar.json`. Finnhub retiré
-du code (57 lignes). Spec : `docs/06 §6.6`. Le run horaire ne fait **aucun** appel réseau
-pour le calendrier ; le fetch ForexFactory est une tâche hebdomadaire séparée.
-
-Vérifié de bout en bout sur le flux réel le 04/08 : 16 FOMC (primaire) + la NFP du
-2026-08-07 (secondaire), fusionnés, dédoublonnés, triés. La dégradation FF a été observée en
-conditions réelles (rate-limit) : warning, cache précédent conservé, primaire intacte.
-
-⚠️ **Ce qu'il reste à faire, et c'est toi qui peux le faire vite** : `bls.gov` refuse les
-récupérations automatisées (HTTP 403). Je n'ai pas inventé les dates. Il faut copier les
-dates 2026-2027 de `bls.gov/schedule/news_release/cpi.htm` (CPI) et `.../empsit.htm` (NFP)
-dans `economic_calendar.json` — publication à 08:30 US Eastern. Tant que ce n'est pas fait,
-la couverture CPI/NFP dépend de ForexFactory, **qui ne voit que la semaine en cours** : un
-CPI à J+20 n'est connu de personne. `coverage_gaps()` le signale en `ERROR` à chaque run.
-
-Piège trouvé et corrigé : ForexFactory identifie le pays par **code devise** (`USD`), pas
-par code pays. Le filtre initial sur `"US"` laissait passer zéro événement **en silence**.
-
-### C2 — spread : ANALYSÉ, pas codé (c'est ce que tu avais demandé)
-Rapport complet : `research/pistes_2026-07-31/C2_spread_analyse.md`. Résumé :
-
-1. La porte est **inerte**, pas cassée : `AritV1` passe `spread_frac = None` en dur.
-2. `docs/11 §11.5` interdit le réseau dans les callbacks ⇒ le spread devrait passer par un
-   service de fond, donc être **toujours périmé** — sur la grandeur la plus volatile du
-   système. Et il faudrait choisir une politique de panne : service mort ⇒ on bloque tout,
-   ou on ne bloque rien. Il n'y a pas de troisième option.
-3. **Le vrai coût** : les données OHLCV n'ont pas de carnet d'ordres ⇒ une porte spread
-   existe en live et **pas en backtest**. On fabriquerait volontairement la divergence
-   live/backtest que `docs/09` surveille comme critère d'invalidation.
-4. Ordre de grandeur : sur BTC/ETH/SOL/BNB perp, le spread est ~10× sous le seuil de
-   0,05 % en régime normal. La porte ne mordrait qu'en stress — déjà couvert en grande
-   partie par la fenêtre news et les circuit breakers.
-
-**Recommandation** : ne pas coder. Faire comme pour les Bollinger (C3) — **journaliser sans
-décider** au démarrage du dry-run, mesurer la distribution réelle, puis trancher avec des
-chiffres. Sur un substrat à espérance nulle, tout filtre qui réduit l'exposition *paraît*
-positif : l'activer sans mesure, ce serait s'acheter une illusion.
-
-**À valider par toi** : d'accord pour laisser la porte inerte jusqu'à la mesure ?
-→ **Répondu le 04/08 : OUI.** Voir la session ci-dessous.
+**Conséquence de rester à 1**, qui est le point à trancher : quand la distance de stop est très
+serrée, le stake calculé dépasse l'équité, freqtrade le plafonne, et le risque réel devient
+**inférieur** aux 1,16 % visés (A6) — **sans le dire**. Spec : `docs/03 §3.7.4`, `docs/03:115`.
 
 ---
 
-## Session du 2026-08-04 (soir) — fermeture de TOUTES les dettes C
+## A2-quater — véto actions c6/c7 en HOSTILE
 
-Consigne de Jonas : « on ferme tous les C ». Quatre dettes restaient ouvertes (C1, C2, C7,
-C9) ; les cinq autres (C3, C4, C5, C6, C8) l'étaient déjà. **Les quatre sont fermées.**
+Le véto actions est resté un coupe-circuit des **deux sens** (il force toujours RISK_OFF), alors
+que HOSTILE, depuis A2, autorise le short. Raison du choix par défaut : le bloc c6/c7 est un
+fail-safe de **corrélation**, pas un avis directionnel.
 
-| # | Décision de Jonas | État |
-|---|---|---|
-| C1 | Retrouver les dates CPI/NFP en ligne **et surtout ajouter tous les événements marqués en ROUGE sur ForexFactory, au minimum** | **appliqué** |
-| C2 | Porte spread : laisser inerte + journaliser | **acté**, aucun code à changer |
-| C7 | Webhook régénéré, l'ancien est supprimé | **fermé** |
-| C9 | Installer optuna + plotly | **appliqué** |
+**À trancher** : une cassure du NASDAQ corrélée au BTC est-elle un signal de **short**, ou un
+« on ne fait rien » ? Le véto est ablatable par construction (A4), donc ça se teste seul.
 
-### C1 — élargissement du calendrier : TOUS les rouges
+---
 
-C'est un **changement de doctrine**, pas un correctif. `fetch_forexfactory()` appliquait deux
-filtres en plus de l'impact ; les deux sont **retirés** :
+## A2-quinquies — RISK_OFF sur Fear & Greed < 25
 
-1. **Filtre de NOM** (`_is_relevant`) — ne gardait que FOMC/CPI/NFP + `NEWS_KEYWORDS`. Un
-   rouge « Retail Sales » ou « ISM Manufacturing PMI » était ignoré alors qu'il bouge le
-   marché. Fonction supprimée (plus aucun appelant).
-2. **Filtre PAYS** (`_US_COUNTRIES`) — ne gardait que `USD`. Une décision BCE ou BoE rouge
-   passait à la trappe. Constante supprimée ; la devise est désormais **conservée** dans le
-   champ `devise` de chaque événement, pour pouvoir re-filtrer plus tard sur des mesures
-   plutôt que sur un a priori.
+Même question que ci-dessus : la peur extrême reste aujourd'hui un « on ne trade pas ». En v4 elle
+pourrait être un signal de **short**. Non touché, faute de réponse.
 
-⚠️ **Conséquence assumée** : beaucoup plus d'événements bloquants (fenêtre ±30 min). Le
-premier fetch réel a ramené 8 rouges sur la semaine, dont 2 NZD et 2 CAD qui auraient été
-jetés avant. Sur-bloquer plutôt que rater un rouge — c'est le compromis choisi.
-Verrouillé par `test_fetch_ff_garde_tous_les_rouges_toutes_devises` : remettre un filtre
-serait invisible autrement.
+---
 
-**Dates CPI/NFP 2026 renseignées** — 24 événements ajoutés à la primaire (16 → 40).
-`bls.gov` refuse toujours tout (403 sur `requests` **et** sur WebFetch), donc les dates
-viennent de sources **secondaires concordantes**, et c'est écrit dans le fichier :
-`usinflationcalculator.com` (qui recopie le BLS), recoupé pour les dates passées avec les
-URL d'archives `bls.gov/news.release/archives/empsit_*`. DST 2026 appliquée (EDT du 08/03
-au 01/11), publication 08:30 US Eastern.
+## C1-bis — palier orange du calendrier économique
 
-⚠️ **2027 non couvert** : le BLS publie son calendrier annuel fin 2026. À compléter à ce
-moment-là, sinon la couverture CPI/NFP retombe sur ForexFactory, qui ne voit qu'une semaine.
+Le calendrier capture tous les rouges toutes devises + `WATCHED_EVENTS` (24 fragments de noms)
+quelle que soit leur couleur, mais un événement suivi ne devient **bloquant** que si ForexFactory
+le classe déjà `high` ou `medium`. Mesuré sur le flux réel du 04/08 :
 
-**Résultat mesuré** : `calendar_source.py` sort en **code 0** (plus aucun trou), 46
-événements fusionnés, et `macro_state.py` ne logue plus ni warning ni erreur.
-
-### C2 — porte spread : fermée en « acte de non-codage »
-
-Jonas a suivi la recommandation : la porte reste inerte, on journalisera la distribution
-réelle du spread au démarrage du dry-run sans qu'elle décide quoi que ce soit, puis on
-tranchera avec des chiffres — même traitement que les Bollinger (C3). Motif retenu : sur un
-substrat à espérance nulle, tout filtre qui réduit l'exposition *paraît* positif ; l'activer
-sans mesure, c'est s'acheter une illusion. **Aucune ligne de code à écrire, et c'est le
-résultat.** La gate 3 reste dans `GATE_NAMES` — elle est traversée sans être évaluée.
-
-### C7 — webhook : fermé
-Régénéré par Jonas, l'ancien est supprimé côté Discord. Nouveau webhook en `.env`
-(gitignoré). Rapport de backtest envoyé et reçu le 04/08.
-
-### C9 — outillage : fermé
-`optuna` et `plotly` installés dans `C:\Users\jofar\venvs\arit`. `freqtrade plot-dataframe`,
-`plot-profit` et `hyperopt` redeviennent utilisables. ⚠️ Rappel : l'interdit n°5 interdit
-d'hyperopter G1-G7 et les poids — l'outil ne sert qu'au reste.
-
-### C1-bis — la liste des indicateurs SUIVIS (Jonas, 04/08 au soir)
-
-Jonas a fourni un glossaire de ~25 indicateurs macro avec « voilà les données que je veux au
-minimum ajouter ». Problème constaté : **la plupart ne sont pas rouges sur ForexFactory**
-(PPI, Retail Sales, Industrial Production, KOF, SPPI, ADP, Unemployment Claims sont oranges
-ou jaunes), donc le filtre `impact == "high"` les jetait tous, même après l'élargissement.
-
-D'où `WATCHED_EVENTS` (24 fragments de noms → libellés) : ces indicateurs sont capturés
-**quelle que soit leur couleur**.
-
-**Palier orange — le garde-fou qui compte.** Un événement suivi ne devient bloquant que si
-FF le classe déjà `high` ou `medium`. Mesuré sur le flux réel du 04/08 :
-
-| Règle | Événements capturés | Bloquants | Part du temps calendaire bloquée |
+| Règle | Capturés | Bloquants | Part du temps calendaire bloquée |
 |---|---|---|---|
-| Sans palier (tout suivi promu) | 40 | **40** | **~24 %** |
-| **Avec palier orange (retenu)** | 40 | **11** | **~7 %** |
+| Sans palier (tout suivi promu) | 40 | 40 | **~24 %** |
+| **Avec palier orange (en place)** | 40 | 11 | **~7 %** |
 
-Sans le palier, la semaine bloquait sur « Spanish Manufacturing PMI », « Italian Services
-PMI » et « French Final Services PMI » — les PMI nationaux européens sont publiés en cascade
-et n'ont aucun effet mesurable sur le BTC. Les 11 bloquants retenus couvrent bien tous les
-indicateurs qui comptent de la liste : ISM Manufacturing, ADP, ISM Services, Unemployment
-Claims, NFP, Employment Change.
-
-Les `low` restent **dans** le calendrier avec `impact: "low"` (donc non bloquants) : la
-donnée est là pour mesurer plus tard, sans re-fetch, ce que le palier a coûté ou évité.
-`impact_ff` conserve la couleur d'origine de chaque événement.
-
-⚠️ **Deux retours en arrière possibles, tous deux à un endroit unique** : vider
-`WATCHED_EVENTS` ramène à « les rouges seuls » ; changer `bloquant` en `impact_ff == "high"`
-ramène à l'ancien filtre. Verrouillé par
-`test_liste_suivie_capture_les_oranges_mais_pas_les_low`.
-
-**À valider par toi** : d'accord pour le palier orange, ou tu veux que les `low` bloquent
-aussi (~24 % du temps) ?
-
-### État après cette session
-**Aucune dette C ouverte.** 320 tests verts, ruff propre.
+**À trancher** : d'accord pour le palier orange, ou tu veux que les `low` bloquent aussi (~24 % du
+temps) ? Le retour en arrière est en un point unique (`bloquant` → `impact_ff == "high"`),
+verrouillé par `test_liste_suivie_capture_les_oranges_mais_pas_les_low`.
 
 ---
 
-## Session du 2026-08-07 — parité live/backtest + dry-run non surveillé
+## C1-ter — dates CPI/NFP 2027 : à saisir fin 2026
 
-**Contexte** : Jonas part en vacances et doit déconnecter. Objectif donné : fermer les
-chantiers et lancer le dry-run pendant son absence.
-
-### Décisions de Jonas (07/08)
-
-| # | Question posée | Réponse | Conséquence |
-|---|---|---|---|
-| V1 | Périmètre avant départ | **Minimum opérationnel + combler la parité live/backtest** | du code métier neuf embarqué sans surveillance ; recommandation inverse donnée et écartée en connaissance de cause |
-| V2 | Remontée Discord pendant l'absence | **Alertes critiques seulement** | le watchdog alerte sur bot mort / exposition anormale ; aucun résumé quotidien |
-
-> ⚠️ Sur V1 j'avais recommandé le périmètre réduit (ne pas toucher à la parité la veille
-> d'une déconnexion). Jonas a tranché pour le périmètre large. Compensation appliquée :
-> fail-safes durcis et 36 tests ajoutés (320 → 356).
-
-### Ce qui a été fait
-
-**1. Parité live/backtest comblée (le BLOCANT déclaré du dry-run).**
-`AritV1.py:58` ne posait la colonne macro qu'en backtest (`df if live`), donc
-`cio.direction_macro` retombait sur son fail-safe long-only : le live et le backtest étaient
-**deux produits différents** depuis A2. Désormais `macro_regime.attach_regime_now()` pose le
-régime en live, calculé par `regime_now()` depuis les 5 scores 06.2 que
-`services/macro_state.py` écrit maintenant dans `macro_state.json`.
-
-**2. Collision de schéma évitée — le piège le plus dangereux de la session.**
-`fear_greed` existe dans les DEUX schémas avec des sens incompatibles : indice **brut**
-0-100 en 06.3, score **{-1,0,1}** en 06.2. Passer le dict à plat à `regime_now()` aurait fait
-sommer un F&G de 50 comme +50 ⇒ **PORTEUR en permanence**, donc long autorisé quelle que soit
-la macro réelle. Les scores vivent donc dans un sous-objet `contracts.MACRO_SCORES_KEY`
-(`macro_scores`), jamais à plat. Verrouillé par
-`test_regime_from_state_ne_melange_pas_les_deux_schemas`.
-
-**3. Fail-safe de donnée en live (`regimes.donnee_non_fiable`).**
-Depuis A2, HOSTILE ne bloque plus rien — il **autorise le short**. Or `regime_now()` renvoie
-justement HOSTILE quand l'état est périmé ou sans scores. Sans garde-fou, une source macro
-tombée aurait fait **shorter le bot en aveugle pendant des semaines**. `classify` force
-désormais RISK_OFF (les deux sens coupés, comme le véto actions c6/c7) si l'état est `stale`,
-`risk_off`, si F&G < 25, **ou si les 5 scores sont absents**. Cette dernière clause est une
-défense en profondeur : elle ne suppose pas que le producteur soit à jour — cas constaté en
-vrai le 07/08, un `macro_state.json` d'ancienne version portant `stale: false` sans scores.
-
-**4. Bug FRED — panne silencieuse depuis le 2026-07-12.**
-`scripts/download_macro.py` envoyait `User-Agent: ARIT-macro/1.0` à toutes les sources.
-FRED met cet UA au trou noir : **ReadTimeout à 40 s, reproductible**, alors qu'il répond en
-**0,1 s sans en-tête**. Conséquence : `dxy` et `taux` — 2 des 5 composants macro — n'étaient
-plus rafraîchis depuis un mois, et `daily_regimes` les scorait à 0 **sans que rien ne le
-signale**. `dl_fred` n'envoie plus d'UA. Les 8 fichiers macro sont à jour au 07/08.
-
-**5. Opérationnel — le dry-run pouvait tourner 2 h puis ne plus rien faire.**
-`services/macro_state.py` est un one-shot **par design** (docstring : « lancé par le Task
-Scheduler toutes les heures ») — mais **la tâche planifiée n'avait jamais été créée**.
-`start_arit.py` le lançait une fois ; passé `CALENDAR_STALE_HOURS = 2`, l'état devenait stale
-⇒ RISK_OFF ⇒ **plus aucune entrée**, sans alerte. Le watchdog ne rattrape pas ce cas : il
-surveille le heartbeat, il ne relance aucun service. Créé :
-
-| Mécanisme | Rôle |
-|---|---|
-| Tâche `ARIT macro_state` (horaire) | rafraîchit `macro_state.json` — sans elle le bot se fige |
-| Tâche `ARIT download_macro` (quotidienne 06:15) | alimente les 5 composants ; historique > 48 h ⇒ scores refusés ⇒ repos |
-| `%APPDATA%\...\Startup\ARIT_relance.cmd` | relance les 4 process après un redémarrage Windows Update |
-| `start_arit.py --si-absent` | garde-fou anti-doublon (`tasklist`) : ne relance rien si un freqtrade tourne |
-
-> La tâche « à l'ouverture de session » a été refusée par Windows (**Accès refusé** — un
-> déclencheur `AtLogOn` exige l'élévation). Contournée par le dossier Démarrage, qui ne
-> demande aucun droit. Supprimer `ARIT_relance.cmd` suffit à désactiver la relance.
-
-### Ce qui reste ouvert — à lire au retour
-
-1. **Le dry-run exige que le PC reste allumé ET la session ouverte.** Les 4 process vivent
-   dans des consoles utilisateur ; le dossier Démarrage ne se déclenche qu'à l'ouverture de
-   session. Un redémarrage sans reconnexion automatique = tout est arrêté jusqu'au retour.
-2. **Données OHLCV futures toujours manquantes** pour 3 paires sur 4 (seul BTC en 4h/5m).
-   Sans elles, aucun backtest futures et `check_bias.py` ne peut pas re-tourner. N'empêche
-   pas le dry-run (freqtrade télécharge le live lui-même), empêche la **validation**.
-3. **Chantiers B1→B17 et D1→D4 intacts** — dont le walk-forward (B13/D2), prérequis déclaré
-   du dry-run. A8 toujours reporté. Le dry-run lancé produit des **données**, il ne valide
-   aucune hypothèse.
-4. **`user_data/decisions/` était vide** : c'est précisément le jeu d'évaluations dont
-   dépendent B8 (N ≥ 400 signaux), B9 (audit d'IC) et toute piste ML. C'est le gain principal
-   de cette absence.
-
-### État après cette session
-**356 tests verts** (320 → 356), ruff propre. Parité live/backtest **comblée**.
-
-### Correctif du 07/08 au soir — la remontée Discord était morte
-
-Découvert en vérifiant la décision V2 juste après le lancement.
-
-**`watchdog.alert()` sortait en silence.** Il lisait `DISCORD_WEBHOOK_URL` dans
-`os.environ` (`services/watchdog.py`), mais la variable n'existe **dans aucune portée**
-Windows — ni `User`, ni `Machine`, ni process. Les secrets ne vivent que dans `.env`, et
-**rien ne chargeait `.env`** dans l'environnement des services lancés par `start_arit.py`.
-Le watchdog tournait, ne trouvait pas d'URL, et retournait sur `if not url: return`. C'est
-la panne la plus coûteuse possible pour un filet de sécurité : muette.
-
-Corrigé par `watchdog._webhook_url()` — environnement d'abord, sinon relecture directe de
-`.env`. **Lecture inline, sans import** : l'invariant M10 nº1 interdit tout import du projet
-à ce fichier et assume explicitement la duplication. Une alerte non envoyée journalise
-désormais `ALERTE NON ENVOYEE` au lieu de disparaître. 4 tests ajoutés.
-
-Le secret n'a **pas** été recopié dans les variables d'environnement Windows : le registre
-les expose à tout process enfant et à tout dump, alors que `.env` est la source unique
-documentée.
-
-### Constat non corrigé — `services/discord_bot.py` ne démarre pas
-
-Le fichier n'a **aucun point d'entrée** : ni `if __name__ == "__main__"`, ni `client.run()`,
-ni instanciation de `Client`. C'est une bibliothèque de fonctions (testée) que
-`start_arit.py` lance comme un service — le process se termine donc aussitôt. Vérifié après
-lancement : seuls `watchdog.py` et `freqtrade` tournent.
-
-**Volontairement non corrigé le 07/08** : écrire et brancher un service Discord la veille
-d'une déconnexion, sans personne pour le surveiller, est exactement le risque qu'on cherche
-à éviter. Sans conséquence sur la décision V2 : les alertes critiques viennent du
-**watchdog**, pas de ce bot. Ce que M09 apporterait — le digest quotidien — est précisément
-ce que Jonas a décliné en choisissant « critiques seulement ».
-
-À traiter au retour, avec le reste de M09.
-
-### Correctif du 07/08 (2) — le watchdog ne pouvait PAS alerter en dry-run
-
-Signalé par Jonas depuis la console du watchdog :
-`WARNING:__main__:watchdog: clefs ccxt absentes - mode alerte seule`.
-
-Le message lui-même est **normal** en dry-run (pas de clés ⇒ pas de lecture d'exposition,
-pas de *flatten* — ce qui n'a aucun sens sur de l'argent papier). Mais en tirant le fil :
-
-```python
-def is_breach(age, holdings) -> bool:
-    return age > HEARTBEAT_MAX_S and bool(holdings)   # <-- "and bool(holdings)"
-```
-
-Sans clés ccxt, `open_exposure` renvoie **toujours** `[]`, donc `is_breach` est **toujours
-faux**, donc le watchdog **n'alerte jamais** — même bot mort. La décision V2 (« alertes
-critiques seulement ») était **structurellement vide** : trois semaines de silence garanti,
-que le bot tourne ou qu'il soit mort depuis le deuxième jour.
-
-Corrigé en **séparant prévenir et agir**, plutôt qu'en affaiblissant M10 :
-
-| Fonction | Condition | Rôle |
-|---|---|---|
-| `is_breach` (inchangée) | heartbeat vieux **ET** exposition | déclenche le **flatten** — on ne liquide que ce qui existe |
-| `bot_silencieux` (nouvelle) | heartbeat vieux, **sans condition d'exposition** | déclenche l'**alerte** |
-
-`surveiller_liveness()` n'émet qu'**une** alerte par épisode + une à la reprise : sans ça, un
-bot mort le 2e jour d'une absence de trois semaines produirait ~30 000 messages Discord.
-Même garde anti-faux-positif que le flatten (`CONFIRM_READS` lectures). 6 tests ajoutés.
-
-⚠️ **Non résolu à cette heure** : `freqtrade` tourne mais n'écrit **aucun heartbeat**
-(fichier toujours daté du 31/07) et n'a créé ni base dry-run ni journal du jour. Le bot n'a
-donc pas atteint sa première boucle. À diagnostiquer avant de considérer le dry-run comme
-lancé — un bot qui ne bat pas ne collecte rien.
-
-### Correctif du 07/08 (3) — LE bug qui rendait tout le reste inutile
-
-Diagnostic du heartbeat manquant, en relançant freqtrade au premier plan :
-
-```
-freqtrade.worker - INFO - Changing state to: STOPPED
-freqtrade.worker - INFO - Bot heartbeat. PID=14768, state='STOPPED'
-```
-
-Le bot démarrait **parfaitement** — stratégie résolue, wallets synchronisés, 4 paires,
-protections chargées — puis passait en état **STOPPED** et y restait.
-
-**Cause** : `user_data/config.dry.json` ne contenait pas `initial_state`, et le défaut de
-freqtrade est `stopped`. L'omission ne produit **aucune erreur** : les logs ont l'air sains,
-le process tourne, il n'évalue simplement rien. Et sans FreqUI (`config.api.json` absent) ni
-API REST, **rien ne pouvait le démarrer** : il serait resté figé toute l'absence.
-
-C'est ce qui explique tout le reste — pas de heartbeat, pas de base dry-run, pas de journal
-du jour.
-
-**Corrigé** : `"initial_state": "running"` + `"logfile": "user_data/logs/freqtrade.log"`.
-Le logfile n'est pas cosmétique : sans lui, un run non surveillé est indiagnosticable a
-posteriori — il a fallu relancer au premier plan pour voir cette ligne.
-
-**`tests/test_config_dry.py` créé** (5 tests) : aucun test ne validait la config déployée,
-c'est précisément pour ça que le bug était invisible. Verrouillés désormais : `dry_run`
-vrai, `initial_state` running, logfile présent, futures + paires perpétuelles, aucune clef
-API en dur.
-
-### Note — « clefs ccxt absentes » n'est PAS un problème
-
-Le message du watchdog est **attendu** en dry-run : sans clefs, pas de lecture d'exposition
-ni de *flatten*, ce qui n'a aucun sens sur de l'argent papier. Aucune clef d'exchange réelle
-n'a été ajoutée pour un run en dry — ce serait un risque gratuit. Seule conséquence réelle,
-déjà corrigée ci-dessus : l'alerte de liveness ne devait pas dépendre de l'exposition.
+Acté, avec une échéance : le BLS publie son calendrier annuel **fin 2026**. Tant que 2027 n'est pas
+saisi dans `user_data/calendar/economic_calendar.json`, la couverture CPI/NFP retombe sur
+ForexFactory, **qui ne voit que la semaine en cours** — un CPI à J+20 n'est connu de personne.
+`coverage_gaps()` le signalera en `ERROR` à chaque run. ⚠️ `bls.gov` refuse toute récupération
+automatisée (403) : saisie manuelle, publication 08:30 US Eastern.
 
 ---
 
-## Dispositif d'absence — mis en place le 2026-08-07 au soir
+## F1 — banc d'essai de stratégies : DÉPOSÉ, NON TRANCHÉ
 
-Jonas part se reposer (~3 semaines). Demande : « continue de chercher de l'edge sans moi
-et des améliorations possibles ».
+> Aucune ligne de code écrite. Cette section existe pour que l'idée ne meure pas dans une
+> conversation ; elle attend un arbitrage. Référencée par `CHANTIERS.md` § F1 et H7.
 
-### Ce que j'ai refusé de programmer, et pourquoi
+**L'idée (Jonas, 12/08)** : un module « stratégie » permettant de tester **d'autres stratégies que
+AritV1**, pour (1) trouver celle qui a le meilleur rendement et (2) **diversifier les formes
+d'investissement**.
 
-**Chercher un edge sans surveillance est exactement ce qu'il ne faut pas automatiser.**
-`CHANTIERS.md` l'exige noir sur blanc : B6 impose le préenregistrement des hypothèses avec
-un compteur d'essais « honnêtement initialisé à ≥ 30 », B2 impose Benjamini-Hochberg. Un
-agent qui cherche pendant trois semaines **trouvera** quelque chose — et ce sera du bruit,
-avec l'apparence d'un résultat. Le mandat programmé est donc : **préparer et mesurer, jamais
-conclure**. Ce qui rend une future recherche d'edge légitime, pas la recherche elle-même.
+**Pourquoi c'est le bon moment** : l'entrée d'AritV1 n'a aucun edge directionnel mesurable — 78
+signaux en 5 ans, p = 0,38 / 0,30 contre le modèle nul. Continuer à réparer une seule mécanique
+dont le substrat est à espérance nulle est un pari sur une seule carte. L'infrastructure existe
+déjà : `--strategy-list`, le journal JSONL, `research/` indexé, `optuna` + `plotly` installés.
 
-### Ce qui tourne sur la machine (local — voit les données réelles)
-
-| Mécanisme | Cadence | Rôle |
-|---|---|---|
-| `ARIT macro_state` | horaire | rafraîchit `macro_state.json` — sans elle le bot se fige en 2 h |
-| `ARIT download_macro` | 06:15 | alimente les 5 composants ; > 48 h ⇒ scores refusés ⇒ repos |
-| `ARIT veille` | 07:00 | écrit `research/veille_locale/AAAA-MM-JJ.md` : collecte + santé |
-| `ARIT_relance.cmd` | ouverture de session | relance les 4 process après un redémarrage |
-
-`veille_quotidienne.py` surveille les **quatre dépendances capables de figer le bot sans
-erreur** — heartbeat, `stale`, scores 06.2 absents, historique macro périmé. Ce sont
-précisément les pannes muettes du 07/08 : aucune ne se signale seule.
-
-**Lecture seule, et sans Discord.** Le script constate, il ne corrige rien : un dry-run non
-surveillé a besoin d'une trace, pas d'un pilote automatique. Et un résumé quotidien poussé
-irait contre la décision V2 (« critiques seulement ») — le watchdog reste le seul dispositif
-autorisé à interrompre Jonas.
-
-### ⏳ Ce qui reste à armer — UNE action de Jonas
-
-La routine cloud (vague 1 : B2, B4, B5, B6, deux fois par semaine, PR en draft, jamais sur
-`main`, jamais de logique de trading) est **écrite mais pas créée** :
-
-> `HTTP 401 — Connect your GitHub account before saving a routine that uses a GitHub repository.`
-
-Il faut connecter le compte GitHub (`/web-setup`, ou l'app GitHub sur le dépôt). Une fois
-fait, la routine se crée en une commande. Périmètre volontairement limité à B2/B4/B5/B6 :
-ce sont les seuls chantiers réalisables **sans les données locales**, `user_data/data/` et
-`user_data/backtest_results/` étant gitignorés donc absents d'un checkout cloud.
-
-### Observabilité ajoutée le même soir
-
-- **FreqUI** installée (`freqtrade install-ui` n'avait jamais été lancé) + overlay
-  `config.api.json` généré, gitignoré, sur `127.0.0.1:8080` uniquement.
-- **`scripts/suivi.py`** : montre les setups **envisagés puis refusés** avec l'écart au
-  seuil — ce que FreqUI ne montre pas, et qui est la matière première de B8/B9.
-
-> ⚠️ **Angle mort constaté le 12/08 : l'observabilité est intégralement locale.** Jonas,
-> depuis une autre machine, n'a accès à **rien** — FreqUI est sur `127.0.0.1`, et toutes les
-> traces du dry-run sont gitignorées (`user_data/decisions/`, `logs/`, la base dry-run,
-> `research/veille_locale/`). Le seul signal distant est l'**absence** d'alerte Discord du
-> watchdog, qui ne distingue pas « le bot va bien » de « la session Windows est fermée
-> depuis trois jours, watchdog compris ». Ce n'est pas un bug : c'est le dispositif tel que
-> décidé (V2, « critiques seulement »), dont la conséquence n'avait pas été énoncée.
-
-### Routine cloud ARMÉE — 2026-08-08
-
-GitHub connecté par Jonas, la routine est créée et active.
-
-| | |
-|---|---|
-| Nom | **ARIT — vague 1 méthodologie (absence Jonas)** |
-| ID | `trig_01LarM6hDoUtTrESnVqGRxdM` |
-| Cadence | lundi et jeudi, 06:00 UTC (08:00 Paris) |
-| Prochaine | 2026-08-10 08:03 Paris |
-| Modèle | `claude-opus-5` |
-| Suivi | https://claude.ai/code/routines/trig_01LarM6hDoUtTrESnVqGRxdM |
-
-**Connecteurs MCP retirés** (`mcp_connections: []`). L'API avait rattaché
-automatiquement Gmail, Google Calendar et Canva ; un agent autonome tournant trois
-semaines sans surveillance n'a aucun besoin d'accéder à une boîte mail. Il ne dispose que
-du dépôt et de ses outils de fichiers.
-
-**Garde-fous inscrits dans le prompt** : jamais de push sur `main` (branche
-`veille/vague1` + PR en draft), aucune modification de `user_data/strategies/**`,
-`services/**`, `download_macro.py` ni des configs — un dry-run tourne sur la machine de
-Jonas et rien ne doit pouvoir l'atteindre — et interdiction de **conclure** sur l'edge.
-Périmètre : B6 d'abord (préenregistrement), puis B2, B4, B5.
-
-**Mémoire entre exécutions** : `research/veille/JOURNAL.md`. Chaque run repart de zéro,
-lit ce fichier, continue le travail entamé et y ajoute une entrée datée. Les livrables
-vont dans `research/veille/` (versionné), jamais dans `research/veille_locale/`
-(gitignoré, réservé à la veille locale).
-
-Une exécution de vérification a été déclenchée le 08/08 à 17:37 (session
-`cse_01NVY6e4gu2z8rnoGAS7SMP2`) plutôt que d'attendre trois semaines pour découvrir un
-éventuel échec.
-
----
-
-## Session du 2026-08-12 — D1 ABANDONNÉ (décision de Jonas)
-
-| # | Décision de Jonas | État |
-|---|---|---|
-| D1 | **Passer les jambes longues en spot : abandonné, aucun intérêt.** La surperformance mesurée ne vient pas du spot, elle vient de l'alternance **bull run / bear run** de la période | **fermé — abandonné** |
-
-### Le motif, et pourquoi il est recevable
-
-Le chiffre qui portait D1 depuis un mois — **+267 % → +579 %** — comparait deux courbes sur
-2020-2026, une période dominée par un bull run majeur. Une jambe longue en spot **conserve
-l'actif** ; sur une période où l'actif est multiplié, elle capte mécaniquement cette hausse.
-Ce n'est pas la stratégie qui s'améliore, c'est le **bêta** qui entre dans la mesure.
-
-C'est exactement le biais que le projet s'interdit ailleurs : *sur un substrat à espérance
-nulle, tout ce qui augmente l'exposition longue paraît positif tant que le marché monte*.
-Le raisonnement qui a fermé C2 (porte spread) ferme D1 pour la même raison.
-
-### Ce que ça généralise — critère de rejet à réutiliser
-
-> Tout gain mesuré en direction longue sur 2020-2026 doit être comparé au **buy-and-hold**
-> de la même période, pas à zéro. Ce qui ne bat pas le hold ne mesure pas un edge, il mesure
-> le marché.
-
-À appliquer d'office à toute candidate du banc d'essai (F1) : sans cette référence, un banc
-qui compare des stratégies longues entre elles couronnera la plus exposée.
-
-### Résidu factuel, consigné sans rouvrir D1
-
-Un écart spot/perp subsiste indépendamment du bull/bear : la jambe longue en perpétuel
-**paie le funding** quand celui-ci est positif, ce qui est le régime habituel en tendance
-haussière. Cet écart-là est un coût mécanique, pas du bêta. Il est noté ici pour ne pas être
-redécouvert dans six mois — **il ne justifie pas de rouvrir D1** : le sens du coût est déjà
-capté par la mesure « funding = 86 % du profit » de MacroFlip, et D1 telle qu'elle était
-formulée reposait sur un chiffre qui, lui, ne mesurait rien.
-
-### Conséquence sur la liste D
-
-D1 sort. **D2 (walk-forward des 5 seuils macro) devient le chantier D le plus urgent** — il
-est déjà déclaré prérequis du dry-run depuis juillet et n'a jamais été fait.
-
-⚠️ **Collision de noms, comme pour C6 en août** : le `D1` fermé ici est celui de la liste D
-de `CHANTIERS.md` (MacroFlip). Les `D1-D6` de `for claude build/REPRISE.md` et
-`RAPPORT_PROTOCOLE_AB.md` sont une numérotation **différente** (décisions d'un rapport de
-juillet) et ne sont pas concernés.
-
----
-
-## Session du 2026-08-12 — idée déposée par Jonas : banc d'essai de stratégies (F1)
-
-> **Statut : DÉPOSÉ, NON TRANCHÉ.** Aucune ligne de code écrite. Cette section existe pour
-> que l'idée ne meure pas dans une conversation ; elle attend un arbitrage de Jonas.
-
-### L'idée, telle que formulée
-
-Un **module « stratégie »** qui permette de tester **d'autres stratégies que celle
-actuellement appliquée** (AritV1), afin de :
-1. trouver celle qui a le **meilleur rendement** ;
-2. **diversifier les formes d'investissement** (ne pas dépendre d'une seule mécanique).
-
-### Pourquoi ça tombe au bon moment
-
-Le diagnostic du 04/08 est sans appel : l'entrée d'AritV1 n'a **aucun edge directionnel**
-(MFE > MAE sur 47 % des trades = pile ou face), et la seule paire positive du dernier
-backtest est SOL — retirer SOL rend le système franchement perdant. Continuer à réparer
-une seule mécanique dont le substrat est à espérance nulle est un pari sur une seule carte.
-Un banc d'essai transforme « réparer AritV1 » en « chercher quelle famille de signal porte
-de l'information », ce qui est la vraie question ouverte depuis le 19/07.
-
-L'infrastructure existe déjà et n'est pas exploitée : `freqtrade backtesting` accepte
-`--strategy-list`, le journal JSONL décrit chaque décision, `research/` accueille déjà les
-runs indexés, et `optuna` + `plotly` sont installés depuis C9.
-
-### Périmètre proposé (à valider, pas à coder en l'état)
+**Périmètre proposé (à valider, pas à coder en l'état)**
 
 | Brique | Rôle |
 |---|---|
-| Socle commun | `arit_lib` reste partagé (risque, journal, contrats). Une stratégie candidate ne réécrit **que** son signal d'entrée/sortie |
-| Registre | une liste déclarée de stratégies candidates, chacune isolée dans son fichier, aucune n'ayant le droit de toucher `AritV1.py` |
-| Banc | un runner qui lance les N candidates sur la **même** période, les mêmes paires, le même `--timeframe-detail 5m` et `--enable-protections`, et sort un tableau comparable |
-| Verdict | métriques imposées identiques pour toutes : PF, Sharpe, MDD **et durée du DD**, N trades, MFE vs MAE, dégradation IS→OOS |
-| Diversification | mesurer la **corrélation des courbes d'équity** entre candidates : deux stratégies rentables et corrélées à 0,9 n'apportent rien |
+| Socle commun | `arit_lib` reste partagé (risque, journal, contrats). Une candidate ne réécrit **que** son signal d'entrée/sortie |
+| Registre | liste déclarée de candidates, chacune isolée dans son fichier, aucune n'ayant le droit de toucher `AritV1.py` |
+| Banc | un runner qui lance les N candidates sur la **même** période, les mêmes paires, le même `--timeframe-detail 5m` et `--enable-protections` |
+| Verdict | métriques imposées identiques : PF, Sharpe, MDD **et durée du DD**, N trades, MFE vs MAE, dégradation IS→OOS |
+| Diversification | **corrélation des courbes d'équity** entre candidates : deux stratégies rentables corrélées à 0,9 n'apportent rien |
 
-Familles envisageables pour la diversification (à préenregistrer une par une, pas en bloc) :
-mean-reversion (opposé structurel d'AritV1 qui est un suiveur), portage / funding (déjà
-identifié comme 86 % du profit sur MacroFlip), macro seule sans couche technique, spot vs
-perpétuel (rejoint D1, +267 % → +579 % mesuré et jamais appliqué).
+Familles envisageables, à préenregistrer **une par une** : mean-reversion (opposé structurel
+d'AritV1 qui est un suiveur), portage / funding (86 % du profit de MacroFlip), macro seule sans
+couche technique, spot vs perpétuel.
 
-### Les trois risques, dits avant et pas après
+**Les trois risques, dits avant**
+1. **P-hacking industrialisé** — un banc est une machine à multiplier les tests, et il en produira
+   d'autant plus de faux gagnants qu'il est efficace. ⇒ B2 (Benjamini-Hochberg), B5 (hold-out
+   scellé) et B6 (`EXPERIMENTS.jsonl`) sont des **prérequis, pas des compléments** ; le banc doit
+   refuser de tourner sur le hold-out.
+2. **Interdit n° 5** — comparer des stratégies ≠ optimiser des seuils. Le banc ne doit jamais
+   devenir un contournement de l'interdiction d'hyperopter G1-G7 et les poids.
+3. **Priorité** — reste le trou de données à vérifier avant de comparer quoi que ce soit : un banc
+   qui tourne sur BTC seul comparerait les candidates sur la paire la plus perdante du dernier run.
 
-1. **P-hacking industrialisé.** Un banc d'essai est une machine à multiplier les tests. Le
-   compteur d'essais est déjà à ≥ 30 (B6) et la correction Benjamini-Hochberg (B2) n'a
-   jamais été appliquée. **Sans budget de tests déclaré à l'avance, ce module produira des
-   gagnants qui sont du bruit** — et il en produira d'autant plus qu'il est efficace.
-   ⇒ **B2 + B5 (hold-out scellé) + B6 (EXPERIMENTS.jsonl) sont des prérequis, pas des
-   compléments.** Le banc doit refuser de tourner sur le hold-out.
-2. **Interdit n°5.** Le banc ne doit jamais devenir un contournement de l'interdiction
-   d'hyperopter G1-G7 et les poids : comparer des stratégies ≠ optimiser des seuils.
-3. **Ordre de priorité.** La parité live/backtest — bloquant historique — a été **comblée le
-   07/08**, donc F1 n'est plus derrière elle. Ce qui passe devant maintenant : la **routine
-   cloud vague 1** (armée le 08/08) traite justement B2/B4/B5/B6, c'est-à-dire les prérequis
-   du banc. F1 se branche naturellement **derrière elle**, pas en parallèle. Reste aussi le
-   trou de données OHLCV futures (3 paires sur 4) : sans elles, un banc comparerait les
-   candidates sur BTC seul, or c'est précisément la paire la plus perdante du dernier run.
+Coût : M (plusieurs jours) + la discipline statistique ci-dessus, sans laquelle le gain est négatif.
 
-### Ce que ça débloque / ce que ça coûte
-
-Débloque : une réponse chiffrée à « faut-il réparer AritV1 ou en changer », et un support
-concret à la diversification demandée. Coûte : M (plusieurs jours), et la discipline
-statistique ci-dessus, sans laquelle le gain est négatif.
-
-### À valider par toi
-
-1. On ouvre F1 ? Si oui, **avant ou après** la fin de la routine cloud vague 1 (B2/B4/B5/B6) ?
-2. D'accord pour que B2/B5/B6 soient des **prérequis bloquants** du banc ?
-3. Quelles familles tu veux voir en premier (mean-reversion, portage/funding, macro seule,
-   spot vs perp) ?
-4. Le dry-run tourne pendant ton absence et remplit `user_data/decisions/`. Ces évaluations
-   servent-elles de premier jeu de comparaison pour le banc, ou on reste sur backtest seul ?
+**À trancher**
+1. On ouvre F1 ? Si oui, avant ou après les prérequis méthodologiques (B2/B4/B5/B6) ?
+2. D'accord pour que B2/B5/B6 soient des prérequis **bloquants** du banc ?
+3. Quelles familles en premier (mean-reversion, portage/funding, macro seule, spot vs perp) ?
+4. Les évaluations du journal servent-elles de premier jeu de comparaison, ou backtest seul ?
+5. Référence imposée : **buy-and-hold** de la même période pour toute candidate (Q9) — ce qui ne
+   bat pas le hold mesure le marché, pas un edge.
 
 ---
 
-## Session du 2026-08-12 (soir) — G0 : le dataset qui manquait, et ce qu'il mesure
+## G1 — un modèle appris peut-il remplacer l'agrégation Σ poids·score ?
 
-Contexte : Jonas ouvre neuf chantiers d'un coup (boucle d'auto-amélioration, ML au CIO / à
-la documentation / au position manager, quantitatif, interface graphique, banc multi-stratégie,
-tracking retail vs institutionnel, agrégateur de news). Aucun n'était réalisable : ils
-dépendent tous d'un jeu de données qui **n'existait pas**. Cette session le crée et le mesure.
+**Ce qui est mesuré** : `produit_pondere` (la somme pondérée) a un IC de **+0,0642**, soit **moins
+bon que `s_structure` seul (+0,0851)**. L'agrégation à poids figés **dégrade** le meilleur signal
+disponible, parce qu'elle y mélange `s_sr` (IC −0,0497) et `s_patterns` (−0,0162) avec des poids
+positifs. C'est le point d'insertion ML n° 1 — ni le CIO macro, ni le position manager. `cio.py`
+l'annonce depuis le début (« V2 remplacera `conviction()` derrière la MÊME interface »).
 
-### Constat 1 — le dispositif d'absence a entièrement disparu
-
-Vérifié le 12/08 sur la machine, pas dans la doc :
-
-| Élément armé le 07-08/08 | État constaté le 12/08 |
-|---|---|
-| Tâches `ARIT macro_state` / `download_macro` / `veille` | **aucune** (`Get-ScheduledTask` : 0 résultat) |
-| `%APPDATA%\...\Startup\ARIT_relance.cmd` | **absent** (seul `Ollama.lnk`) |
-| Process freqtrade / watchdog | **aucun** |
-| `user_data/logs/freqtrade.log` | **jamais créé** |
-| `research/veille_locale/`, `research/veille/` | **inexistants** |
-| `macro_state.json` | figé au 04/08 — **8 jours périmé** |
-| Journal de décisions | rien après le `2026-08-04.jsonl` |
-
-Le code des commits du 07-08/08 est intact (git l'a préservé) ; c'est l'**état hors-git** qui
-a disparu — tâches Windows, fichier de démarrage, logs, données collectées. Conséquence
-sèche : **les trois semaines de collecte prévues ont produit zéro donnée.**
-
-⚠️ Rien n'a été relancé : remettre en route un dry-run engage la machine de Jonas et lui
-appartient. À décider (G2 ci-dessous).
-
-### Constat 2 — l'évènement `evaluation` n'a JAMAIS existé, dans aucun run
-
-Le plus coûteux des trois, et il était invisible. `AritV1.py:61` :
-
-```python
-if live:
-    self._journal_evaluation(df, metadata.get("pair"), macro)
-```
-
-L'évènement `evaluation` est le **seul** qui porte le vecteur de features complet (5 scores,
-~63 motifs de bougie, régime, macro, conviction, seuil, RR). Il n'est écrit qu'en live. Le
-live n'a jamais tenu une boucle. Décompte sur la totalité de `user_data/logs/decisions/` :
-
-> `{'entry': 95, 'gate_check': 1427, 'gestion': 4084, 'system': 10}` — **`evaluation` : 0**
-
-Donc B8 (N ≥ 400 signaux), B9 (audit d'IC des 5 scores) et **toute** piste ML étaient sans
-données, alors que `CHANTIERS.md` annonçait « ~420 évaluations » comme acquis de l'absence.
-
-### Ce qui a été livré — collecter par REJEU, pas par dry-run
-
-Jonas proposait de « supprimer des paramètres et des sécurités en dry-run pour permettre plus
-d'entrées ». Le besoin est le bon (il n'y a pas de quoi apprendre), le moyen non : un dry-run
-produit ~20 évaluations/jour et dégrader le live casserait la parité backtest/live comblée le
-07/08. Le rejeu hors-ligne donne le même vecteur, sur 5 ans d'histoire, sans toucher à la
-production.
-
-| Fichier | Rôle |
-|---|---|
-| `analysis/dataset.py` | rejoue `features → regimes → cio` avec les **mêmes fonctions pures** d'`arit_lib`, étiquette chaque évaluation par triple barrière (SL structurel, TP +1,5R) et écrit une table SQLite de 121 colonnes |
-| `analysis/mesures.py` | répond à B1, B9 et B2 sur cette table |
-
-**Résultat : 56 890 évaluations en 69 secondes** (BTC 15 131 · ETH 14 654 · SOL 12 902 ·
-BNB 14 203), là où le projet en avait zéro depuis un an.
-
-Trois garanties structurelles, parce que ce dataset va servir à décider :
-1. **Zéro look-ahead côté features** — le merge 4h/1d passe par
-   `freqtrade.strategy.merge_informative_pair` (le décalage de la production, pas une
-   réimplémentation) ; le régime macro est joint par `attach_macro_regime`, déjà décalé +1 j ;
-   le fichier `macro_state.json` n'est **pas** lu (le lire poserait l'état d'aujourd'hui sur
-   une bougie de 2021).
-2. **Cibles isolées par nom** — toute colonne qui regarde le futur est préfixée `y_`. Un
-   entraînement qui exclut `y_%` ne peut pas fuiter par inattention.
-3. **Hold-out matérialisé (B5)** — colonne `split`, `holdout` à partir du 2025-01-01, exclue
-   de toutes les mesures ci-dessous. 13 932 évaluations mises sous scellé.
-
-### B1 — FERMÉ. Le modèle nul, enfin mesuré
-
-Espérance d'une entrée prise **au hasard** avec la géométrie du système, sur 42 902 bougies au
-lieu de 128 trades :
-
-| Sens | n | p(TP) | p(SL) | E[R] |
-|---|---|---|---|---|
-| long | 42 902 | 33,08 % | 50,85 % | **−0,0123** |
-| short | 42 902 | 32,87 % | 53,01 % | **−0,0370** |
-
-Le substrat est à espérance nulle, légèrement négative. Ce n'était jusqu'ici qu'une phrase de
-doctrine ; c'est maintenant un chiffre, et c'est la référence contre laquelle tout taux de
-réussite doit être lu.
-
-### Le sélecteur d'entrée ne bat pas le hasard — et il est intestable
-
-Binomial exact, unilatéral, contre le p(TP) nul ci-dessus :
-
-| Sens | n | p(TP) | nul | E[R] | p-value | verdict |
-|---|---|---|---|---|---|---|
-| long | **50** | 36,00 % | 33,08 % | −0,080 | 0,381 | non significatif |
-| short | **28** | 39,29 % | 32,87 % | +0,089 | 0,296 | non significatif |
-
-Le diagnostic du 04/08 (« edge d'entrée nul ») est confirmé, cette fois contre un modèle nul
-solide. Mais le chiffre qui compte est **n = 50 et n = 28 sur cinq ans et quatre paires** :
-0,16 % des évaluations donnent un signal. Aucune campagne, aucun walk-forward, aucun modèle ne
-peut rien conclure de 78 observations. **Le problème n° 1 d'ARIT n'est pas que son entrée soit
-mauvaise, c'est qu'elle soit trop rare pour être mesurable.** C'est exactement ce que Jonas
-avait senti en demandant « plus d'entrées ».
-
-### B9 — PASSÉ, et il change la priorité du ML. B2 appliqué pour la première fois
-
-38 tests d'IC de Spearman, corrigés Benjamini-Hochberg à FDR = 0,10 (29 survivent). Critère de
-passage déclaré **avant** la mesure dans `CHANTIERS.md` : |IC| ≥ 0,04 et signe stable entre les
-deux cibles. **9 features passent.**
-
-| Feature | IC vs ret_96h | IC vs r_long | B9 |
-|---|---|---|---|
-| `s_structure` | +0,0518 | **+0,0851** | ✅ |
-| `conviction` | +0,0706 | +0,0637 | ✅ |
-| `trend_dir` | +0,0353 | +0,0646 | ✅ |
-| `produit_pondere` | +0,0348 | +0,0642 | ✅ |
-| `adx4h` | +0,0464 | +0,0321 | ✅ |
-| `s_sr` | −0,0051 | **−0,0497** | ✗ (signe stable, mais **négatif**) |
-| `s_patterns` | −0,0022 | −0,0162 | ✗ |
-| `rr_dispo` | +0,0003 | **−0,0592** | ✗ (signe **instable**) |
-
-Il y a donc de l'information dans les features — faible (IC ~0,05-0,085) mais réelle, et avec
-43 000 observations la largeur compense. Le scoring n'est **pas** vide : le critère d'abandon
-de B9 (« tous < 0,04 ⇒ changer de famille de signal ») n'est pas déclenché.
-
-**Le constat qui décide où mettre le ML** : `produit_pondere` — la somme Σ poids·score — a un
-IC de **+0,0642**, soit **moins bon que `s_structure` seul (+0,0851)**. L'agrégation à poids
-figés dégrade le meilleur signal disponible, parce qu'elle y mélange `s_sr` (IC −0,0497) et
-`s_patterns` (−0,0162) avec des poids positifs. Deux des cinq scores tirent à l'envers.
-
-⇒ Le premier point d'insertion du ML n'est ni le CIO macro, ni le position manager : c'est
-**l'agrégation des scores**, là où de l'information mesurée est détruite par une pondération
-arbitraire. `cio.py` l'annonce d'ailleurs en tête depuis le début (« V2 remplacera
-conviction() derrière la MÊME interface »).
-
-⚠️ **Et c'est un arbitrage de Jonas, pas une évidence technique** : l'interdit n° 5 dit
-« G1-G7 et les poids jamais hyperoptés ». Mesurer un IC n'est pas hyperopter ; remplacer
-l'agrégation par un modèle appris, si. Question ouverte G1 ci-dessous.
-
-### Deux anomalies à ne pas laisser filer
-
-1. **`rr_dispo` a un IC de −0,0592 contre `y_r_long`, avec un signe instable.** C'est la porte
-   `rr_min` (RR ≥ 1,5), l'un des filtres les plus contraignants du système : elle pourrait
-   sélectionner contre le rendement. Non conclu — un IC de rang sur une variable tronquée par
-   sa propre porte demande un traitement à part.
-2. **`s_sr` et `s_patterns` entrent dans la somme avec un poids positif et un IC négatif.**
-   C'est mesurable sans rien recoder : leur retrait est une ablation, pas une optimisation.
-
-### Questions ouvertes pour Jonas — G1 à G4
-
-| # | Question | Pourquoi elle bloque |
-|---|---|---|
-| G1 | Autorise-t-on un modèle appris à remplacer l'agrégation Σ poids·score de `cio.conviction` ? | c'est le point d'insertion ML n° 1 mesuré, et il touche l'interdit n° 5 |
-| G2 | Relance-t-on le dry-run, et avec quel mécanisme de survie aux redémarrages ? | il est mort depuis le 05/08 ; le rejeu le remplace pour la donnée, pas pour la parité |
-| G3 | Le retrait de `s_sr` et `s_patterns` de la somme : ablation à mesurer maintenant ? | deux scores sur cinq tirent à l'envers |
-| G4 | Ordre des neuf chantiers : la priorisation proposée (rareté des entrées d'abord, ML ensuite) est-elle la bonne ? | tout le reste en dépend |
+**Pourquoi ça bloque** : l'interdit n° 5 dit « G1-G7 et les poids jamais hyperoptés ». Mesurer un
+IC n'est pas hyperopter ; **remplacer l'agrégation par un modèle appris, si**. C'est donc un
+arbitrage de Jonas, pas une évidence technique.
 
 ---
 
-## Session du 2026-08-12 (nuit) — G5 à G8 : les deux bases, et le journal réparé
+## G2 — relance-t-on le dry-run, et avec quel mécanisme de survie ?
 
-### Décisions de Jonas
+Le dry-run est mort depuis le 05/08 et **rien n'a été relancé** : remettre en route un dry-run
+engage la machine de Jonas et lui appartient.
 
-| # | Décision | État |
-|---|---|---|
-| G5 | **Journaliser les évaluations en backtest** (retirer le `if live:` d'`AritV1.py:61`) — « pour ARIT v1 oui » | **appliqué** |
-| G6 | **Deux bases séparées**, une par nature de rapport : débogage d'un côté, analyse/ML de l'autre | **appliqué** |
-| G7 | Réserve sur le périmètre backtest : « ça pourrait créer un surplus de données inutiles et du bruit avec la modification du fonctionnement des marchés actuels » | **traitée par la mesure, voir ci-dessous** |
-| G8 | VPS prévu pour Hermes Agent **+ ARIT 24/24** | acté, non codé |
+Ce que la relance doit régler pour ne pas répéter août :
+- les 4 process vivent dans des consoles utilisateur ⇒ **PC allumé ET session ouverte** ; un
+  redémarrage sans reconnexion automatique arrête tout ;
+- l'état hors-git (tâches planifiées, `ARIT_relance.cmd`, logs) avait **entièrement disparu** entre
+  le 08 et le 12/08 — les trois semaines de collecte ont produit zéro donnée ;
+- l'observabilité est **intégralement locale** (FreqUI sur `127.0.0.1`, traces gitignorées) : le
+  seul signal distant est l'**absence** d'alerte Discord, qui ne distingue pas « bot sain » de
+  « session Windows fermée depuis trois jours » (chantier F2, et lien direct avec G8).
 
-### G7 — la réserve était juste, mais pas là où on l'attendait
-
-Testée plutôt que débattue : IC de Spearman par période, contre `y_r_long`.
-
-| Feature | 2019-2021 | 2022-2023 | 2024-2026 | Verdict |
-|---|---|---|---|---|
-| `s_structure` | +0,0831* | +0,0910* | +0,0630* | stable |
-| `conviction` | +0,0557* | +0,0727* | +0,0471* | stable |
-| `adx4h` | +0,0269* | +0,0362* | +0,0433* | stable, **croissant** |
-| `rr_dispo` | −0,0704* | −0,0458* | −0,0557* | stable **négatif** |
-| `s_sr` | −0,0687* | −0,0345* | −0,0386* | stable **négatif** |
-| `trend_dir` | +0,0718* | +0,0676* | **+0,0086** | **EFFONDRÉ** |
-
-L'information de `s_structure`, `conviction` et `adx4h` tient sur sept ans, ETF spot compris :
-tronquer l'historique coûterait les deux tiers du dataset sans gagner en pertinence. Mais
-`trend_dir` s'est effondré — le suivi de tendance naïf a été arbitragé depuis 2024, et c'est
-une des conditions de `signal_long`.
-
-⇒ **Le remède retenu n'est pas de tronquer, c'est d'exiger la stabilité inter-périodes** comme
-critère de rétention d'une feature. À câbler dans `mesures.py`.
-
-### G5 — ce que le changement de production coûte, mesuré
-
-`journal.lignes_evaluation(df, live)` (fonction pure, `journal.py`) porte la règle :
-live = la dernière ligne si elle ouvre une bougie 4h ; backtest = toutes les clôtures 4h.
-`AritV1._journal_evaluation` boucle dessus.
-
-Piège évité : `macro_state.json` porte l'état **courant**. L'écrire sur une bougie de 2021
-serait du look-ahead — en backtest `fear_greed` et `macro_stale` restent donc vides, le
-contexte macro point-in-time étant déjà dans la row. Verrouillé par
-`test_journal_evaluation_backtest_nutilise_pas_letat_macro_courant`.
-
-Coût réel mesuré sur un backtest d'un mois × 4 paires : **1 724 évaluations, 0 doublon**,
-2 224 octets par ligne, +3,9 Mo de journal. Les 720 du mois demandé sont exactes
-(30 j × 6 × 4) ; le reste est le warm-up de 999 bougies. Extrapolé : **~135 Mo pour 7 ans**.
-
-⚠️ `AritV1.py` passe de 259 à 260 lignes. Le contrat `< 250` était **déjà violé de 9 lignes
-avant cette session** — dette à traiter à part (une PR = une feature).
-
-### G6 — les deux bases
-
-| Base | Produite par | Grain | Répond à |
-|---|---|---|---|
-| `analysis/out/arit_debug.sqlite` | `analysis/ingest.py` (JSONL) | 1 évènement = 1 ligne | **pourquoi ce trade est passé, ou non** |
-| `analysis/out/arit_analyse.sqlite` | `analysis/dataset.py` (rejeu) | 1 évaluation étiquetée | mesures statistiques, ML, contrefactuels |
-
-Le bot n'écrit **jamais** en base : il écrit du JSONL append-only, `ingest.py` ingère à part.
-Une écriture SQL dans un callback serait de l'I/O bloquante dans le chemin de trading
-(docs/11 §11.5), et `journal.py` garantit que le trading ne s'arrête jamais pour un problème
-de journal. Le JSONL reste la source de vérité, donc la base est reconstructible à volonté.
-
-Ingestion **incrémentale** (`ingestion_state` retient l'offset par fichier) et **idempotente**.
-Vue `pourquoi` : LEFT JOIN depuis les évaluations, pour que les setups **refusés** — ceux qui
-n'ont ni gate_check ni entry — restent visibles. C'est précisément eux qu'on veut lire.
-
-### Deux trous du journal, découverts par l'ingestion
-
-Aucun n'est corrigé — ce sont des correctifs de production à part entière.
-
-**1. `ev_gestion` et `ev_gate_check` ne posent aucun `ts_utc`.** `journal.write` leur donne
-donc l'heure **réelle** d'exécution. En backtest, des milliers d'évènements de marché
-distincts partagent la même seconde, la même paire et le même `signal_id` : **on ne peut pas
-placer une décision de porte dans le temps simulé**. Conséquence directe sur l'ingestion — une
-clé métier `(ts_utc, pair, signal_id, règle)` en détruisait 5 073 sur 5 521. D'où la clé par
-**empreinte SHA-1 du contenu**, verrouillée par
-`test_deux_evenements_de_meme_cle_metier_sont_conserves`.
-
-**2. `exit` n'est écrit nulle part : 95 `entry`, 0 `exit` sur tout l'historique du journal.**
-`_journal_exit` n'est déclenché que par `order_filled` quand `not trade.is_open`, condition
-jamais remplie. Le journal ne contient donc **aucun résultat de trade** : ni `r_final`, ni
-`mae_r`, ni `mfe_r`, ni cause de sortie. Le rapport « pourquoi » s'arrête à l'entrée, et tout
-le chantier « gestion » reste aveugle côté journal.
-
-### État
-
-400 tests verts (390 → 400), ruff propre.
+Le rejeu hors-ligne (`analysis/dataset.py`) remplace le dry-run pour la **donnée**, pas pour la
+**parité** live/backtest ni pour l'exécution réelle.
 
 ---
 
-## Session du 2026-08-16 — les dettes C fermées s'affichaient encore comme ouvertes
+## G3 — ablation de `s_sr` et `s_patterns`
 
-Constat de Jonas : « tous ces chantiers étaient censés être fermés, pourquoi s'affichent-ils
-toujours ». Vérifié — il a raison, et la cause n'est pas un oubli de fermeture.
+Deux scores sur cinq entrent dans la somme avec un **poids positif et un IC négatif** (`s_sr`
+−0,0497 · `s_patterns` −0,0162). Leur retrait est une **ablation, pas une optimisation** : c'est
+mesurable sans rien recoder, donc l'interdit n° 5 n'est pas touché. Chantier `Q4`.
 
-### La cause : `CHANTIERS.md` est append-only, ses tableaux ne l'étaient pas
+⚠️ À ne pas confondre avec l'anomalie `rr_dispo` (IC −0,0592, signe instable, variable **tronquée
+par sa propre porte** `rr_min`) : celle-là demande un traitement de biais de sélection, pas un IC
+de rang. Chantier `Q3`, non conclu.
 
-C1-C9 ont bien été fermés le 04/08 au soir. Mais la fermeture a été écrite dans une **section
-ajoutée en bas** du fichier (« MISE À JOUR DU 2026-08-04 »), sans jamais amender le tableau
-d'origine du 31/07, resté 40 lignes plus haut avec ses statuts `jamais tranché` / `jamais codé`.
+---
 
-Toute lecture séquentielle — un humain qui scrolle, un outil qui parse les tableaux — voit donc
-la version périmée **avant** la version à jour, et recompte des dettes fermées comme ouvertes.
-Le même défaut touchait le tableau A (A1-A7 signés), le tableau B (B1/B2/B5/B8/B9 fermés le
-12/08) et la liste E (points 1 et 5 levés).
+## G4 — ordre des neuf chantiers H1-H9
 
-⚠️ `D1` avait échappé au piège parce qu'il avait été **barré en place** (`~~…~~` + « FERMÉ —
-ABANDONNÉ ») le 12/08. C'est la seule différence de traitement, et elle explique tout.
+Priorisation **proposée** et non validée : la **rareté des entrées d'abord** (Q1 — courbe
+N(seuil) : combien de signaux, et à quelle espérance, si on desserre chaque porte une à une), le ML
+ensuite. Motif : 78 signaux en 5 ans, rien n'est mesurable avant. Tout le reste de l'ordre des
+chantiers en dépend ; détail des neuf dans `CHANTIERS.md` § H1-H9.
 
-### Règle retenue
+---
 
-> **Un statut se corrige à l'endroit où il a été écrit, pas seulement dans une section plus
-> bas.** Une ligne fermée est barrée en place et porte sa date de fermeture ; ce qui n'est pas
-> barré est ouvert. Une mise à jour ajoutée en bas complète le détail, elle ne remplace jamais
-> l'amendement en place.
+## G8 — VPS : acté, non codé
 
-Appliqué le 16/08 aux tableaux A, B, C et à la liste E, plus un bandeau en tête du fichier qui
-dit que `DECISIONS.md` fait foi. Aucune décision de fond n'est modifiée : seuls les statuts
-affichés rejoignent l'état réel.
-
-### Effet sur le décompte
-
-Les fantômes retirés (9 dettes C + 5 chantiers B + 7 décisions A + 2 points E = **23 lignes**)
-ne sont plus comptés comme en attente. Ce qui reste réellement ouvert : B3, B4, B6, B7,
-B10-B13 · D2-D4 · E2, E3, E4 · F1, F2 · G1-G4 · H1-H9 · Q1-Q10.
+Jonas, 12/08 : un VPS est prévu pour **Hermes Agent + ARIT 24/24**. C'est la réponse envisagée au
+problème de survie du dry-run (G2) et à l'observabilité locale (F2). Rien n'est codé, rien n'est
+provisionné. ⚠️ Tant que ce n'est pas fait, tout dry-run dépend de la session Windows de Jonas.

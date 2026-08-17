@@ -1,5 +1,118 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-08-17 — leçons d'août, extraites de DECISIONS.md avant sa purge
+`DECISIONS.md` ne conserve plus que les décisions **ouvertes** (règle de purge du 17/08) : tout
+ce qui suit y était consigné et n'existait nulle part ailleurs. L'historique complet des
+décisions fermées reste dans git (`git log -p -- DECISIONS.md`).
+
+**Pièges de production trouvés en août — chacun était MUET.**
+1. **`order_filled` rejetait les entrées short** (04/08). Un short entre en **SELL** ; le code
+   lisait tout `ft_order_side == "sell"` comme une sortie G4 partielle et sortait avant d'écrire
+   le `custom_data` ⇒ aucun short n'aurait eu d'`initial_sl`, donc aucune gestion.
+2. **`make_signal_id` ne normalisait pas le `:`** des paires perpétuelles, contrairement à sa
+   docstring. `BTC/USDT:USDT` ⇒ nom de fichier illégal sous Windows ⇒ `OSError` à la création de
+   `veto/<id>.intent`.
+3. **ForexFactory identifie le pays par code DEVISE** (`USD`), pas par code pays : le filtre
+   initial sur `"US"` laissait passer **zéro** événement, en silence.
+4. **`bls.gov` répond 403** à toute récupération automatisée (`requests` **et** WebFetch). Dates
+   CPI/NFP 2026 saisies depuis des sources secondaires concordantes (`usinflationcalculator.com`,
+   recoupées avec `bls.gov/news.release/archives/empsit_*`), DST 2026 appliquée, 08:30 US Eastern.
+   ⚠️ **2027 à compléter** quand le BLS publie (fin 2026), sinon la couverture CPI/NFP retombe sur
+   ForexFactory qui ne voit **qu'une semaine**.
+5. **FRED met l'en-tête `User-Agent: ARIT-macro/1.0` au trou noir** : ReadTimeout à 40 s
+   reproductible, **0,1 s sans en-tête**. `dxy` et `taux` — 2 des 5 composants macro — n'ont plus
+   été rafraîchis pendant un mois et étaient scorés à 0 sans que rien ne le signale. `dl_fred`
+   n'envoie plus d'UA.
+6. **`fear_greed` existe dans DEUX schémas de sens incompatibles** : indice brut 0-100 en 06.3,
+   score `{-1,0,1}` en 06.2. Passer le dict à plat à `regime_now()` sommerait un F&G de 50 comme
+   +50 ⇒ **PORTEUR en permanence**. Les scores vivent dans le sous-objet
+   `contracts.MACRO_SCORES_KEY`, jamais à plat.
+7. **`config.dry.json` sans `initial_state` ⇒ freqtrade démarre STOPPED** (son défaut) : logs
+   sains, process vivant, **zéro évaluation**, et sans FreqUI ni API REST rien ne peut le
+   démarrer. `logfile` est du même ordre : un run non surveillé sans logfile est indiagnosticable
+   a posteriori. Verrouillé par `tests/test_config_dry.py` (aucun test ne validait la config
+   déployée — c'est pour ça que le bug était invisible).
+8. **`watchdog.alert()` sortait en silence** : il lisait `DISCORD_WEBHOOK_URL` dans `os.environ`,
+   variable inexistante dans **toute** portée Windows (les secrets ne vivent que dans `.env`, et
+   rien ne chargeait `.env` pour les services lancés par `start_arit.py`) ⇒ `if not url: return`.
+   Corrigé par `watchdog._webhook_url()` : env d'abord, sinon relecture **inline** de `.env` sans
+   import (l'invariant M10 n°1 interdit tout import du projet ici et assume la duplication). Une
+   alerte non envoyée journalise `ALERTE NON ENVOYEE`. Le secret n'est **pas** recopié dans les
+   variables d'environnement Windows (registre exposé à tout process enfant et à tout dump).
+9. **`is_breach` = heartbeat vieux ET exposition** : sans clés ccxt `open_exposure` renvoie
+   toujours `[]` ⇒ **jamais d'alerte, même bot mort**. Séparé depuis : `is_breach` déclenche le
+   *flatten* (on ne liquide que ce qui existe), `bot_silencieux` (heartbeat seul) déclenche
+   l'**alerte**, une seule par épisode + une à la reprise — sinon un bot mort au 2e jour d'une
+   absence de trois semaines produit ~30 000 messages Discord.
+10. **`services/discord_bot.py` n'a aucun point d'entrée** (ni `__main__`, ni `client.run()`) :
+    `start_arit.py` le lance comme un service, le process se termine aussitôt. Non corrigé, à
+    traiter avec M09.
+11. **`ev_gestion` et `ev_gate_check` ne posent aucun `ts_utc`** ⇒ `journal.write` met l'heure
+    **réelle** ; en backtest des milliers d'évènements partagent `(ts_utc, pair, signal_id,
+    règle)`. D'où la clé d'ingestion par **empreinte SHA-1 du contenu** — une clé métier en
+    détruisait 5 073 sur 5 521.
+12. **`exit` n'est écrit nulle part** : 95 `entry`, **0 `exit`** sur tout l'historique.
+    `_journal_exit` dépend de `not trade.is_open` dans `order_filled`, condition jamais remplie
+    ⇒ ni `r_final`, ni `mae_r`, ni `mfe_r` : le chantier gestion est aveugle (H4).
+13. **L'état hors-git ne survit pas.** Entre le 08/08 et le 12/08, tâches planifiées,
+    `ARIT_relance.cmd`, logs et données collectées avaient **tous** disparu ; le code, lui, était
+    intact. Les trois semaines de collecte prévues ont produit **zéro donnée**.
+14. **`--enable-protections` est obligatoire en backtest** : sans le drapeau, freqtrade ignore
+    silencieusement les protections et le backtest ne mesure plus le même produit que le dry-run.
+    Natif et custom ne sont pas redondants : `StoplossGuard` compte les sorties au stop quel que
+    soit leur R ; `risk.cb_sequential_state` compte toute clôture ≤ −0,8R (donc aussi G6/G7) et
+    exige qu'elles soient consécutives — le sizing ÷2 pendant 5 trades reste hors de portée de
+    toute protection native.
+
+**Mesures acquises — la référence chiffrée du projet.**
+Modèle nul B1 sur 42 902 bougies : long p(TP) 33,08 % / E[R] **−0,0123** · short 32,87 % /
+**−0,0370**. Le substrat est à espérance nulle, légèrement négative. Sélecteur d'entrée AritV1 :
+**50 longs + 28 shorts en 5 ans et 4 paires** (0,16 % des évaluations), p = 0,381 / 0,296 ⇒ le
+problème n° 1 n'est pas que l'entrée soit mauvaise, c'est qu'elle est **trop rare pour être
+mesurable** (Q1). B9 (IC de Spearman, Benjamini-Hochberg FDR 0,10, 29 tests sur 38 survivent) :
+9 features passent — `s_structure` **+0,0851**, `trend_dir` +0,0646, `produit_pondere` +0,0642,
+`conviction` +0,0637, `adx4h` +0,0321 ; `s_sr` **−0,0497** et `s_patterns` −0,0162 entrent dans la
+somme avec un poids **positif**. `produit_pondere` (+0,0642) est **moins bon que `s_structure`
+seul** ⇒ l'agrégation à poids figés **détruit** de l'information : c'est le point d'insertion ML
+n° 1 (question G1), ni le CIO macro ni le position manager. G7 (IC par période) : `s_structure`,
+`conviction` et `adx4h` tiennent sur sept ans, mais **`trend_dir` s'est effondré** en 2024-2026
+(+0,0086 contre +0,0718 en 2019-2021) — le suivi de tendance naïf a été arbitragé, et c'est une
+condition de `signal_long`. Remède retenu : **exiger la stabilité inter-périodes** comme critère
+de rétention de feature (Q2), pas tronquer l'historique.
+
+**Les deux bases, et le rejeu.** `analysis/dataset.py` rejoue `features → regimes → cio` avec les
+**mêmes fonctions pures** d'`arit_lib` et étiquette par triple barrière : **56 890 évaluations en
+69 s**, 121 colonnes, zéro look-ahead (merge via `merge_informative_pair`, `macro_state.json`
+jamais lu), cibles isolées par le préfixe `y_`, hold-out scellé par la colonne `split` à partir du
+2025-01-01 (13 932 lignes, exclues de toute mesure). `analysis/ingest.py` produit la base de
+**débogage** depuis le JSONL (incrémentale par offset, idempotente, vue `pourquoi` en LEFT JOIN
+pour garder visibles les setups **refusés**). Le bot n'écrit **jamais** en base — une écriture SQL
+dans un callback serait de l'I/O bloquante dans le chemin de trading (docs/11 §11.5) ; le JSONL
+reste la source de vérité, la base est reconstructible. Coût mesuré des évaluations journalisées
+en backtest (G5) : 1 724 lignes sur un mois × 4 paires, 2 224 o/ligne, **~135 Mo pour 7 ans**,
+0 doublon.
+
+**Doctrine acquise.**
+- **Calendrier (C1)** : tous les rouges, **toutes devises**, plus `WATCHED_EVENTS` (24 fragments
+  de noms) capturés quelle que soit leur couleur — mais bloquants seulement si ForexFactory les
+  classe `high`/`medium`. Ce **palier orange** donne 11 bloquants sur 40 et **~7 %** du temps
+  calendaire, contre 40 et **~24 %** sans palier (les PMI nationaux européens, publiés en
+  cascade, bloquaient la semaine). Les `low` restent dans le calendrier, non bloquants, pour
+  mesurer plus tard sans re-fetch. Retours en arrière possibles en un point unique (vider
+  `WATCHED_EVENTS`, ou exiger `impact_ff == "high"`).
+- **Critère de rejet généralisé (abandon de D1)** : tout gain mesuré en direction longue sur
+  2020-2026 se compare au **buy-and-hold** de la même période, pas à zéro. Ce qui ne bat pas le
+  hold ne mesure pas un edge, il mesure le marché. Résidu factuel consigné sans rouvrir D1 : une
+  jambe longue en perpétuel **paie le funding** en tendance haussière — coût mécanique, pas du
+  bêta.
+- **Ne pas coder un filtre avant de l'avoir mesuré (C2/C3)** : sur un substrat à espérance nulle,
+  tout filtre qui réduit l'exposition *paraît* positif. La porte spread reste inerte et
+  journalisée ; les Bollinger sont journalisées, non décisionnelles.
+- **Tenue des fichiers de suivi (16/08)** : un statut se corrige **à l'endroit où il a été
+  écrit** (barré en place, avec sa date), jamais seulement dans une section ajoutée en bas —
+  sinon toute lecture séquentielle voit la version périmée d'abord. C'est ce défaut qui faisait
+  recompter **23 lignes fermées** comme ouvertes dans `CHANTIERS.md`.
+
 ## 2026-07-27 — MacroFlip : le Macro Analyst seul, sans technique ni gestion (research/macro_flip/)
 Expérience Jonas : isoler la couche macro après le verdict « edge d'entrée NUL » du 19/07.
 Règle nue — PORTEUR→long, HOSTILE→short (perp), NEUTRE→on garde ; ni SL ni TP, 50 % de

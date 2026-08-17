@@ -30,3 +30,6 @@ contractuelle : README → 02_architecture → 11_sync_orchestration → modules
 - venv : `C:\Users\jofar\venvs\arit` (Python 3.12, freqtrade 2026.6, talib 0.6.8, ruff, pytest).
 - Tests : `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q`
 - État du build : `PLAN.md` (checklist qui fait foi) · leçons : `BUILD_NOTES.md`.
+- `DECISIONS.md` (racine) = décisions **ouvertes uniquement**, purgé dès qu'une décision est
+  appliquée/fermée (règle du 17/08). Ce qu'elle laisse de durable va dans `BUILD_NOTES.md`,
+  `docs/` ou `CHANTIERS.md` **avant** la suppression ; l'historique est dans git.

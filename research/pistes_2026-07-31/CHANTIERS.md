@@ -2,6 +2,9 @@
 
 > ⚠️ **CE FICHIER EST APPEND-ONLY. Les tableaux A à E datent du 31/07 ; les statuts réels sont
 > dans les sections « MISE À JOUR DU … » plus bas et dans `DECISIONS.md` (racine), qui fait foi.**
+> ⚠️ Depuis le 17/08, `DECISIONS.md` est **purgé** : il ne contient plus que les décisions
+> **ouvertes**. Une décision fermée n'y est plus, ses motifs sont dans
+> `for claude build/BUILD_NOTES.md` (§ 2026-08-17) et dans `git log -p -- DECISIONS.md`.
 > Ne jamais compter les lignes de A-E comme « ouvertes » sans lire les mises à jour : les statuts
 > périmés ont déjà été recomptés à tort comme des décisions en attente. Depuis le 16/08, chaque
 > ligne fermée est **barrée en place** — si elle n'est pas barrée, elle est ouverte.
@@ -73,7 +76,8 @@ n'a **jamais tourné en dry-run**.
 
 > ✅ **Aucune dette C ouverte depuis le 04/08 au soir.** Le tableau ci-dessous décrit l'état
 > du **31/07** et n'est conservé que pour l'historique. Statuts à jour : § « MISE À JOUR DU
-> 2026-08-04 » plus bas, et `DECISIONS.md` § « fermeture de TOUTES les dettes C ».
+> 2026-08-04 » plus bas, et `BUILD_NOTES.md` § 2026-08-17 (`DECISIONS.md` a été purgé de ses
+> décisions fermées le 17/08 — historique : `git log -p -- DECISIONS.md`).
 
 | # | Dette (constat du 31/07) | Statut réel |
 |---|---|---|
@@ -93,7 +97,7 @@ n'a **jamais tourné en dry-run**.
 
 | # | Chantier | Gain mesuré |
 |---|---|---|
-| D1 | ~~**Passer les jambes longues en spot** au lieu du perpétuel~~ | **FERMÉ — ABANDONNÉ le 12/08 par Jonas.** Le +267 % → +579 % n'est pas un edge : il mesure l'alternance bull/bear de la période. Motif complet : `DECISIONS.md` § 12/08 |
+| D1 | ~~**Passer les jambes longues en spot** au lieu du perpétuel~~ | **FERMÉ — ABANDONNÉ le 12/08 par Jonas.** Le +267 % → +579 % n'est pas un edge : il mesure l'alternance bull/bear de la période. Motif complet : `BUILD_NOTES.md` § 2026-08-17 |
 | D2 | Walk-forward des 5 seuils macro (calibrer 2020-2022, tester 2023-2026) | prérequis explicite avant tout dry-run |
 | D3 | Ablation des 5 composants macro (lequel porte le signal ?) | — |
 | D4 | Augmenter n (ETH/SOL/BNB, ou variante flat-neutre à 134 trades) | p = 0,095 sur 12 trades est indéfendable |
@@ -130,7 +134,7 @@ n'a **jamais tourné en dry-run**.
 
 # MISE À JOUR DU 2026-08-04 — état des dettes C
 
-`DECISIONS.md` (racine) fait foi. Le tableau C ci-dessus est daté du 31/07 ; voici où il en est.
+`BUILD_NOTES.md` § 2026-08-17 fait foi. Le tableau C ci-dessus est daté du 31/07 ; voici où il en est.
 
 | # | Dette | Statut au 04/08 |
 |---|---|---|
@@ -145,7 +149,8 @@ n'a **jamais tourné en dry-run**.
 | C9 | hyperopt/plot inutilisables | **FERMÉ le 04/08 (soir)** — `optuna` + `plotly` installés dans le venv |
 
 > **Au 2026-08-04 au soir : plus AUCUNE dette C ouverte.** Détail et arbitrages dans
-> `DECISIONS.md`, section « fermeture de TOUTES les dettes C ».
+> `for claude build/BUILD_NOTES.md` § 2026-08-17. Seuls C1-bis (palier orange) et C1-ter (dates
+> 2027) restent ouverts, dans `DECISIONS.md`.
 
 ## Décisions A
 
@@ -171,7 +176,7 @@ La liste `E` ci-dessus reste valable, avec deux entrées **nouvelles et priorita
 
 # MISE À JOUR DU 2026-08-07 — parité comblée, dry-run lancé
 
-`DECISIONS.md` (racine), section « Session du 2026-08-07 », fait foi.
+`BUILD_NOTES.md` § 2026-08-17 fait foi (section correspondante de `DECISIONS.md` purgée le 17/08).
 
 ## Bloquants du dry-run — état
 
@@ -253,8 +258,8 @@ doublons. À traiter au retour, avec la mesure en main.
 
 | # | Idée | Origine | Statut | Détail |
 |---|---|---|---|---|
-| F1 | **Banc d'essai de stratégies** — un module qui fait tourner d'autres stratégies que AritV1 sur le même protocole, pour comparer les rendements et **diversifier les formes d'investissement** (mean-reversion, portage/funding, macro seule, spot vs perp) | Jonas, 12/08 | **déposé, non tranché** | `DECISIONS.md` § « Session du 2026-08-12 » |
-| F2 | **Observabilité à distance du dry-run** — aujourd'hui nulle : FreqUI est sur `127.0.0.1`, toutes les traces sont gitignorées, et le seul signal distant est l'absence d'alerte Discord (qui ne distingue pas « bot sain » de « session Windows fermée »). Pistes : bot **Telegram natif** de freqtrade (`/status`, `/profit`, `/daily`, aucun port ouvert) — c'est aussi ce que M09 devait apporter — ou **Tailscale / Cloudflare Tunnel** (FreqUI reste sur `127.0.0.1` et devient joignable sans exposition publique). ❌ **Jamais** `listen_ip_address: 0.0.0.0` + redirection de port : l'API porte `/forceexit`, `/forcebuy`, `/stop` | Jonas, 12/08 | **déposé, non tranché** | `DECISIONS.md` § « Observabilité ajoutée le même soir » |
+| F1 | **Banc d'essai de stratégies** — un module qui fait tourner d'autres stratégies que AritV1 sur le même protocole, pour comparer les rendements et **diversifier les formes d'investissement** (mean-reversion, portage/funding, macro seule, spot vs perp) | Jonas, 12/08 | **déposé, non tranché** | `DECISIONS.md` § F1 |
+| F2 | **Observabilité à distance du dry-run** — aujourd'hui nulle : FreqUI est sur `127.0.0.1`, toutes les traces sont gitignorées, et le seul signal distant est l'absence d'alerte Discord (qui ne distingue pas « bot sain » de « session Windows fermée »). Pistes : bot **Telegram natif** de freqtrade (`/status`, `/profit`, `/daily`, aucun port ouvert) — c'est aussi ce que M09 devait apporter — ou **Tailscale / Cloudflare Tunnel** (FreqUI reste sur `127.0.0.1` et devient joignable sans exposition publique). ❌ **Jamais** `listen_ip_address: 0.0.0.0` + redirection de port : l'API porte `/forceexit`, `/forcebuy`, `/stop` | Jonas, 12/08 | **déposé, non tranché** | cette ligne porte la substance ; voir aussi `DECISIONS.md` § G2 et § G8 |
 
 ⚠️ F1 a trois prérequis non négociables, écrits dans `DECISIONS.md` : B2 (correction
 Benjamini-Hochberg), B5 (hold-out scellé), B6 (`EXPERIMENTS.jsonl`). Un banc d'essai sans
@@ -268,7 +273,7 @@ pour 3 paires sur 4, donc un banc lancé aujourd'hui comparerait les candidates 
 
 # MISE À JOUR DU 2026-08-12 (soir) — B1, B2 et B9 fermés · le dataset existe
 
-`DECISIONS.md` § « Session du 2026-08-12 (soir) » fait foi. Résumé de ce qui change dans les
+`BUILD_NOTES.md` § 2026-08-17 fait foi (mesures et pièges). Résumé de ce qui change dans les
 tableaux ci-dessus.
 
 ## Le prérequis caché de toute la vague 2 : il n'y avait aucune évaluation
