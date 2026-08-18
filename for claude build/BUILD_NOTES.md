@@ -22,6 +22,16 @@ les 50 longs retenus contre −0,0123 pour une entrée aléatoire de même géom
 significatif (n = 50, MDE +0,433 R), mais le signe est cohérent avec l'IC de
 `produit_pondere` (+0,0642 < `s_structure` seul +0,0851). À reposer quand N aura grossi.
 
+**Principe posé par Jonas le 18/08, en réponse à cette mesure** : « si la macro dit long,
+alors une position ne peut être prise qu'avec un signal long également — c'est un **filtre
+directionnel**, pas une obligation d'entrer en position ». Écrit dans `docs/01 §Mode de
+fonctionnement`. Le code faisait déjà ça (`cio.direction_macro` autorise un sens, toutes les
+autres portes restent à franchir), mais ce n'était formulé nulle part comme principe, et la
+distinction qu'il pose a une conséquence immédiate : **un signal qui interdit les DEUX sens
+n'est pas un filtre directionnel, c'est un coupe-circuit** — autre catégorie, à justifier
+comme telle. Concerne directement A2-quater (véto actions) et A2-quinquies (F&G < 25), tous
+deux encore ouverts et qui forcent RISK_OFF dans les deux sens.
+
 **Piste ouverte, à préenregistrer avant de la mesurer** : le seul p < 0,05 brut du run ne
 porte pas sur A5 mais sur la contrainte **directionnelle** — les 7 shorts bloqués par la
 porte de direction affichent −0,229 R contre +0,168 R pour le noyau (p = 0,022, ne survit

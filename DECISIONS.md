@@ -79,12 +79,24 @@ fail-safe de **corrélation**, pas un avis directionnel.
 **À trancher** : une cassure du NASDAQ corrélée au BTC est-elle un signal de **short**, ou un
 « on ne fait rien » ? Le véto est ablatable par construction (A4), donc ça se teste seul.
 
+⚠️ **La question est reformulée par le principe posé le 18/08** (`docs/01 §Mode de
+fonctionnement`) : « la macro est un **filtre directionnel**, pas une obligation d'entrer ».
+Un véto qui interdit **les deux** sens n'est donc pas un filtre directionnel mais un
+**coupe-circuit** — ce qui reste légitime, mais doit être assumé comme tel plutôt que subi.
+La vraie question devient : c6/c7 est-il un fail-safe de corrélation (coupe-circuit, statut
+actuel) ou un avis directionnel (filtre, donc autorisant le short) ?
+
 ---
 
 ## A2-quinquies — RISK_OFF sur Fear & Greed < 25
 
 Même question que ci-dessus : la peur extrême reste aujourd'hui un « on ne trade pas ». En v4 elle
 pourrait être un signal de **short**. Non touché, faute de réponse.
+
+⚠️ Même reformulation que A2-quater depuis le 18/08 : F&G < 25 est aujourd'hui un
+**coupe-circuit** (les deux sens interdits), pas un **filtre directionnel**. Le principe posé
+par Jonas n'interdit pas les coupe-circuits, il impose de les distinguer — et de dire lequel
+des deux on veut ici.
 
 ---
 

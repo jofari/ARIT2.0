@@ -34,9 +34,9 @@ n'a **jamais tourné en dry-run**.
 | ~~A2~~ | ~~Retirer `pivot_high`/`pivot_low` bruts du DataFrame~~ | ✅ appliqué 04/08 (avec le short) | un `check_bias.py` qui sort en code 0 | 31/07 |
 | ~~A3~~ | ~~Bloc corrélation : `SP500` → **`NASDAQ100`**~~ | ✅ appliqué 03/08 | évite une dégradation **silencieuse** dans ~13 mois | 31/07 |
 | ~~A4~~ | ~~Fusionner ou non le bloc corrélation macro~~ | ✅ appliqué 03/08 | la question fail-open / fail-safe reste ouverte | 30/07 |
-| ~~A5~~ | ~~Véto macro HOSTILE **seul**~~ | ✅ acté sans code · **mesuré 18/08 : INDÉCIDABLE** (`research/ablation_A5/RAPPORT.md`) | 7 signaux marginaux en 5 ans, MDE +1,53 R : la porte macro n'est pas mesurable à ce N | 17/07 |
+| ~~A5~~ | ~~Véto macro HOSTILE **seul**~~ | ✅ **FERMÉ 18/08** — acté sans code, puis mesuré : **INDÉCIDABLE** (`research/ablation_A5/RAPPORT.md`) | 7 signaux marginaux en 5 ans, MDE +1,53 R : la porte macro n'est pas mesurable à ce N | 17/07 |
 | ~~A6~~ | ~~Sizing : risque **constant**~~ | ✅ appliqué (1,16 %) | un sizing justifiable | 31/07 |
-| ~~A7~~ | ~~Choisir l'hypothèse d'edge de remplacement~~ | ✅ **signée 04/08** (`docs/01` v4) | tout le reste — c'était le point 1 de la liste E | 19/07 |
+| ~~A7~~ | ~~Choisir l'hypothèse d'edge de remplacement~~ | ✅ **FERMÉ** — signée 04/08 (`docs/01` v4) | tout le reste — c'était le point 1 de la liste E | 19/07 |
 | **A8** | G-set v2 (supprimer G1/G2/G3/G5/G6, garder G4+G7) | 🔴 **reporté par Jonas**, à re-mesurer après réparation de l'entrée | — | 19/07 |
 
 ---
@@ -181,10 +181,10 @@ La liste `E` ci-dessus reste valable, avec deux entrées **nouvelles et priorita
 
 ## Bloquants du dry-run — état
 
-| # (liste du 04/08) | Bloquant | Statut au 07/08 |
+| # (liste du 04/08) | Bloquant | Statut (07/08, révisé le 18/08) |
 |---|---|---|
 | 1 | Parité backtest/live rompue par A2 | **FERMÉ** — `macro_state` écrit les 5 scores 06.2, `macro_regime.attach_regime_now()` pose le régime en live, fail-safe `regimes.donnee_non_fiable` |
-| 2 | Données OHLCV futures manquantes | **OUVERT** — seul BTC en 4h/5m. Bloque les backtests et `check_bias.py`, PAS le dry-run |
+| 2 | ~~Données OHLCV futures manquantes~~ | ✅ **FERMÉ 18/08** — le statut « seul BTC en 4h/5m » était périmé. Vérifié au bit près en construisant le lake BETA : les **4 paires** ont 5m/1h/4h/1d, **100 % de couverture**, 0 bougie manquante (BTC 2019-09, ETH 2019-11, BNB 2020-02, SOL 2020-09 → 2026-08-04). Ne bloque plus les backtests. ⚠️ `check_bias.py` n'a pas été relancé depuis : les données ne manquent plus, mais le passage du contrôle reste à vérifier |
 | 3 | Hypothèse signée (A7) | levé depuis le 04/08 |
 
 De la liste `E` d'origine : A7 fait ; **walk-forward (B13/D2) toujours pas fait** ; drawdown

@@ -32,9 +32,37 @@ de préservation. Le score de conviction ne choisit plus la direction — il ne 
 temporiser.
 
 ## Mode de fonctionnement (v4)
+
+### Principe directeur — la macro FILTRE, elle n'ORDONNE pas (Jonas, 18/08)
+
+> **Si la macro dit long, alors une position ne peut être prise qu'avec un signal long
+> également. C'est un filtre directionnel, pas une obligation d'entrer en position.**
+
+Formulation à garder telle quelle, parce qu'elle tranche une ambiguïté que le code ne dit
+pas tout seul. La macro **retire** des possibilités, elle n'en crée aucune : un régime
+PORTEUR n'ouvre pas de long, il interdit les shorts. L'entrée reste soumise à **toutes** les
+autres portes (conviction ≥ seuil, RR ≥ 1,5, régime d'entrée, sens de la tendance).
+
+Deux conséquences de conception :
+- un signal macro s'exprime comme **filtre de sens**, jamais comme déclencheur d'entrée ;
+- un signal macro qui interdirait **les deux** sens n'est pas un filtre directionnel mais un
+  coupe-circuit. Ce n'est pas interdit, mais c'est une autre catégorie, qui doit être
+  justifiée comme telle — cf. le véto actions (A2-quater) et le Fear & Greed (A2-quinquies),
+  tous deux encore ouverts dans `DECISIONS.md`.
+
+Ce principe est corroboré par la mesure du 18/08 (`research/ablation_A5/RAPPORT.md`) : le
+seul écart à p < 0,05 brut du run porte sur la contrainte **directionnelle** — les shorts
+qu'elle bloque font −0,229 R contre +0,168 R pour ceux qu'elle laisse passer — et **non** sur
+la pénalité graduée de seuil. Ne survit pas à la correction de tests multiples, donc à
+préenregistrer avant d'en faire quoi que ce soit.
+
+### Câblage
+
 - **Direction** : donnée par le régime macro. PORTEUR → long autorisé, HOSTILE → short
   autorisé, NEUTRE → seuil de conviction relevé (`MACRO_NEUTRE_CONV_BUMP`, décision A5 du
-  03/08 : la pénalité NEUTRE est CONSERVÉE, le véto HOSTILE n'agit pas seul).
+  03/08 : la pénalité NEUTRE est CONSERVÉE, le véto HOSTILE n'agit pas seul). A5 a été
+  **mesurée le 18/08 : indécidable** (7 signaux marginaux en 5 ans, MDE +1,53 R) — elle reste
+  donc appliquée faute de raison de bouger, pas parce qu'elle est validée.
 - **Le bot est long ET short** (décision A2 du 03/08). Un signal macro baissier est
   inexploitable en spot long-only : le short est une **dépendance** de cette hypothèse, pas
   une option. Conséquence : `trading_mode: futures`, `margin_mode: isolated`.
