@@ -42,7 +42,7 @@ Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/
 | A2-quinquies | RISK_OFF sur Fear & Greed < 25 | à trancher | 04/08 |
 | C1-bis | Palier orange du calendrier éco | à trancher | 04/08 |
 | C1-ter | Dates CPI/NFP **2027** à saisir | acté, échéance fin 2026 | 04/08 |
-| F1 | Banc d'essai de stratégies → **projet BETA** | **acté 18/08**, non codé · 1 point à trancher | 12/08 |
+| F1 | Banc d'essai de stratégies → **projet BETA** | **acté 18/08** · lake livré, le reste conçu-non-codé | 12/08 |
 | G1 | Modèle appris à la place de l'agrégation Σ poids·score | à trancher | 12/08 |
 | G2 | Relance du dry-run, et sa survie aux redémarrages | à trancher | 12/08 |
 | G3 | Ablation de `s_sr` et `s_patterns` | à trancher | 12/08 |
@@ -133,16 +133,18 @@ signaux en 5 ans, p = 0,38 / 0,30 contre le modèle nul.
 | **Prérequis B2/B5/B6** | levés — **B6 fermé le 18/08** (`research/EXPERIMENTS.jsonl`, verrou matériel). Plus aucun verrou méthodologique devant le banc. |
 | **Périmètre immédiat** | **les données, et rien d'autre**. « Je veux juste des data pour le moment, pas de nouvelles stratégies automatiques derrière, nous pourrons les réanalyser. » ⇒ le pipeline YouTube → stratégie générée est **reporté**, pas annulé. |
 | **Dépendances** | BETA **peut utiliser les pip sécurisés** (pandas/numpy/scipy/pyarrow/duckdb). L'invariant zéro-pip d'ALPHA ne s'applique pas ; le front reste sans CDN. |
-| **Univers** | **6 paires** : les 4 habituelles (BTC, ETH, SOL, BNB) **+ 2 altcoins moins populaires** du calibre de SOL. |
+| **Univers** | **6 paires** : BTC, ETH, SOL, BNB (habituelles) **+ LINK et XRP** (tranché le 18/08). Critère d'ajout : **l'ancienneté du contrat perpétuel**, pas la popularité — le goulot est le nombre de signaux, donc c'est l'historique qui commande. |
 | **Téléchargement** | les 4 habituelles sont **déjà sur disque** — ne lancer que les 2 nouvelles. Les téléchargements peuvent être **simultanés** dans BETA (repère : 27 min pour 4 paires en séquentiel). |
 | **Emplacement** | **nouveau dossier hors ARIT2.0, repo git séparé et PRIVÉ.** |
 | **Patte graphique** | celle d'ALPHA (`ALPHA/web/style.css`), thème sombre, tokens CSS. |
 | **MCP** | double sens : dashboard → Claude Code (comme `ALPHA/alpha/actions.py:160`) **et** Claude Code → BETA (serveur MCP stdio exposant le catalogue, les runs, le registre d'expériences). |
 
-### Le point qui reste à trancher — le moteur de backtest
+### Le moteur — tranché le 18/08 : **hybride**
 
-Jonas, 18/08 : « maison en espace R me semble bien, mais freqtrade permettrait d'être plus
-proche d'ARIT ». Les deux ont un coût réel :
+Jonas a retenu la voie en deux temps : **moteur maison en espace-R pour cribler** (des
+centaines de candidates, avec la batterie statistique complète), **freqtrade pour confirmer**
+les 2-3 survivantes en conditions réalistes. Ce que chacun apporte, et pourquoi aucun des
+deux seul ne suffisait :
 
 | | Moteur maison (espace-R, vectorisé) | freqtrade |
 |---|---|---|
@@ -151,9 +153,22 @@ proche d'ARIT ». Les deux ont un coût réel :
 | Frais, slots, sizing, compounding | **non simulés** (limite déjà assumée par `replay_entries.py`) | simulés |
 | Code à écrire | portage de `analysis/dataset.py:_issue` | quasi nul |
 
-Piste non exclusive à évaluer : **maison pour cribler** (des centaines de candidates, avec
-la batterie statistique complète), **freqtrade pour confirmer** les 2-3 survivantes en
-conditions réalistes. Personne ne tranche ça à la place de Jonas.
+⚠️ Conséquence à ne pas perdre de vue : la phase de criblage **ne mesure ni les frais, ni
+les slots, ni le compounding** — limite déjà assumée par `analysis/replay_entries.py` côté
+ARIT. Un chiffre issu du criblage n'est donc **jamais** un verdict portefeuille ; seule la
+phase freqtrade en produit un.
+
+### État d'avancement au 18/08
+
+**Livré** — `C:\Users\jofar\BETA` : le lake de données et son catalogue. 4 paires × 4
+timeframes importées d'ARIT en lecture seule (100 % de couverture, 2,7 M bougies en 5m,
+64 Mo), LINK et XRP téléchargées. Point d'entrée unique `beta.data.load(paire, tf)`,
+resampling à la volée pour tout timeframe non stocké, trous détectés et inscrits au
+catalogue DuckDB. 26 tests, ruff propre. **Repo git local créé ; le distant privé reste à
+faire — `gh` n'est pas installé sur la machine.**
+
+**Conçu, non codé** (périmètre volontairement fermé par Jonas le 18/08) : moteur de
+backtest, batterie statistique, dashboard, serveur MCP, pipeline YouTube.
 
 ### Les trois risques, redits parce qu'ils ne disparaissent pas
 1. **P-hacking industrialisé** — un banc est une machine à multiplier les tests, et il en
