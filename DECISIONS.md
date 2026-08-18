@@ -42,17 +42,35 @@ Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/
    > **est-ce le côté technique, le côté stratégie, ou le côté edge qui merde ?**
 
    Les trois se mesurent séparément, et les données pour le faire existent depuis le 18/08
-   (`C:\Users\jofar\BETA`, tables `trades` / `evaluations` / `gestion`). Premiers éléments
-   déjà visibles, tous **sous le MDE** donc à traiter comme des pistes, pas des verdicts :
-   - **technique** : le sélecteur long fait *pire que le hasard* (E[R] −0,0736 contre
-     −0,0123 pour une entrée aléatoire de même géométrie) ;
-   - **stratégie** : le short est le trou noir — 21 trades, win rate **14,3 %**, PF **0,07**,
-     E[R] −0,468 ; le long est à +0,0815 R, PF 2,38 ;
-   - **edge** : `news_window` bloque **91,75 %** de tout ce qui est rejeté (756 signaux sur
-     824) — la porte la plus active du système, et le lien direct avec **C1-bis**.
+   (`C:\Users\jofar\BETA`, tables `trades` / `evaluations` / `gestion`).
 
-   ⚠️ Aucun de ces écarts n'atteint son MDE. Toute mesure qui les creusera doit être
-   **préenregistrée** (`research/EXPERIMENTS.jsonl`, B6) avant d'être lancée.
+   **La comparaison qui sépare le signal de la gestion** — deux sources, ramenées à la
+   **même période** (le zip démarre en 2021, le rejeu G0 en 2019 ; les comparer sans ça
+   était une erreur, corrigée ici le 18/08 au soir) :
+
+   | Sens | Signal brut, géométrie pure (G0, aucune gestion) | Stratégie complète (zip, G1-G7 actives) | Écart |
+   |---|---|---|---|
+   | long | n=36 · **+0,0417 R** | n=31 · **+0,0815 R** | +0,04 |
+   | **short** | n=27 · **+0,0637 R** | n=21 · **−0,4683 R** | **−0,53** |
+
+   > **Le signal short n'est pas le problème : il est légèrement positif.** Ce qui le détruit
+   > se situe **entre le signal et la sortie**.
+
+   Mécanique visible dans les raisons de sortie : sur `trailing_stop_loss`, le MFE moyen est
+   de **+1,215 R** côté long (n=29) contre **+0,438 R** côté short (n=17). Les longs vont
+   chercher plus d'un R de profit latent avant d'être coupés ; les shorts, jamais.
+
+   - **technique (signal)** : rien ne l'accable une fois la période alignée. Le −0,0736 R du
+     long vient surtout de 2019-2020, hors période du backtest.
+   - **gestion** : c'est là que se trouve la perte. Hypothèse n° 1 à préenregistrer — *le
+     trailing stop coupe les shorts avant qu'ils ne produisent*.
+   - **edge (filtrage)** : `news_window` bloque **91,75 %** de tout ce qui est rejeté
+     (756 signaux sur 824) — la porte la plus active du système, lien direct avec **C1-bis**.
+
+   ⚠️ Un seul chiffre du lot dépasse son MDE : short + trailing stop (|−0,468| > 0,406).
+   Et c'est un sous-groupe repéré **après** avoir vu les données. Il doit donc être
+   **préenregistré** (`research/EXPERIMENTS.jsonl`, B6) avant d'être mesuré pour de bon —
+   sinon c'est du p-hacking, quel que soit le résultat.
 
 ---
 
