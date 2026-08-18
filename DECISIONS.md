@@ -42,7 +42,7 @@ Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/
 | A2-quinquies | RISK_OFF sur Fear & Greed < 25 | à trancher | 04/08 |
 | C1-bis | Palier orange du calendrier éco | à trancher | 04/08 |
 | C1-ter | Dates CPI/NFP **2027** à saisir | acté, échéance fin 2026 | 04/08 |
-| F1 | Banc d'essai de stratégies | déposé, non tranché | 12/08 |
+| F1 | Banc d'essai de stratégies → **projet BETA** | **acté 18/08**, non codé · 1 point à trancher | 12/08 |
 | G1 | Modèle appris à la place de l'agrégation Σ poids·score | à trancher | 12/08 |
 | G2 | Relance du dry-run, et sa survie aux redémarrages | à trancher | 12/08 |
 | G3 | Ablation de `s_sr` et `s_patterns` | à trancher | 12/08 |
@@ -115,55 +115,56 @@ automatisée (403) : saisie manuelle, publication 08:30 US Eastern.
 
 ---
 
-## F1 — banc d'essai de stratégies : DÉPOSÉ, NON TRANCHÉ
+## F1 — banc d'essai de stratégies : ACTÉ le 18/08, projet **BETA**
 
-> Aucune ligne de code écrite. Cette section existe pour que l'idée ne meure pas dans une
-> conversation ; elle attend un arbitrage. Référencée par `CHANTIERS.md` § F1 et H7.
+> Arbitré par Jonas le 2026-08-18. Reste **un** point à trancher (le moteur, plus bas).
+> Référencé par `CHANTIERS.md` § F1 et H7.
 
-**L'idée (Jonas, 12/08)** : un module « stratégie » permettant de tester **d'autres stratégies que
-AritV1**, pour (1) trouver celle qui a le meilleur rendement et (2) **diversifier les formes
-d'investissement**.
+**L'idée (Jonas, 12/08)** : un banc permettant de tester **d'autres stratégies que AritV1**,
+pour (1) trouver celle qui a le meilleur rendement et (2) **diversifier les formes
+d'investissement**. Motif : l'entrée d'AritV1 n'a aucun edge directionnel mesurable — 78
+signaux en 5 ans, p = 0,38 / 0,30 contre le modèle nul.
 
-**Pourquoi c'est le bon moment** : l'entrée d'AritV1 n'a aucun edge directionnel mesurable — 78
-signaux en 5 ans, p = 0,38 / 0,30 contre le modèle nul. Continuer à réparer une seule mécanique
-dont le substrat est à espérance nulle est un pari sur une seule carte. L'infrastructure existe
-déjà : `--strategy-list`, le journal JSONL, `research/` indexé, `optuna` + `plotly` installés.
+### Ce que Jonas a tranché le 18/08
 
-**Périmètre proposé (à valider, pas à coder en l'état)**
-
-| Brique | Rôle |
+| Point | Décision |
 |---|---|
-| Socle commun | `arit_lib` reste partagé (risque, journal, contrats). Une candidate ne réécrit **que** son signal d'entrée/sortie |
-| Registre | liste déclarée de candidates, chacune isolée dans son fichier, aucune n'ayant le droit de toucher `AritV1.py` |
-| Banc | un runner qui lance les N candidates sur la **même** période, les mêmes paires, le même `--timeframe-detail 5m` et `--enable-protections` |
-| Verdict | métriques imposées identiques : PF, Sharpe, MDD **et durée du DD**, N trades, MFE vs MAE, dégradation IS→OOS |
-| Diversification | **corrélation des courbes d'équity** entre candidates : deux stratégies rentables corrélées à 0,9 n'apportent rien |
+| **Ouverture** | F1 est **ouvert**. Nom du projet : **BETA**. |
+| **Prérequis B2/B5/B6** | levés — **B6 fermé le 18/08** (`research/EXPERIMENTS.jsonl`, verrou matériel). Plus aucun verrou méthodologique devant le banc. |
+| **Périmètre immédiat** | **les données, et rien d'autre**. « Je veux juste des data pour le moment, pas de nouvelles stratégies automatiques derrière, nous pourrons les réanalyser. » ⇒ le pipeline YouTube → stratégie générée est **reporté**, pas annulé. |
+| **Dépendances** | BETA **peut utiliser les pip sécurisés** (pandas/numpy/scipy/pyarrow/duckdb). L'invariant zéro-pip d'ALPHA ne s'applique pas ; le front reste sans CDN. |
+| **Univers** | **6 paires** : les 4 habituelles (BTC, ETH, SOL, BNB) **+ 2 altcoins moins populaires** du calibre de SOL. |
+| **Téléchargement** | les 4 habituelles sont **déjà sur disque** — ne lancer que les 2 nouvelles. Les téléchargements peuvent être **simultanés** dans BETA (repère : 27 min pour 4 paires en séquentiel). |
+| **Emplacement** | **nouveau dossier hors ARIT2.0, repo git séparé et PRIVÉ.** |
+| **Patte graphique** | celle d'ALPHA (`ALPHA/web/style.css`), thème sombre, tokens CSS. |
+| **MCP** | double sens : dashboard → Claude Code (comme `ALPHA/alpha/actions.py:160`) **et** Claude Code → BETA (serveur MCP stdio exposant le catalogue, les runs, le registre d'expériences). |
 
-Familles envisageables, à préenregistrer **une par une** : mean-reversion (opposé structurel
-d'AritV1 qui est un suiveur), portage / funding (86 % du profit de MacroFlip), macro seule sans
-couche technique, spot vs perpétuel.
+### Le point qui reste à trancher — le moteur de backtest
 
-**Les trois risques, dits avant**
-1. **P-hacking industrialisé** — un banc est une machine à multiplier les tests, et il en produira
-   d'autant plus de faux gagnants qu'il est efficace. ⇒ B2 (Benjamini-Hochberg), B5 (hold-out
-   scellé) et B6 (`EXPERIMENTS.jsonl`) sont des **prérequis, pas des compléments** ; le banc doit
-   refuser de tourner sur le hold-out.
+Jonas, 18/08 : « maison en espace R me semble bien, mais freqtrade permettrait d'être plus
+proche d'ARIT ». Les deux ont un coût réel :
+
+| | Moteur maison (espace-R, vectorisé) | freqtrade |
+|---|---|---|
+| Monte-Carlo / bootstrap (1 000 runs) | faisable | **irréalisable** avec `--timeframe-detail 5m` |
+| Proximité avec ARIT | il faut re-porter la géométrie SL/TP | **native** — même produit, mêmes protections |
+| Frais, slots, sizing, compounding | **non simulés** (limite déjà assumée par `replay_entries.py`) | simulés |
+| Code à écrire | portage de `analysis/dataset.py:_issue` | quasi nul |
+
+Piste non exclusive à évaluer : **maison pour cribler** (des centaines de candidates, avec
+la batterie statistique complète), **freqtrade pour confirmer** les 2-3 survivantes en
+conditions réalistes. Personne ne tranche ça à la place de Jonas.
+
+### Les trois risques, redits parce qu'ils ne disparaissent pas
+1. **P-hacking industrialisé** — un banc est une machine à multiplier les tests, et il en
+   produira d'autant plus de faux gagnants qu'il est efficace. B6 est fermé, mais le
+   **compteur d'essais cumulatif** (parti de 30) et le **hold-out scellé** doivent être dans
+   BETA dès le premier lot, pas ajoutés après.
 2. **Interdit n° 5** — comparer des stratégies ≠ optimiser des seuils. Le banc ne doit jamais
-   devenir un contournement de l'interdiction d'hyperopter G1-G7 et les poids.
-3. **Priorité** — reste le trou de données à vérifier avant de comparer quoi que ce soit : un banc
-   qui tourne sur BTC seul comparerait les candidates sur la paire la plus perdante du dernier run.
-
-Coût : M (plusieurs jours) + la discipline statistique ci-dessus, sans laquelle le gain est négatif.
-
-**À trancher**
-1. On ouvre F1 ? Si oui, avant ou après les prérequis méthodologiques (B2/B4/B5/B6) ?
-2. D'accord pour que B2/B5/B6 soient des prérequis **bloquants** du banc ?
-3. Quelles familles en premier (mean-reversion, portage/funding, macro seule, spot vs perp) ?
-4. Les évaluations du journal servent-elles de premier jeu de comparaison, ou backtest seul ?
-5. Référence imposée : **buy-and-hold** de la même période pour toute candidate (Q9) — ce qui ne
-   bat pas le hold mesure le marché, pas un edge.
-
----
+   devenir un contournement de l'interdiction d'hyperopter G1-G7 et les poids. **BETA ne
+   modifie jamais `ARIT2.0`** : il le lit.
+3. **Référence imposée** — **buy-and-hold** de la même période pour toute candidate (Q9) : ce
+   qui ne bat pas le hold mesure le marché, pas un edge.
 
 ## G1 — un modèle appris peut-il remplacer l'agrégation Σ poids·score ?
 

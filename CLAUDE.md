@@ -22,7 +22,7 @@
   arit_lib · AritV1.py < 250 lignes, zéro métier, zéro réseau dans les callbacks · tout en UTC ·
   backtest TOUJOURS `--timeframe-detail 5m` · réponses à Jonas en français.
 - venv : `C:\Users\jofar\venvs\arit` (ne pas réinstaller `aiodns` — voir BUILD_NOTES).
-  Tests : `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 318 passed).
+  Tests : `& C:\Users\jofar\venvs\arit\Scripts\python.exe -m pytest -q` (attendu : 418 passed au 18/08).
 - Le bot est **long ET short** depuis le 04/08 (A2) : `trading_mode: futures`, paires
   `BTC/USDT:USDT`. Convention de signe unique = `docs/03 §3.7`, jamais de `if is_short`
   dispersé. Backtest : `--enable-protections` est OBLIGATOIRE depuis C6 (docs/07 §7.2).
