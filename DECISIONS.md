@@ -32,6 +32,30 @@ Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/
 
 ---
 
+## Programme annoncé par Jonas le 18/08 pour la session suivante
+
+1. **Trancher les décisions d'ARIT** — le sommaire ci-dessous, dans l'ordre qu'il voudra.
+   Les plus mûres, parce que la mesure du 18/08 les a reformulées : **A2-quater** et
+   **A2-quinquies** (coupe-circuit ou filtre directionnel ?).
+2. **Retravailler l'edge**, avec une question précise et bien posée :
+
+   > **est-ce le côté technique, le côté stratégie, ou le côté edge qui merde ?**
+
+   Les trois se mesurent séparément, et les données pour le faire existent depuis le 18/08
+   (`C:\Users\jofar\BETA`, tables `trades` / `evaluations` / `gestion`). Premiers éléments
+   déjà visibles, tous **sous le MDE** donc à traiter comme des pistes, pas des verdicts :
+   - **technique** : le sélecteur long fait *pire que le hasard* (E[R] −0,0736 contre
+     −0,0123 pour une entrée aléatoire de même géométrie) ;
+   - **stratégie** : le short est le trou noir — 21 trades, win rate **14,3 %**, PF **0,07**,
+     E[R] −0,468 ; le long est à +0,0815 R, PF 2,38 ;
+   - **edge** : `news_window` bloque **91,75 %** de tout ce qui est rejeté (756 signaux sur
+     824) — la porte la plus active du système, et le lien direct avec **C1-bis**.
+
+   ⚠️ Aucun de ces écarts n'atteint son MDE. Toute mesure qui les creusera doit être
+   **préenregistrée** (`research/EXPERIMENTS.jsonl`, B6) avant d'être lancée.
+
+---
+
 ## Sommaire des décisions ouvertes
 
 | # | Objet | État | Depuis |
