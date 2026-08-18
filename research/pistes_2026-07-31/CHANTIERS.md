@@ -327,6 +327,20 @@ faits au 18/08** : `analysis/mesures.py` (B2), la colonne `split` (B5), et
 `research/EXPERIMENTS.jsonl` + le refus matériel de mesurer sans préenregistrement (B6,
 compteur initialisé à 30). **Plus aucun verrou méthodologique devant le banc.**
 
+**F1 est ouvert depuis le 18/08 et vit désormais dans son propre dépôt** :
+`C:\Users\jofar\BETA` (projet **BETA**). Ses chantiers ne sont plus suivis ici mais dans
+`BETA\CHANTIERS.md`, pour ne pas dupliquer un statut à deux endroits — la duplication de
+statuts est précisément ce qui a déjà fait recompter des lignes fermées comme ouvertes.
+
+Ce qui est **livré** : lake OHLCV (6 paires, 24 séries, 100 % de couverture), données de
+stratégie (79 trades, 3 151 évaluations), protocole expérimental, dashboard.
+Ce qui **manque, et qui est le cœur du banc** : le **moteur** (bloc M), la **batterie
+multi-test** (bloc S — BH, DSR, bootstrap par blocs, Monte-Carlo, CPCV, Reality Check,
+buy-and-hold, corrélation des équity) et la **recherche d'edge** (bloc R, 6 hypothèses déjà
+identifiées). Arbitrages : `DECISIONS.md` § F1.
+
+⚠️ **H7 (banc multi-stratégie) est donc BETA**, et ne se code plus dans ce dépôt.
+
 ---
 
 # H. ML, quantitatif et boucle d'amélioration — les neuf chantiers du 12/08

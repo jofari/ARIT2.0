@@ -221,8 +221,27 @@ resampling à la volée pour tout timeframe non stocké, trous détectés et ins
 catalogue DuckDB. 26 tests, ruff propre. **Repo git local créé ; le distant privé reste à
 faire — `gh` n'est pas installé sur la machine.**
 
-**Conçu, non codé** (périmètre volontairement fermé par Jonas le 18/08) : moteur de
-backtest, batterie statistique, dashboard, serveur MCP, pipeline YouTube.
+**Livré aussi** : les données de **stratégie** (79 trades, 3 151 évaluations, 4 084
+événements de gestion), le **protocole expérimental** (préenregistrement à verrou matériel,
+hold-out scellé, compteur d'essais parti de 30) et le **dashboard** (`BETA.cmd`, port 7474).
+
+**Manquant, et c'est le cœur du projet** — suivi désormais dans `C:\Users\jofar\BETA\CHANTIERS.md` :
+
+| Bloc | Ce qui manque | Pourquoi ça bloque |
+|---|---|---|
+| **M — moteur** | contrats gelés, criblage espace-R, pont freqtrade, registre de candidates | sans lui, aucune candidate ne peut être testée : BETA lit des résultats, il n'en produit pas |
+| **S — multi-test** | Benjamini-Hochberg, Sharpe dégonflé, bootstrap par blocs, Monte-Carlo, chemins synthétiques, CPCV, Reality Check/SPA, buy-and-hold, corrélation des équity | **sans S1/S2/S8, le premier gagnant du banc sera un artefact** — et on le croira |
+| **R — recherche d'edge** | le protocole de recherche + 6 hypothèses déjà identifiées (R1 trailing/shorts, R2 mean-reversion, R3 portage/funding, R4 macro seule, R5 spot vs perp, R6 `news_window`) | c'est l'objet même de F1 : « tester d'autres stratégies **et diversifier les formes d'investissement** » |
+| **P — MCP** | double sens, avec refus de run non préenregistré | reporté avec le pipeline YouTube |
+
+**Les deux hypothèses les moins chères** (R1 et R6) se mesurent sur les données **déjà
+présentes**, sans écrire une seule candidate. Ce sont donc les deux premières à
+préenregistrer.
+
+⚠️ Rappel de l'ordre imposé : **S1 (Benjamini-Hochberg), S2 (Sharpe dégonflé) et S8
+(buy-and-hold) avant la première comparaison de candidates.** Un banc d'essai est une
+machine à multiplier les tests ; il produira d'autant plus de faux gagnants qu'il est
+efficace.
 
 ### Les trois risques, redits parce qu'ils ne disparaissent pas
 1. **P-hacking industrialisé** — un banc est une machine à multiplier les tests, et il en
