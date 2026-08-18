@@ -1,5 +1,40 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-08-18 — A5 mesurée (indécidable), B6 fermé : trois pièges qui restent
+
+**1. Le `seuil` du dataset est DÉJÀ bumpé.** `cio.conviction` ajoute
+`MACRO_NEUTRE_CONV_BUMP` (0,05) à la colonne `seuil` avant qu'elle n'arrive dans
+`analysis/out/arit_analyse.sqlite`. Toute ablation « sans pénalité NEUTRE » qui se contente
+de lire `seuil` mesure donc la **production**, pas l'alternative — et conclurait que les deux
+sont identiques. Le retrait explicite vit dans `ablation_macro.seuil_sans_bump`, verrouillé
+par `test_seuil_sans_bump_ne_touche_que_neutre`.
+
+**2. Sur un substrat à espérance négative, comparer des résultats TOTAUX ne mesure rien.**
+Le modèle nul B1 donne −0,0123 R (long) et −0,0370 R (short) : tout filtre qui bloque des
+trades améliore le total **sans rien trier**. C'est ce qui a produit le résultat historique
+« véto HOSTILE : −19,1 % → −7,0 % » (17/07) — non pas invalidé, mais **non mesuré**. La seule
+formulation valide est la **sélectivité marginale** : les signaux que la porte bloque ont-ils
+une espérance plus mauvaise que ceux qu'elle laisse passer ? Toute future mesure de filtre
+(fenêtre horaire, funding, gamma, bloc corrélation) doit être posée ainsi.
+
+**3. Le sélecteur long fait pire que le hasard**, sur cet échantillon : E[R] = −0,0736 pour
+les 50 longs retenus contre −0,0123 pour une entrée aléatoire de même géométrie. Non
+significatif (n = 50, MDE +0,433 R), mais le signe est cohérent avec l'IC de
+`produit_pondere` (+0,0642 < `s_structure` seul +0,0851). À reposer quand N aura grossi.
+
+**Piste ouverte, à préenregistrer avant de la mesurer** : le seul p < 0,05 brut du run ne
+porte pas sur A5 mais sur la contrainte **directionnelle** — les 7 shorts bloqués par la
+porte de direction affichent −0,229 R contre +0,168 R pour le noyau (p = 0,022, ne survit
+pas à BH). Si quelque chose porte de l'information dans la couche macro, c'est le véto
+directionnel, pas la pénalité graduée de seuil. Ne pas traiter comme un résultat : c'est une
+observation hors hypothèse, consignée dans `research/EXPERIMENTS.jsonl`.
+
+**B6 est fermé** : `research/EXPERIMENTS.jsonl` + `research/EXPERIMENTS.md`. Le verrou est
+matériel, pas déclaratif — `ablation_macro.preenregistrement()` arrête le script si
+l'hypothèse n'a pas été écrite avant. Le compteur d'essais part de **30** (dette rétroactive
+du 31/07), jamais de 0 : c'est la seule base honnête d'une correction de tests multiples.
+
+
 ## 2026-08-17 — leçons d'août, extraites de DECISIONS.md avant sa purge
 `DECISIONS.md` ne conserve plus que les décisions **ouvertes** (règle de purge du 17/08) : tout
 ce qui suit y était consigné et n'existait nulle part ailleurs. L'historique complet des
