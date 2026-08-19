@@ -90,7 +90,7 @@ Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/
 | C1-ter | Dates CPI/NFP **2027** à saisir | acté, échéance fin 2026 | 04/08 |
 | G1 | Modèle appris à la place de l'agrégation Σ poids·score | à trancher | 12/08 |
 | G2 | Relance du dry-run, et sa survie aux redémarrages | à trancher | 12/08 |
-| G3 | Ablation de `s_sr` et `s_patterns` | **acté 20/08**, mesure à faire | 12/08 |
+| G3 | Ablation de `s_sr` et `s_patterns` | **mesurée 20/08** (retenue) — appliquer maintenant ou après Q1 ? | 12/08 |
 | G8 | VPS (Hermes Agent + ARIT 24/24) | acté, non codé | 12/08 |
 
 ---
@@ -213,45 +213,42 @@ Le rejeu hors-ligne (`analysis/dataset.py`) remplace le dry-run pour la **donné
 
 ---
 
-## G3 — ablation de `s_sr` et `s_patterns` : ACTÉ le 20/08, mesure à faire
+## G3 — ablation `s_sr` + `s_patterns` : MESURÉE le 20/08. Reste : on l'applique quand ?
 
-**Décision de Jonas (20/08) : d'accord, l'ablation se fait.**
+**Décision de Jonas (20/08)** : d'accord, l'ablation se fait. **Mesurée le jour même**,
+préenregistrée (B6) puis close : `research/ablation_Q4/RAPPORT.md`, code
+`analysis/ablation_scores.py`, registre § `Q4-ablation-scores-sr-patterns` (essais cumulés 50).
 
-Deux scores sur cinq entrent dans la somme avec un **poids positif et un IC négatif** (`s_sr`
-−0,0497 · `s_patterns` −0,0162). Leur retrait est une **ablation, pas une optimisation** : c'est
-mesurable sans rien recoder, donc l'interdit n° 5 n'est pas touché. Chantier `Q4`.
+**Résultat — l'ablation est RETENUE sur la métrique primaire**, selon les trois conditions
+écrites avant la mesure (ΔIC ≥ +0,010, IC bootstrap 90 % excluant 0, survie à BH) :
 
-**Reste à faire, dans cet ordre** :
-1. **Préenregistrer** l'hypothèse dans `research/EXPERIMENTS.jsonl` (B6) — retirer deux scores
-   après avoir lu leur IC est un choix informé par les données.
-   ⚠️ Le test `test_experience_reelle_est_preenregistree` **échoue depuis avant le 20/08**
-   (`KeyError: 'split_autorise'`) : le verrou méthodologique B6 est cassé, à réparer d'abord.
-2. Mesurer l'ablation sur le dataset hors hold-out, IC de `produit_pondere` avant/après.
-3. Critère de passage à écrire **avant** la mesure : de combien l'IC doit-il monter pour que le
-   retrait soit retenu ? Sans ce seuil, toute amélioration paraîtra suffisante.
+| | IC production | IC ablaté | ΔIC | IC 90 % |
+|---|---|---|---|---|
+| long | 0,0642 | **0,0848** | **+0,0205** | [0,0135 ; 0,0275] |
+| short | 0,0357 | **0,0544** | **+0,0187** | [0,0115 ; 0,0260] |
 
-### ⚠️ Le piège arithmétique, vérifié le 20/08 — l'ablation naïve ne mesure PAS ce qu'on croit
+`s_sr` porte les trois quarts de l'effet. Et le chiffre qui résume tout : IC(ablaté) = **0,0848**
+contre **0,0851** pour `s_structure` **seul** (B9). L'agrégation à cinq termes détruisait
+exactement ce que ses deux termes à IC négatif y injectaient — l'ablation ne fait pas mieux que
+le meilleur score isolé, elle le **rejoint**.
 
-`POIDS` somme exactement à 1,00 (`params.py:94` — 0,40 + 0,20 + 0,15 + 0,15 + 0,10). Retirer
-`s_sr` et `s_patterns` **sans renormaliser** plafonne la conviction à **0,70 × multiplicateur**.
-Or les seuils, eux, ne bougent pas :
+### ⚠️ Ce qui reste à trancher, et c'est un vrai arbitrage
 
-| Régime | Seuil | Conviction max après retrait | Verdict |
-|---|---|---|---|
-| TREND (mult 1,0) | 0,50 | 0,70 | passe, mais exige un score quasi parfait sur les 3 restants |
-| TREND + NEUTRE | 0,55 | 0,70 | idem, encore plus serré |
-| TRANSITION (mult 0,85) | 0,65 | **0,595** | ❌ **plus aucun signal possible** |
+L'ablation supprime **44 % des signaux longs** (50 → 28) et **21 % des shorts** (28 → 22).
+Or le goulot n° 1 du projet est la **rareté des entrées** (78 signaux en 5 ans, chantier Q1,
+que tu viens de placer en tête des priorités). Appliquer l'ablation améliore un IC mesuré **et
+aggrave le goulot mesuré**. Les deux sont vrais en même temps.
 
-⇒ Une ablation brute mesurerait **un durcissement du seuil**, pas le retrait de deux scores.
-Sur 78 signaux en 5 ans, elle les ferait presque tous disparaître et le résultat serait
-ininterprétable.
+> **La question** : on applique en production tout de suite, ou on attend **Q1** (courbe
+> N(seuil)) pour savoir de combien desserrer les portes en compensation ?
 
-**Ce qui suit de là, et qui n'est pas un détail de méthode** :
-- **Renormaliser les 3 poids restants à somme 1** (0,571 / 0,286 / 0,143). Les rapports entre
-  poids sont **inchangés** : ce n'est pas une hyperopt, c'est la seule façon d'isoler la variable.
-- **L'IC est insensible à cette renormalisation** (corrélation de rang, invariante par
-  multiplication par 1/0,70) : la mesure d'IC donnera le même chiffre dans les deux cas.
-  **Le backtest, lui, y est extrêmement sensible.** Ne pas conclure de l'un sur l'autre.
+Ma recommandation : **attendre Q1**. Un seuil abaissé sur mesure pourrait rendre les 22 signaux
+perdus sans réintroduire les deux scores à IC négatif — rien n'oblige à payer les deux coûts.
+
+Deux réserves à porter à la décision, toutes deux préenregistrées :
+- Le gain d'IC **ne se lit pas** dans les trades effectivement perdus côté long (+0,0828 R
+  contre un noyau à −0,1964 R), mais sur 22 signaux c'est indécidable (MDE 0,825 R).
+- Le noyau conservé reste à **−0,1964 R** : améliorer un IC ne crée pas un edge.
 
 ⚠️ À ne pas confondre avec l'anomalie `rr_dispo` (IC −0,0592, signe instable, variable **tronquée
 par sa propre porte** `rr_min`) : celle-là demande un traitement de biais de sélection, pas un IC

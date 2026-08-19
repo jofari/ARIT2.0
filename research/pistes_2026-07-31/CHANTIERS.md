@@ -572,3 +572,50 @@ L'IC est **invariant** par cette renormalisation ; le backtest y est **très sen
 | # | Dette | Détail | Statut |
 |---|---|---|---|
 | **T5-ARIT** | **`test_experience_reelle_est_preenregistree` échoue** (`KeyError: 'split_autorise'`) | L'entrée du registre `research/EXPERIMENTS.jsonl` ne porte pas la clé que le test — et le verrou matériel de B6 — exigent. Échec **antérieur au 20/08** (vérifié par `git stash`), donc présent depuis la fermeture de B6 le 18/08. Le préenregistrement est le garde-fou anti-p-hacking de **trois** chantiers actés : G3/Q4, Q11e et l'hypothèse short/trailing | 🔴 ouvert — **à réparer avant toute mesure préenregistrée** |
+
+## 20/08 (suite) — T5-ARIT réparé, et Q4 mesurée
+
+**T5-ARIT — FERMÉ le 20/08.** Le verrou B6 était ouvert depuis sa propre fermeture le 18/08.
+Règle en cause : « la DERNIÈRE ligne de cet id fait foi » — dès qu'une expérience était close,
+`preenregistrement()` renvoyait la ligne de **résultat**, qui ne porte ni `split_autorise` ni
+`variantes`. Le test échouait (`KeyError`), mais le vrai dégât est ailleurs : **le script
+relancé après clôture tournait avec un garde-fou vide**. Le verrou censé empêcher le p-hacking
+s'ouvrait précisément après la première mesure.
+
+Corrigé en séparant les deux natures de ligne : le **protocole** (statut `preenregistre`, seul
+à porter les garde-fous ; un amendement = une nouvelle ligne `preenregistre`, la dernière fait
+foi) et le **résultat** (`clos`, `mesure`), qui n'amende jamais un protocole. Deuxième refus
+ajouté : une expérience **close** ne se remesure pas — rejouer jusqu'au bon résultat est du
+p-hacking par répétition, une nouvelle mesure exige un nouvel id, donc un essai de plus au
+compteur cumulé. Le verrou vit désormais dans `analysis/registre.py`, partagé (il sert à Q4,
+Q11e et short/trailing) ; `ablation_macro.py` le ré-exporte. +6 tests, 432 passed.
+
+**`Q4` — FERMÉ le 20/08 : mesurée, ablation RETENUE sur la métrique primaire.**
+Préenregistrée puis close (essais cumulés **50**) · `research/ablation_Q4/RAPPORT.md` ·
+code `analysis/ablation_scores.py`.
+
+| | IC production | IC ablaté (renormalisé) | ΔIC | IC bootstrap 90 % |
+|---|---|---|---|---|
+| long | 0,0642 | **0,0848** | **+0,0205** | [0,0135 ; 0,0275] |
+| short | 0,0357 | **0,0544** | **+0,0187** | [0,0115 ; 0,0260] |
+
+Les trois conditions préenregistrées sont remplies dans les deux sens. `s_sr` porte les trois
+quarts de l'effet. **Le chiffre qui résume tout** : IC(ablaté) = 0,0848 contre **0,0851** pour
+`s_structure` **seul** (B9) — l'agrégation à cinq termes détruisait exactement ce que ses deux
+termes à IC négatif y injectaient. L'ablation ne fait pas mieux que le meilleur score isolé,
+elle le **rejoint**.
+
+⚠️ **Le piège arithmétique est confirmé empiriquement** : l'ablation brute (sans renormaliser)
+ne laisse que **5 signaux long sur 50** et 8 short sur 28. Elle aurait mesuré un durcissement
+de seuil, pas un retrait de scores.
+
+⚠️ **Ce qui reste ouvert, et qui appartient à Jonas** (`DECISIONS.md § G3`) : l'ablation coûte
+**44 % des signaux longs** et 21 % des shorts, alors que le goulot n° 1 est la **rareté des
+entrées** (Q1, désormais en tête des priorités). Appliquer maintenant, ou attendre Q1 pour
+savoir de combien desserrer les portes en compensation ? Reco : **attendre Q1** — un seuil
+abaissé sur mesure peut rendre les 22 signaux perdus sans réintroduire les scores à IC négatif.
+
+Réserves préenregistrées, maintenues : le gain d'IC **ne se lit pas** dans les 22 trades
+effectivement perdus côté long (+0,0828 R contre un noyau à −0,1964 R), mais c'est indécidable
+à ce N (MDE 0,825 R) ; et le noyau conservé reste à **−0,1964 R** — améliorer un IC ne crée pas
+un edge.

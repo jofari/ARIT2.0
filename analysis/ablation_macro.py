@@ -47,6 +47,7 @@ sys.path.insert(0, str(REPO / "user_data" / "strategies"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import mesures  # noqa: E402  — charger(), benjamini_hochberg(), modele_nul() : zero duplication
+import registre  # noqa: E402  — B6 : le verrou de preenregistrement, partage (20/08)
 
 from arit_lib import contracts, params  # noqa: E402
 
@@ -70,29 +71,12 @@ _TREND = contracts.TREND_DIR_COL
 _SENS = ("long", "short")
 
 
-def preenregistrement(chemin: pathlib.Path, id_exp: str) -> dict:
-    """B6 — le verrou methodologique, materialise : pas de ligne, pas de mesure.
-
-    Ce n'est pas une formalite. Sans hypothese et sans regle de decision ecrites AVANT, un
-    resultat post-hoc est indiscernable d'une hypothese confirmee, et le compteur cumulatif
-    d'essais — seule base honnete d'une correction de tests multiples — n'existe pas.
-    """
-    if not chemin.exists():
-        raise SystemExit(f"B6 : registre absent ({chemin}). Preenregistrer avant de mesurer.")
-    trouve = None
-    for ligne in chemin.read_text(encoding="utf-8").splitlines():
-        if not ligne.strip():
-            continue
-        try:
-            entree = json.loads(ligne)
-        except json.JSONDecodeError as exc:
-            raise SystemExit(f"B6 : registre illisible ({exc})") from exc
-        if entree.get("id") == id_exp:
-            trouve = entree          # la DERNIERE ligne portant cet id fait foi
-    if trouve is None:
-        raise SystemExit(f"B6 : aucune entree '{id_exp}' dans {chemin}. "
-                         "Ecrire l'hypothese, la metrique et la regle de decision AVANT.")
-    return trouve
+# B6 — le verrou vit dans `registre.py` depuis le 2026-08-20 (il sert aussi a Q4 et Q11e).
+# Reexporte ici : les appels `ab.preenregistrement(...)` / `ab.protocole(...)` restent valides.
+STATUT_PROTOCOLE = registre.STATUT_PROTOCOLE
+STATUTS_CLOS = registre.STATUTS_CLOS
+protocole = registre.protocole
+preenregistrement = registre.preenregistrement
 
 
 def seuil_sans_bump(df: pd.DataFrame) -> pd.Series:

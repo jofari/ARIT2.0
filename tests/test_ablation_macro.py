@@ -68,19 +68,67 @@ def test_preenregistrement_fichier_absent_refuse_de_mesurer(tmp_path):
         ab.preenregistrement(tmp_path / "rien.jsonl", "A5-ablation-porte-macro")
 
 
-def test_preenregistrement_derniere_ligne_fait_foi(tmp_path):
+def test_dernier_protocole_fait_foi(tmp_path):
+    """Amender un protocole = ajouter une ligne `preenregistre` ; la derniere fait foi."""
+    registre = tmp_path / "EXPERIMENTS.jsonl"
+    registre.write_text(
+        json.dumps({"id": "X", "statut": "preenregistre", "v": 1}) + "\n"
+        + json.dumps({"id": "X", "statut": "preenregistre", "v": 2}) + "\n", encoding="utf-8")
+    assert ab.preenregistrement(registre, "X")["v"] == 2
+
+
+def test_ligne_de_resultat_ne_sert_jamais_de_protocole(tmp_path):
+    """Le bug du 20/08 : une ligne `mesure`/`clos` ne porte ni variantes ni split_autorise.
+    La laisser faire foi VIDAIT le garde-fou au lieu de l'appliquer."""
+    registre = tmp_path / "EXPERIMENTS.jsonl"
+    registre.write_text(
+        json.dumps({"id": "X", "statut": "preenregistre", "split_autorise": "train"}) + "\n"
+        + json.dumps({"id": "X", "statut": "mesure"}) + "\n", encoding="utf-8")
+    assert ab.preenregistrement(registre, "X")["split_autorise"] == "train"
+
+
+def test_experience_close_refuse_une_remesure(tmp_path):
+    """Rejouer une experience close jusqu'au bon resultat est du p-hacking par repetition :
+    une nouvelle mesure exige un nouvel id, donc un essai de plus au compteur cumule."""
     registre = tmp_path / "EXPERIMENTS.jsonl"
     registre.write_text(
         json.dumps({"id": "X", "statut": "preenregistre"}) + "\n"
-        + json.dumps({"id": "X", "statut": "mesure"}) + "\n", encoding="utf-8")
-    assert ab.preenregistrement(registre, "X")["statut"] == "mesure"
+        + json.dumps({"id": "X", "statut": "clos", "verdict": "indecidable"}) + "\n",
+        encoding="utf-8")
+    with pytest.raises(SystemExit, match="B6"):
+        ab.preenregistrement(registre, "X")
+
+
+def test_protocole_reste_lisible_apres_cloture(tmp_path):
+    """La cloture bloque la MESURE, elle n'efface pas le protocole : il reste auditable."""
+    registre = tmp_path / "EXPERIMENTS.jsonl"
+    registre.write_text(
+        json.dumps({"id": "X", "statut": "preenregistre", "split_autorise": "train"}) + "\n"
+        + json.dumps({"id": "X", "statut": "clos"}) + "\n", encoding="utf-8")
+    assert ab.protocole(registre, "X")["split_autorise"] == "train"
+
+
+def test_resultat_sans_protocole_refuse_de_mesurer(tmp_path):
+    """Un resultat ecrit sans protocole prealable ne vaut pas preenregistrement."""
+    registre = tmp_path / "EXPERIMENTS.jsonl"
+    registre.write_text(json.dumps({"id": "X", "statut": "mesure"}) + "\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="B6"):
+        ab.preenregistrement(registre, "X")
 
 
 def test_experience_reelle_est_preenregistree():
-    """Le registre versionne doit contenir l'entree que le script exige."""
-    entree = ab.preenregistrement(ab.EXPERIMENTS, ab.EXPERIENCE_ID)
+    """Le registre versionne doit contenir le protocole que le script exige — A5 est CLOSE
+    depuis le 18/08, donc c'est `protocole` (lecture) et non le verrou de mesure."""
+    entree = ab.protocole(ab.EXPERIMENTS, ab.EXPERIENCE_ID)
     assert entree["split_autorise"] == "train"
     assert {v["nom"] for v in entree["variantes"]} == {v["nom"] for v in ab.VARIANTES}
+
+
+def test_a5_est_close_donc_le_script_refuse_de_la_rejouer():
+    """Consequence directe de la cloture d'A5 le 18/08 : `ablation_macro.py` relance tel quel
+    s'arrete. C'est le comportement voulu, pas une panne."""
+    with pytest.raises(SystemExit, match="CLOSE"):
+        ab.preenregistrement(ab.EXPERIMENTS, ab.EXPERIENCE_ID)
 
 
 # --- le piege du bump deja applique --------------------------------------------------
