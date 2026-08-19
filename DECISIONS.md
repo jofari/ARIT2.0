@@ -85,14 +85,12 @@ Lecture au démarrage de session : ce fichier, puis `research/pistes_2026-07-31/
 |---|---|---|---|
 | A8 | G-rules à retravailler | reporté (priorité aux autres paramètres) | 03/08 |
 | A2-ter | **Levier** en futures (aujourd'hui 1.0) | à trancher | 04/08 |
-| A2-quater | Véto actions c6/c7 en régime HOSTILE | à trancher | 04/08 |
-| A2-quinquies | RISK_OFF sur Fear & Greed < 25 | à trancher | 04/08 |
+| A2-quinquies | **F&G adaptatif** (niveau + dynamique) | **acté 20/08**, spec à trancher | 04/08 |
 | C1-bis | Palier orange du calendrier éco | à trancher | 04/08 |
 | C1-ter | Dates CPI/NFP **2027** à saisir | acté, échéance fin 2026 | 04/08 |
 | G1 | Modèle appris à la place de l'agrégation Σ poids·score | à trancher | 12/08 |
 | G2 | Relance du dry-run, et sa survie aux redémarrages | à trancher | 12/08 |
-| G3 | Ablation de `s_sr` et `s_patterns` | à trancher | 12/08 |
-| G4 | Ordre des neuf chantiers H1-H9 | à trancher | 12/08 |
+| G3 | Ablation de `s_sr` et `s_patterns` | **acté 20/08**, mesure à faire | 12/08 |
 | G8 | VPS (Hermes Agent + ARIT 24/24) | acté, non codé | 12/08 |
 
 ---
@@ -116,33 +114,42 @@ serrée, le stake calculé dépasse l'équité, freqtrade le plafonne, et le ris
 
 ---
 
-## A2-quater — véto actions c6/c7 en HOSTILE
+## A2-quinquies — F&G ADAPTATIF : acté le 20/08, spec à trancher
 
-Le véto actions est resté un coupe-circuit des **deux sens** (il force toujours RISK_OFF), alors
-que HOSTILE, depuis A2, autorise le short. Raison du choix par défaut : le bloc c6/c7 est un
-fail-safe de **corrélation**, pas un avis directionnel.
+**Décision de Jonas (20/08)** : le Fear & Greed cesse d'être un coupe-circuit statique. Il
+devient **adaptatif, en deux temps** :
 
-**À trancher** : une cassure du NASDAQ corrélée au BTC est-elle un signal de **short**, ou un
-« on ne fait rien » ? Le véto est ablatable par construction (A4), donc ça se teste seul.
+1. **Le niveau** — des seuils clés, au-dessus / en dessous. C'est ce qui existe déjà (< 25).
+2. **La dynamique** — l'*évolution* de l'indice porte de l'information que le niveau ignore.
+   Mot pour mot : « s'il prend 15 points en une journée et qu'il passe de 15 à 30, alors ça
+   peut être un signal bullish **si d'autres signaux bullish** ».
 
-⚠️ **La question est reformulée par le principe posé le 18/08** (`docs/01 §Mode de
-fonctionnement`) : « la macro est un **filtre directionnel**, pas une obligation d'entrer ».
-Un véto qui interdit **les deux** sens n'est donc pas un filtre directionnel mais un
-**coupe-circuit** — ce qui reste légitime, mais doit être assumé comme tel plutôt que subi.
-La vraie question devient : c6/c7 est-il un fail-safe de corrélation (coupe-circuit, statut
-actuel) ou un avis directionnel (filtre, donc autorisant le short) ?
+**Traduction retenue, et pourquoi elle ne crée aucune source de signal nouvelle** : un
+retournement du F&G ne **produit** pas d'entrée, il **lève un blocage**. Aujourd'hui F&G < 25
+interdit tout ; demain F&G < 25 interdit le long **sauf** si l'indice se retourne violemment,
+auquel cas le long redevient possible et ce sont la conviction, `trend_dir` et `rr_dispo` qui
+décident. La clause « si d'autres signaux bullish » de Jonas est donc déjà portée par la chaîne
+existante — la dupliquer dans le F&G serait un second filtre sur les mêmes données.
 
----
+### Ce qui bloque, et qui n'est pas une question de goût
 
-## A2-quinquies — RISK_OFF sur Fear & Greed < 25
+| # | Fait constaté le 20/08 | Conséquence |
+|---|---|---|
+| 1 | **Le F&G n'existe pas en backtest.** `_classify_macro` injecte `FG_NEUTRAL_BACKTEST = 50` en dur (`regimes.py`), donc aucune règle F&G n'est mesurable aujourd'hui | Sans colonne quotidienne `fear_greed` (via `attach_macro_regime`, décalage +1 j comme la macro), on coderait une règle live qu'aucun backtest ne pourrait valider. **C'est le prérequis n° 1** |
+| 2 | **Pas de delta possible en live.** `services/macro_state.py:fetch_fear_greed()` ne lit que `data[0]` — la valeur du jour, sans historique | L'API accepte `limit=N`. Sans ça, la règle marche en backtest et pas en live : rupture de parité, exactement le bloquant n° 1 déjà payé une fois |
+| 3 | **F&G < 25 est câblé à DEUX endroits**, dont `regimes.donnee_non_fiable()` — la même fonction que `stale` et « aucun score » | Le code **confond « la donnée est cassée » et « le marché a peur »**. Tant que le F&G vit dans le fail-safe de données, il ne *peut pas* être directionnel. L'en sortir est le vrai travail de ce chantier |
+| 4 | `user_data/data/macro/fear_greed.json` : 3 103 points depuis 2018-02, **figé au 03/08/2026** | À re-télécharger (`scripts/download_macro.py fng`). L'historique nécessaire au delta existe, lui |
 
-Même question que ci-dessus : la peur extrême reste aujourd'hui un « on ne trade pas ». En v4 elle
-pourrait être un signal de **short**. Non touché, faute de réponse.
+### Les trois paramètres qui attendent Jonas
 
-⚠️ Même reformulation que A2-quater depuis le 18/08 : F&G < 25 est aujourd'hui un
-**coupe-circuit** (les deux sens interdits), pas un **filtre directionnel**. Le principe posé
-par Jonas n'interdit pas les coupe-circuits, il impose de les distinguer — et de dire lequel
-des deux on veut ici.
+| # | Question | Défaut proposé |
+|---|---|---|
+| **P1** | **Amplitude et fenêtre du retournement.** « +15 points en une journée » : 15 points fermes, ou un seuil relatif ? Fenêtre 1 jour, ou 2-3 jours glissants (le F&G bouge par à-coups) ? | **+15 points sur 1 jour**, littéralement ce que tu as dit |
+| **P2** | **Le miroir baissier.** Tu n'as parlé que du bas. Une chute de −15 points, ou l'euphorie (F&G > 75), doit-elle retirer le long de la même façon ? | **Symétrie**, sinon le filtre est un pari haussier déguisé |
+| **P3** | **Ce que le retournement a le droit de faire.** Lever le blocage seulement, ou aussi *ajouter* de la conviction ? | **Lever seulement.** Ajouter du poids toucherait l'agrégation, donc l'interdit n° 5 |
+
+⚠️ **Préenregistrement obligatoire (B6)** avant toute mesure de cette règle : c'est une
+hypothèse formulée après avoir vu le marché, comme le sous-groupe short/trailing.
 
 ---
 
@@ -206,24 +213,49 @@ Le rejeu hors-ligne (`analysis/dataset.py`) remplace le dry-run pour la **donné
 
 ---
 
-## G3 — ablation de `s_sr` et `s_patterns`
+## G3 — ablation de `s_sr` et `s_patterns` : ACTÉ le 20/08, mesure à faire
+
+**Décision de Jonas (20/08) : d'accord, l'ablation se fait.**
 
 Deux scores sur cinq entrent dans la somme avec un **poids positif et un IC négatif** (`s_sr`
 −0,0497 · `s_patterns` −0,0162). Leur retrait est une **ablation, pas une optimisation** : c'est
 mesurable sans rien recoder, donc l'interdit n° 5 n'est pas touché. Chantier `Q4`.
 
+**Reste à faire, dans cet ordre** :
+1. **Préenregistrer** l'hypothèse dans `research/EXPERIMENTS.jsonl` (B6) — retirer deux scores
+   après avoir lu leur IC est un choix informé par les données.
+   ⚠️ Le test `test_experience_reelle_est_preenregistree` **échoue depuis avant le 20/08**
+   (`KeyError: 'split_autorise'`) : le verrou méthodologique B6 est cassé, à réparer d'abord.
+2. Mesurer l'ablation sur le dataset hors hold-out, IC de `produit_pondere` avant/après.
+3. Critère de passage à écrire **avant** la mesure : de combien l'IC doit-il monter pour que le
+   retrait soit retenu ? Sans ce seuil, toute amélioration paraîtra suffisante.
+
+### ⚠️ Le piège arithmétique, vérifié le 20/08 — l'ablation naïve ne mesure PAS ce qu'on croit
+
+`POIDS` somme exactement à 1,00 (`params.py:94` — 0,40 + 0,20 + 0,15 + 0,15 + 0,10). Retirer
+`s_sr` et `s_patterns` **sans renormaliser** plafonne la conviction à **0,70 × multiplicateur**.
+Or les seuils, eux, ne bougent pas :
+
+| Régime | Seuil | Conviction max après retrait | Verdict |
+|---|---|---|---|
+| TREND (mult 1,0) | 0,50 | 0,70 | passe, mais exige un score quasi parfait sur les 3 restants |
+| TREND + NEUTRE | 0,55 | 0,70 | idem, encore plus serré |
+| TRANSITION (mult 0,85) | 0,65 | **0,595** | ❌ **plus aucun signal possible** |
+
+⇒ Une ablation brute mesurerait **un durcissement du seuil**, pas le retrait de deux scores.
+Sur 78 signaux en 5 ans, elle les ferait presque tous disparaître et le résultat serait
+ininterprétable.
+
+**Ce qui suit de là, et qui n'est pas un détail de méthode** :
+- **Renormaliser les 3 poids restants à somme 1** (0,571 / 0,286 / 0,143). Les rapports entre
+  poids sont **inchangés** : ce n'est pas une hyperopt, c'est la seule façon d'isoler la variable.
+- **L'IC est insensible à cette renormalisation** (corrélation de rang, invariante par
+  multiplication par 1/0,70) : la mesure d'IC donnera le même chiffre dans les deux cas.
+  **Le backtest, lui, y est extrêmement sensible.** Ne pas conclure de l'un sur l'autre.
+
 ⚠️ À ne pas confondre avec l'anomalie `rr_dispo` (IC −0,0592, signe instable, variable **tronquée
 par sa propre porte** `rr_min`) : celle-là demande un traitement de biais de sélection, pas un IC
 de rang. Chantier `Q3`, non conclu.
-
----
-
-## G4 — ordre des neuf chantiers H1-H9
-
-Priorisation **proposée** et non validée : la **rareté des entrées d'abord** (Q1 — courbe
-N(seuil) : combien de signaux, et à quelle espérance, si on desserre chaque porte une à une), le ML
-ensuite. Motif : 78 signaux en 5 ans, rien n'est mesurable avant. Tout le reste de l'ordre des
-chantiers en dépend ; détail des neuf dans `CHANTIERS.md` § H1-H9.
 
 ---
 

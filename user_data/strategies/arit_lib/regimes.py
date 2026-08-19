@@ -146,16 +146,31 @@ def _classify_macro(df: pd.DataFrame, macro: dict | None = None) -> pd.DataFrame
     En v4 la macro donne la DIRECTION : HOSTILE veut dire « short autorise », pas
     « rien a faire ». Le blocage des longs en HOSTILE est desormais porte par
     `direction_macro` dans cio, ce qui est strictement equivalent COTE LONG et debloque
-    le short. Le veto actions c6/c7, lui, continue de forcer RISK_OFF : c'est un
-    fail-safe de correlation, pas un avis directionnel (cf. question ouverte DECISIONS).
+    le short.
+
+    ⚠️ CHANGEMENT A2-quater (2026-08-20, decision Jonas) : le veto actions c6/c7 SUIT le
+    meme chemin depuis ce jour. Il forcait RISK_OFF, donc il interdisait les DEUX sens —
+    un coupe-circuit. Jonas tranche : c'est un FILTRE DIRECTIONNEL. Une cassure du NASDAQ
+    correlee au BTC retire le long et laisse le short ; le blocage est desormais porte par
+    `cio.direction_macro`, strictement equivalent COTE LONG.
+
+    Ce qui reste ici, et qui est le coeur de l'arbitrage : `EQUITY_VETO_STALE` (serie
+    actions demarree puis perimee) n'est pas un avis de marche mais un doute sur la
+    DONNEE. Il garde son coupe-circuit RISK_OFF, comme `donnee_non_fiable` ci-dessous.
+    La regle du projet ne change pas : une donnee absente ne donne jamais de direction.
     """
     neutral = {"risk_off": False, "fear_greed": params.FG_NEUTRAL_BACKTEST, "stale": False}
     regime = _regime_series(df, neutral)                    # technique seule (RISK_OFF neutralise)
     macro_col = df[contracts.MACRO_REGIME_COL]
     # Bloc correlation c6/c7 (docs/06 §6.2.1, A4 du 03/08) : veto SEPARE de la somme des 5.
     # Colonne absente (donnees macro sans indice actions) => bloc inoperant, rien ne change.
+    # A2-quater (20/08) : SEUL le veto de donnee perimee reste un coupe-circuit ici. Le veto
+    # de correlation (BINDING/REDUNDANT) est devenu directionnel et vit dans cio. Raison
+    # absente = on ne sait pas distinguer les deux : coupe-circuit, comme avant.
     if contracts.EQUITY_VETO_COL in df.columns:
         equity_veto = df[contracts.EQUITY_VETO_COL].fillna(False).astype(bool)
+        if contracts.EQUITY_VETO_REASON_COL in df.columns:
+            equity_veto &= df[contracts.EQUITY_VETO_REASON_COL] == contracts.EQUITY_VETO_STALE
         regime = regime.mask(equity_veto, "RISK_OFF")
     # FAIL-SAFE LIVE (parite A2) — meme nature que le veto actions ci-dessus : un doute sur
     # la DONNEE force RISK_OFF, il ne donne jamais d'avis directionnel. Indispensable depuis

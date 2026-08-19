@@ -72,6 +72,34 @@ macro déjà HOSTILE) · `equity_decoupled` · `equity_no_break` · `equity_veto
 `equity_not_started`. La distinction BINDING/REDUNDANT donne directement l'apport **marginal** du
 filtre ; sans elle, l'ablation le surestime de tous ses blocages non-liants.
 
+**Sens du véto — FILTRE DIRECTIONNEL** (décision Jonas 2026-08-20, A2-quater). Jusqu'à cette
+date le véto forçait `RISK_OFF`, c'est-à-dire qu'il interdisait **les deux sens** : un
+coupe-circuit. C'était incohérent avec son propre contrat (`evaluate_equity_veto` renvoie
+« bloquer_nouveaux_longs ») et avec le principe posé le 18/08 dans `docs/01` — *la macro est un
+filtre directionnel, pas une obligation d'entrer*. Une cassure du NASDAQ corrélée au BTC est un
+avis **baissier** : elle retire le long, elle ne retire pas le short.
+
+| Macro du jour | Direction avant le véto | Direction avec véto armé |
+|---|---|---|
+| PORTEUR | long seul | **aucune entrée** — désaccord macro/actions, on ne fait rien |
+| NEUTRE | les deux | **short seul** |
+| HOSTILE | short seul | short seul (inchangé) |
+| inconnue (NaN) | long seul (fail-safe) | **aucune entrée** |
+
+Le véto **soustrait le long**, il n'**invente** jamais un short que la macro ne donne pas :
+shorter en PORTEUR parce que les actions cassent serait un avis directionnel produit par un
+fail-safe. Équivalence côté long avec l'ancien `RISK_OFF` : stricte, et verrouillée par
+`test_veto_actions_equivalence_cote_long_avant_apres_a2_quater`.
+
+⚠️ **`equity_veto_stale` est l'exception, et c'est la règle de fond du projet** : une série
+périmée n'est pas un avis de marché mais un doute sur la **donnée**. Elle garde son
+coupe-circuit `RISK_OFF`. Une donnée absente ne donne **jamais** de direction — même principe
+que `regimes.donnee_non_fiable`. Conséquence de cablage : le véto de corrélation s'applique
+dans `cio.direction_macro`, le véto de donnée reste dans `regimes._classify_macro`.
+
+⚠️ Si la colonne `equity_veto_reason` est absente alors que `equity_veto` existe, les deux cas
+sont indiscernables ⇒ coupe-circuit, comme avant A2-quater.
+
 ⚠️ **Ne rien conclure de son backtest tant que l'entrée n'a pas d'edge** : sur un substrat à
 espérance nulle, tout filtre qui réduit l'exposition paraît positif par construction.
 

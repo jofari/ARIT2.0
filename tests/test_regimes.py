@@ -306,13 +306,38 @@ def test_attach_macro_regime_empty_daily_is_noop():
 
 
 # ------------------------- Bloc correlation actions c6/c7 (docs/06 §6.2.1, A4 du 03/08)
-def test_equity_veto_force_risk_off_meme_en_macro_porteur():
-    """Le veto actions est SEPARE de la somme des 5 composants : il bloque meme un PORTEUR."""
+def test_equity_veto_sans_raison_force_risk_off_meme_en_macro_porteur():
+    """Le veto actions est SEPARE de la somme des 5 composants : il bloque meme un PORTEUR.
+    Raison absente => on ne peut pas distinguer avis de marche et donnee perimee (A2-quater),
+    donc le coupe-circuit d'origine reste : retrocompatibilite stricte."""
     df = _df_macro(30, 110, 100, 115, "PORTEUR")
     df[contracts.EQUITY_VETO_COL] = [True]
     out = regimes.classify(df)
     assert out["regime"].iloc[0] == "RISK_OFF"
     assert out["multiplicateur"].iloc[0] == params.MULT_RISK_OFF
+
+
+def test_equity_veto_stale_reste_un_coupe_circuit():
+    """A2-quater : la serie actions perimee est un doute sur la DONNEE. Elle garde son
+    RISK_OFF — une donnee absente ne donne jamais de direction (cf. donnee_non_fiable)."""
+    df = _df_macro(30, 110, 100, 115, "PORTEUR")
+    df[contracts.EQUITY_VETO_COL] = [True]
+    df[contracts.EQUITY_VETO_REASON_COL] = [contracts.EQUITY_VETO_STALE]
+    out = regimes.classify(df)
+    assert out["regime"].iloc[0] == "RISK_OFF"
+    assert out["multiplicateur"].iloc[0] == params.MULT_RISK_OFF
+
+
+@pytest.mark.parametrize("raison", [contracts.EQUITY_VETO_BINDING, contracts.EQUITY_VETO_REDUNDANT])
+def test_equity_veto_de_correlation_ne_touche_plus_le_regime(raison):
+    """A2-quater (20/08, Jonas) : le veto de correlation est devenu un FILTRE DIRECTIONNEL.
+    Il ne doit plus ecraser le regime technique — sinon le short reste bloque avec le long.
+    Le blocage du long est porte par cio.direction_macro (cf. tests/test_cio.py)."""
+    df = _df_macro(30, 110, 100, 115, "PORTEUR")
+    df[contracts.EQUITY_VETO_COL] = [True]
+    df[contracts.EQUITY_VETO_REASON_COL] = [raison]
+    out = regimes.classify(df)
+    assert out["regime"].iloc[0] == "TREND"
 
 
 def test_equity_veto_faux_ne_change_rien():

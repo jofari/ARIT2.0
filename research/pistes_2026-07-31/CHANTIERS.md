@@ -511,3 +511,64 @@ compté deux fois et resté « déposé, non tranché » alors qu'il est acté d
 | # | Dette | Détail | Statut |
 |---|---|---|---|
 | **T4-ARIT** | **`ts_utc` ment sur les événements `gestion`** | `ev_gestion()` (`user_data/strategies/arit_lib/journal.py:353`) ne pose pas de `ts_utc` ; `write()` retombe alors sur `_now_iso()` (`journal.py:199`), c'est-à-dire **l'heure d'exécution du backtest**, pas celle de la bougie. `ev_signal()` et `ev_exit()`, eux, posent la bonne date (`open_date` / `close_date`). BETA contourne par `signal_id` (sa dette T4), mais **la correction appartient à ARIT** : tout nouveau consommateur du journal retombera dedans, et l'interdit n° 6 (chaque évaluation journalisée) suppose une date juste | 🔴 ouvert |
+
+---
+
+# MISE À JOUR DU 2026-08-20 — quatre décisions tranchées par Jonas
+
+## G4 — l'ORDRE EST VALIDÉ (Jonas, 20/08) : « tu as mon accord »
+
+L'ordre proposé le 12/08 devient l'ordre de travail. Il sort de `DECISIONS.md` (plus rien à
+trancher) et fait foi ici :
+
+> **1. H5 — le quantitatif, en commençant par Q1 · 2. H2 — ML au CIO · 3. H1 — la boucle, en
+> dernier.**
+
+Motif, inchangé et re-vérifié : le goulot n'est pas la qualité de l'entrée mais sa **rareté**
+(78 signaux en 5 ans, 0,16 % des évaluations). Aucun modèle, aucun walk-forward, aucune boucle
+ne conclut sur 78 observations. Et une boucle branchée avant le compteur d'essais est une
+machine à fabriquer du bruit gagnant.
+
+⚠️ Cet ordre porte sur **H1-H9**. Il ne préempte pas le diagnostic gestion short (le −0,53 R du
+18/08), qui est un **bug de mesure et de journal** avant d'être un chantier de recherche —
+il passe devant tout, parce qu'il ne coûte presque rien.
+
+## A2-quater — APPLIQUÉ le 20/08 : le véto actions c6/c7 devient un filtre directionnel
+
+Jonas : « A2 filtre directionnel ». Le véto forçait `RISK_OFF` — il interdisait les **deux**
+sens. Il retire désormais le **long** seul, et laisse le short (PORTEUR ⇒ aucune entrée,
+NEUTRE ⇒ short seul, HOSTILE ⇒ inchangé). Le véto ne crée jamais un short que la macro ne donne
+pas. Spec : `docs/06 §6.2.1`. Code : `cio.direction_macro` + `regimes._classify_macro`.
+Tests : +8 (426 passed). Équivalence côté long verrouillée par un test dédié.
+
+⚠️ **La distinction qui est le cœur du travail** : `equity_veto_stale` (série périmée) reste un
+**coupe-circuit** `RISK_OFF`. Ce n'est pas un avis de marché mais un doute sur la donnée, et
+**une donnée absente ne donne jamais de direction** — même règle que `donnee_non_fiable`.
+Le véto de corrélation vit maintenant dans `cio`, le véto de donnée reste dans `regimes`.
+
+## A2-quinquies — ACTÉ : F&G adaptatif (niveau + dynamique). Nouveau chantier `Q11`
+
+| # | Sous-chantier | Effort | Statut |
+|---|---|---|---|
+| **Q11a** | **Poser `fear_greed` en colonne quotidienne** (via `attach_macro_regime`, décalage +1 j) | S | **prérequis absolu** — aujourd'hui `_classify_macro` injecte `FG_NEUTRAL_BACKTEST = 50` en dur : le F&G **n'existe pas en backtest**, aucune règle F&G n'est mesurable |
+| **Q11b** | **Sortir F&G < 25 de `regimes.donnee_non_fiable()`** | S | le code confond « donnée cassée » et « marché apeuré ». Tant que le F&G vit dans le fail-safe, il ne *peut pas* devenir directionnel. C'est le vrai travail |
+| **Q11c** | `fetch_fear_greed()` → `limit=N` (aujourd'hui `data[0]` seul) | S | sans historique en live, pas de delta ⇒ règle valide en backtest et morte en live : **rupture de parité**, le bloquant n° 1 déjà payé une fois |
+| **Q11d** | Re-télécharger `fear_greed.json` (figé au 03/08/2026, 3 103 points depuis 2018-02) | S | `scripts/download_macro.py fng` |
+| **Q11e** | Règle des deux temps + préenregistrement (B6) | M | 3 paramètres attendent Jonas : amplitude/fenêtre du retournement, symétrie baissière, et « lever le blocage » vs « ajouter de la conviction ». Détail : `DECISIONS.md § A2-quinquies` |
+
+## G3 / Q4 — ACTÉ : l'ablation de `s_sr` + `s_patterns` se fait
+
+`Q4` passe de « question ouverte » à **acté le 20/08, mesure à faire**.
+
+⚠️ **Piège arithmétique vérifié le 20/08, à lire avant de mesurer** : `POIDS` somme à 1,00.
+Retirer les deux scores sans renormaliser plafonne la conviction à **0,70 × multiplicateur**
+alors que le seuil TRANSITION vaut 0,65 et le multiplicateur 0,85 ⇒ **0,595 : plus aucun signal
+possible en TRANSITION**. L'ablation brute mesurerait un durcissement de seuil, pas un retrait de
+scores. Renormaliser les 3 poids restants à somme 1 (rapports inchangés, donc pas une hyperopt).
+L'IC est **invariant** par cette renormalisation ; le backtest y est **très sensible**.
+
+## Dette découverte le 20/08 — le verrou B6 est cassé
+
+| # | Dette | Détail | Statut |
+|---|---|---|---|
+| **T5-ARIT** | **`test_experience_reelle_est_preenregistree` échoue** (`KeyError: 'split_autorise'`) | L'entrée du registre `research/EXPERIMENTS.jsonl` ne porte pas la clé que le test — et le verrou matériel de B6 — exigent. Échec **antérieur au 20/08** (vérifié par `git stash`), donc présent depuis la fermeture de B6 le 18/08. Le préenregistrement est le garde-fou anti-p-hacking de **trois** chantiers actés : G3/Q4, Q11e et l'hypothèse short/trailing | 🔴 ouvert — **à réparer avant toute mesure préenregistrée** |

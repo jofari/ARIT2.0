@@ -302,3 +302,59 @@ def test_cio_pose_toutes_les_colonnes_du_contrat():
     out = _dir_df("NEUTRE", trend_dir=0)
     for col in contracts.CIO_COLUMNS:
         assert col in out.columns
+
+
+# ==== A2-quater (20/08) — le veto actions c6/c7 est un FILTRE DIRECTIONNEL, plus un veto sec ====
+def _dir_df_veto(macro, trend_dir, raison=None, veto=True):
+    """Meme df que _dir_df, avec le bloc correlation actions pose (colonne + raison)."""
+    df = _df(_scores(1.0), params.MULT_FULL, params.SEUIL_TREND, "TREND",
+             scores_short=_scores(1.0), trend_dir=trend_dir)
+    df[contracts.MACRO_REGIME_COL] = [macro]
+    df[contracts.EQUITY_VETO_COL] = [veto]
+    if raison is not None:
+        df[contracts.EQUITY_VETO_REASON_COL] = [raison]
+    return cio.conviction(df)
+
+
+def test_veto_actions_retire_le_long_et_laisse_le_short_en_neutre():
+    """Le coeur de A2-quater : NEUTRE autorisait les deux sens, le veto n'en retire qu'un."""
+    out = _dir_df_veto("NEUTRE", trend_dir=-1, raison=contracts.EQUITY_VETO_BINDING)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_SHORT
+    assert not bool(out["signal_long"].iloc[0])
+    assert bool(out["signal_short"].iloc[0])
+
+
+def test_veto_actions_ne_cree_jamais_un_short_contre_une_macro_porteuse():
+    """PORTEUR + cassure actions = desaccord : aucune entree. Le veto SOUSTRAIT le long,
+    il n'INVENTE pas un avis de short que la macro ne donne pas."""
+    out = _dir_df_veto("PORTEUR", trend_dir=-1, raison=contracts.EQUITY_VETO_BINDING)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_NONE
+    assert not bool(out["signal_long"].iloc[0])
+    assert not bool(out["signal_short"].iloc[0])
+
+
+def test_veto_actions_equivalence_cote_long_avant_apres_a2_quater():
+    """LE garde-fou de non-regression : quelle que soit la macro, un veto actions arme
+    n'ouvre AUCUN long — exactement ce que faisait le RISK_OFF qu'il remplace."""
+    for macro in ("PORTEUR", "NEUTRE", "HOSTILE", float("nan")):
+        out = _dir_df_veto(macro, trend_dir=1, raison=contracts.EQUITY_VETO_BINDING)
+        assert not bool(out["signal_long"].iloc[0]), macro
+
+
+def test_veto_actions_stale_ne_donne_aucune_direction():
+    """Serie actions perimee = doute sur la DONNEE, pas avis de marche : cio n'en tire rien
+    (le coupe-circuit RISK_OFF reste porte par regimes, cf. test_regimes)."""
+    out = _dir_df_veto("NEUTRE", trend_dir=-1, raison=contracts.EQUITY_VETO_STALE)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_BOTH
+
+
+def test_veto_actions_sans_raison_ne_filtre_pas_la_direction():
+    """Raison absente : impossible de distinguer fail-safe et avis de marche. cio s'abstient,
+    regimes garde le coupe-circuit (retrocompatibilite stricte)."""
+    out = _dir_df_veto("NEUTRE", trend_dir=-1, raison=None)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_BOTH
+
+
+def test_veto_actions_faux_ne_change_aucune_direction():
+    out = _dir_df_veto("NEUTRE", trend_dir=0, raison=contracts.EQUITY_PASS_NO_BREAK, veto=False)
+    assert out["direction_macro"].iloc[0] == contracts.DIR_BOTH
