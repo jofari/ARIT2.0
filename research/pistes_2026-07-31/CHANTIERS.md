@@ -11,7 +11,9 @@
 >
 > Raccourci : **C = tout fermé (04/08)** · **B1/B2/B5/B8/B9 fermés (12/08)** · **B6 fermé (18/08)** ·
 > **D1 abandonné (12/08)** · **A1-A7 appliqués, A8 reporté** · reste ouvert : B3/B4/B7/B10-B13,
-> D2-D4, E2/E3/E4, F1/F2, G1-G4, H1-H9, Q1-Q10.
+> D2-D4, E2/E3/E4, **F2** (F1 → BETA), G1-G4, H1-H6/H8/H9 (**H7 → BETA**), Q1-Q8/Q10
+> (**Q9 → BETA**). ⚠️ **Frontière ARIT / BETA : § MISE À JOUR DU 2026-08-19, en bas de fichier.**
+> Un chantier de comparaison de stratégies n'est plus suivi ici.
 
 Inventaire de **tout ce qui est ouvert** : décisions en attente, chantiers de mesure, dettes
 techniques, et ce qui bloque le dry-run. Rien de ce qui suit n'est appliqué.
@@ -259,16 +261,22 @@ doublons. À traiter au retour, avec la mesure en main.
 
 | # | Idée | Origine | Statut | Détail |
 |---|---|---|---|---|
-| F1 | **Banc d'essai de stratégies** — un module qui fait tourner d'autres stratégies que AritV1 sur le même protocole, pour comparer les rendements et **diversifier les formes d'investissement** (mean-reversion, portage/funding, macro seule, spot vs perp) | Jonas, 12/08 | **déposé, non tranché** | `DECISIONS.md` § F1 |
+| ~~F1~~ | **Banc d'essai de stratégies** — un module qui fait tourner d'autres stratégies que AritV1 sur le même protocole, pour comparer les rendements et **diversifier les formes d'investissement** (mean-reversion, portage/funding, macro seule, spot vs perp) | Jonas, 12/08 | ~~déposé, non tranché~~ → ✅ **FERMÉ ICI le 19/08** (statut périmé) — **acté le 18/08, devenu le projet BETA** | chantiers suivis dans `C:\Users\jofar\BETA\CHANTIERS.md`, plus ici · arbitrages : `C:\Users\jofar\BETA\DECISIONS.md` |
 | F2 | **Observabilité à distance du dry-run** — aujourd'hui nulle : FreqUI est sur `127.0.0.1`, toutes les traces sont gitignorées, et le seul signal distant est l'absence d'alerte Discord (qui ne distingue pas « bot sain » de « session Windows fermée »). Pistes : bot **Telegram natif** de freqtrade (`/status`, `/profit`, `/daily`, aucun port ouvert) — c'est aussi ce que M09 devait apporter — ou **Tailscale / Cloudflare Tunnel** (FreqUI reste sur `127.0.0.1` et devient joignable sans exposition publique). ❌ **Jamais** `listen_ip_address: 0.0.0.0` + redirection de port : l'API porte `/forceexit`, `/forcebuy`, `/stop` | Jonas, 12/08 | **déposé, non tranché** | cette ligne porte la substance ; voir aussi `DECISIONS.md` § G2 et § G8 |
 
-⚠️ F1 a trois prérequis non négociables, écrits dans `DECISIONS.md` : B2 (correction
-Benjamini-Hochberg), B5 (hold-out scellé), B6 (`EXPERIMENTS.jsonl`). Un banc d'essai sans
-budget de tests déclaré est une machine à fabriquer du bruit statistiquement gagnant.
-Ces trois-là sont précisément le périmètre de la **routine cloud vague 1** armée le 08/08 :
-F1 se branche derrière elle. Second frein, matériel celui-là : les OHLCV futures manquent
-pour 3 paires sur 4, donc un banc lancé aujourd'hui comparerait les candidates sur BTC seul
-— la paire la plus perdante du run du 04/08.
+❌ **PARAGRAPHE PÉRIMÉ — corrigé le 2026-08-19.** Les trois prérequis (B2, B5, B6) sont
+**fermés au 18/08**, et les OHLCV futures sont **complètes sur les 4 paires** (100 % de
+couverture, 0 bougie manquante, vérifié au bit près en construisant le lake BETA). Il ne
+reste donc **aucun verrou** devant le banc, ni méthodologique ni matériel. Texte d'origine
+conservé pour la trace :
+
+> ⚠️ F1 a trois prérequis non négociables, écrits dans `DECISIONS.md` : B2 (correction
+> Benjamini-Hochberg), B5 (hold-out scellé), B6 (`EXPERIMENTS.jsonl`). Un banc d'essai sans
+> budget de tests déclaré est une machine à fabriquer du bruit statistiquement gagnant.
+> Ces trois-là sont précisément le périmètre de la **routine cloud vague 1** armée le 08/08 :
+> F1 se branche derrière elle. Second frein, matériel celui-là : les OHLCV futures manquent
+> pour 3 paires sur 4, donc un banc lancé aujourd'hui comparerait les candidates sur BTC seul
+> — la paire la plus perdante du run du 04/08.
 
 ---
 
@@ -337,7 +345,7 @@ stratégie (79 trades, 3 151 évaluations), protocole expérimental, dashboard.
 Ce qui **manque, et qui est le cœur du banc** : le **moteur** (bloc M), la **batterie
 multi-test** (bloc S — BH, DSR, bootstrap par blocs, Monte-Carlo, CPCV, Reality Check,
 buy-and-hold, corrélation des équity) et la **recherche d'edge** (bloc R, 6 hypothèses déjà
-identifiées). Arbitrages : `DECISIONS.md` § F1.
+identifiées). Arbitrages : `BETA\DECISIONS.md` (sortis de `DECISIONS.md` le 19/08).
 
 ⚠️ **H7 (banc multi-stratégie) est donc BETA**, et ne se code plus dans ce dépôt.
 
@@ -364,7 +372,7 @@ en même temps.
 | H4 | **ML au position manager** (gestion) | ❌ **aveugle** | `exit` n'est écrit nulle part : 95 `entry`, **0 `exit`** — ni `r_final`, ni `mae_r`, ni `mfe_r` |
 | H5 | **Quantitatif** (le socle de maths) | ✅ c'est le chantier le plus mûr | rien — détail § H5 |
 | H6 | **Interface graphique** | ✅ mais FreqUI + `scripts/suivi.py` existent déjà | l'observabilité est **locale**, c'est ça le vrai manque (F2) |
-| H7 | **Banc multi-stratégie** | ⚠️ = **F1**, déjà déposé | B6 ; + OHLCV futures désormais complètes (fermé le 08/08) |
+| ~~H7~~ | **Banc multi-stratégie** | ✅ **FERMÉ ICI le 19/08** — = F1, projet BETA depuis le 18/08 | ne se code plus dans ce dépôt : `BETA\CHANTIERS.md`, blocs M / S / R |
 | H8 | **Tracking retail vs institutionnel** | ❌ donnée absente | flux ETF / CVD taker / OI : source externe, aucune n'est câblée |
 | H9 | **Agrégateur de news** | ❌ et à cadrer | **interdit n° 1** : aucun LLM dans le chemin de trading. Utilisable en amont, jamais en décision |
 
@@ -454,7 +462,7 @@ seul chantier qui débloque tous les autres (Q1).
 | Q6 | **B7** — dépendance de queue des 4 paires | M | le nombre réel de paris indépendants (~1,2, pas 4) conditionne tout dimensionnement | ouvert |
 | Q7 | **B13 / D2** — walk-forward, ancré, **purgé et avec embargo** | M | prérequis du dry-run depuis juillet, jamais fait. D2 (5 seuils macro) est le plus urgent de la liste D depuis l'abandon de D1 | ouvert |
 | Q8 | **B11** (HAR-RV vs ATR, QLIKE + Diebold-Mariano) et **B12** (stops fractionnaires, frais inclus) | M | critères de passage/abandon déjà écrits en vague 2 | ouverts |
-| Q9 | **Deflated Sharpe / PSR** + référence **buy-and-hold** imposée à toute candidate | S | décision du 12/08 : « ce qui ne bat pas le hold ne mesure pas un edge, il mesure le marché ». Sans ça, F1 couronnera la plus exposée | à imposer avec F1 |
+| Q9 | **Deflated Sharpe / PSR** + référence **buy-and-hold** imposée à toute candidate | S | décision du 12/08 : « ce qui ne bat pas le hold ne mesure pas un edge, il mesure le marché ». Sans ça, F1 couronnera la plus exposée | ~~à imposer avec F1~~ → ✅ **FERMÉ ICI le 19/08**, migré chez BETA : S2 (Sharpe dégonflé) + S8 (buy-and-hold) |
 | Q10 | Étendre le **modèle nul B1 par régime** (macro, volatilité) | S | E[R] nul = −0,0123 long / −0,0370 short **en moyenne** ; par régime, la référence change | extension |
 
 ---
@@ -467,3 +475,39 @@ seul chantier qui débloque tous les autres (Q1).
    Tant qu'il n'y a pas un seul `exit`, le chantier « gestion » n'a aucune cible à apprendre.
 3. **B6 est le dernier verrou méthodologique** et il bloque désormais **deux** chantiers, pas un :
    F1/H7 (banc) **et** H1 (boucle). C'est le prochain à fermer.
+
+
+---
+
+# MISE À JOUR DU 2026-08-19 — frontière ARIT / BETA
+
+Ce qui a déclenché cette section : ALPHA comptait **24 décisions en attente** sur ARIT — 11 dans
+`DECISIONS.md`, 13 ici. Après déduplication il en reste **21**, dont **8 seulement attendent une
+réponse de Jonas**. Les 3 lignes de trop étaient des doublons ou des statuts périmés : **F1**
+compté deux fois et resté « déposé, non tranché » alors qu'il est acté depuis le 18/08, et
+**G3 = Q4**. Corrigés en place plus haut.
+
+## La règle, en une phrase
+
+> **ARIT2.0 = la stratégie qui tourne. BETA = la recherche d'autres stratégies.**
+> Un chantier qui porte sur **AritV1** (ses portes, ses scores, sa gestion, son dry-run, son
+> observabilité) reste ici. Un chantier qui porte sur **la comparaison de plusieurs candidates**
+> (moteur de criblage, batterie multi-test, hypothèses d'edge) est chez BETA.
+> **Aucun statut ne vit aux deux endroits** : le dépôt propriétaire fait foi, l'autre ne porte
+> qu'un pointeur. C'est exactement la duplication de statuts qui a déjà fait recompter des
+> lignes fermées comme ouvertes.
+
+| Ligne | Avant | Depuis le 19/08 |
+|---|---|---|
+| **F1 / H7** — banc d'essai | « déposé, non tranché » | **BETA** — blocs M (moteur), S (multi-test), R (recherche d'edge) |
+| **Q9** — Deflated Sharpe + buy-and-hold | « à imposer avec F1 » | **BETA** — S2 et S8 |
+| **Q7** — walk-forward purgé + embargo | ouvert | **reste ici** (B13/D2, pour AritV1). BETA S6 est le même outil appliqué aux candidates : deux travaux, deux dépôts, à ne pas fusionner |
+| **G3 / Q4** — ablation `s_sr` + `s_patterns` | compté deux fois | **reste ici** ; `DECISIONS.md` § G3 fait foi, Q4 n'est que sa ligne de chantier |
+| **F2** — observabilité du dry-run | ouvert | **reste ici** (avec G2 et G8) : c'est le bot en production, BETA ne tourne pas en live |
+| **C1-bis** — palier orange / `news_window` | à trancher | **reste ici** (paramètre d'AritV1), mais BETA **R6** mesure ce que cette porte bloque. La mesure informe la décision, elle ne la prend pas |
+
+## Ce que BETA a trouvé et qui est un chantier ARIT
+
+| # | Dette | Détail | Statut |
+|---|---|---|---|
+| **T4-ARIT** | **`ts_utc` ment sur les événements `gestion`** | `ev_gestion()` (`user_data/strategies/arit_lib/journal.py:353`) ne pose pas de `ts_utc` ; `write()` retombe alors sur `_now_iso()` (`journal.py:199`), c'est-à-dire **l'heure d'exécution du backtest**, pas celle de la bougie. `ev_signal()` et `ev_exit()`, eux, posent la bonne date (`open_date` / `close_date`). BETA contourne par `signal_id` (sa dette T4), mais **la correction appartient à ARIT** : tout nouveau consommateur du journal retombera dedans, et l'interdit n° 6 (chaque évaluation journalisée) suppose une date juste | 🔴 ouvert |
