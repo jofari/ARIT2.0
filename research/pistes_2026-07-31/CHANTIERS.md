@@ -11,7 +11,9 @@
 >
 > Raccourci : **C = tout fermé (04/08)** · **B1/B2/B5/B8/B9 fermés (12/08)** · **B6 fermé (18/08)** ·
 > **D1 abandonné (12/08)** · **A1-A7 appliqués, A8 reporté** · reste ouvert : B3/B4/B7/B10-B13,
-> D2-D4, E2/E3/E4, **F2** (F1 → BETA), G1-G4, H1-H6/H8/H9 (**H7 → BETA**), Q1-Q8/Q10
+> D2-D4, E2/E3/E4, **F2** (F1 → BETA), G1-G3 (**G4 tranché 20/08**), H1-H6/H8/H9 (**H7 → BETA**),
+> Q1-Q3/Q5-Q8/Q10 (**Q4 fermée 20/08**) + **Q11a-e** (F&G adaptatif) et **Q12** (raison de refus),
+> ouverts le 20/08
 > (**Q9 → BETA**). ⚠️ **Frontière ARIT / BETA : § MISE À JOUR DU 2026-08-19, en bas de fichier.**
 > Un chantier de comparaison de stratégies n'est plus suivi ici.
 
@@ -619,3 +621,66 @@ Réserves préenregistrées, maintenues : le gain d'IC **ne se lit pas** dans le
 effectivement perdus côté long (+0,0828 R contre un noyau à −0,1964 R), mais c'est indécidable
 à ce N (MDE 0,825 R) ; et le noyau conservé reste à **−0,1964 R** — améliorer un IC ne crée pas
 un edge.
+
+---
+
+# MISE À JOUR DU 2026-08-20 (soir) — A2-quater rouvert, mesuré, et deux chiffres corrigés
+
+## Où en est l'ordre G4, validé le matin même
+
+**Rien n'a démarré.** L'ordre est acté (H5 → H2 → H1), mais **Q1 n'est pas ouvert** : aucun
+fichier dans `analysis/`, aucune courbe N(seuil). Les livraisons du 20/08 (A2-quater,
+T5-ARIT, Q4) sont toutes *antérieures* à l'ordre ou orthogonales à lui. Le premier travail
+de la prochaine session reste donc **Q1**, et il est réclamé par deux décisions ouvertes
+à la fois : **G3** (de combien desserrer pour compenser l'ablation ?) et **A2-sexies**
+(peut-on se permettre de perdre 19 % des entrées ?).
+
+## A2-quater rouvert par Jonas — devenu A2-sexies
+
+Jonas, 20/08 : « pas du tout ce que je voulais, je voulais un **filtre décisionnel** pas une
+**interdiction de long** », et il écrit la règle qu'il veut (concordance `macro ∧ technique`,
+sinon journal seul). Arbitrage : `DECISIONS.md § A2-sexies`.
+Décompte descriptif : `research/regle_direction/RAPPORT.md`, code `compte_variantes.py`
+(train seul, hold-out non lu ; **aucune p-value, aucun verdict** — les N sont de l'ordre de
+la dizaine).
+
+**Ce que la mesure a montré, et qui n'était pas prévisible :**
+
+| Constat | Chiffre |
+|---|---|
+| **A2-quater n'a déplacé aucun trade** — le véto actions directionnel couvre 2 298 lignes du train, **aucun signal technique ne tombe dessous** | 0 long, 0 short. Décompte avant/après **identique** : 50 longs, 28 shorts |
+| Les 3 façons de rendre le véto « décisionnel » (le laisser, le dégrader d'un cran, le forcer HOSTILE) | **même décompte**, au trade près |
+| La concordance stricte (NEUTRE ⇒ rien) | **78 → 63 signaux (−19 %)**, tous perdus en macro NEUTRE |
+| Les 9 shorts en macro NEUTRE — ceux que la règle stricte supprimerait | **+0,4978 R** de moyenne, **seul groupe nettement positif du lot** (⚠️ n = 9, indécidable) |
+| Les 7 shorts techniques en macro PORTEUR, bloqués par la porte macro | −0,2286 R : la porte macro **fait son travail** sur ce sous-groupe |
+| Régime technique des 78 signaux | **100 % TREND, zéro TRANSITION** — le seuil 0,65 n'est jamais atteint en cinq ans. À verser à **Q1** |
+
+⇒ Le désaccord porte sur un bloc **inerte dans les données**. Une seule vraie question reste :
+**que fait la macro NEUTRE** (les deux sens, ou rien) ? Elle est dans `DECISIONS.md`.
+
+## Q12 — raison de refus structurée dans le journal (nouveau chantier, aucun arbitrage)
+
+| # | Sous-chantier | Effort | Pourquoi |
+|---|---|---|---|
+| **Q12** | `AritV1._journal_evaluation` écrit `decision: no_signal` avec pour raison **le régime technique** (`row.get("regime")`), **pas le motif du refus** | S | Le `else: enregistrement des raisons` de la règle de Jonas est le **seul morceau de sa spec absent du code**. Aujourd'hui le journal ne distingue pas « macro discordante » de « conviction insuffisante » ou « RR manquant » |
+
+C'est **exactement** le manque qui a rendu R6 non mesurable chez BETA : il a fallu
+reconstruire les populations à la main pour découvrir que `news_window` ne séparait rien.
+Q12 ne change aucun trade, ne demande aucune décision, et rend mesurable tout ce qui suit —
+**Q1 le premier**, qui a besoin de savoir *quelle porte* a refusé pour tracer N(seuil) porte
+par porte.
+
+## Deux chiffres à ne plus citer tels quels
+
+1. **« `news_window` bloque 91,75 % de tout ce qui est rejeté (756 signaux sur 824) »** —
+   FAUX comme énoncé. BETA R6 (19/08) : ce sont **756 lignes de journal**, soit **63 signaux
+   distincts** (≈ 13 `gate_check` par signal, dette T4), dont **53 sont acceptés ailleurs de
+   toute façon**. La porte **retarde** un signal, elle ne l'élimine pas. ⚠️ **C1-bis ne doit
+   pas être tranchée sur ce chiffre.**
+2. **« Le F&G n'existe pas en backtest »** (écrit le 20/08 au matin dans `DECISIONS.md`) —
+   trop absolu. `macro_regime._score_fear_greed` en fait le composant **c5** du régime
+   (< 25 ⇒ −1, ≥ 45 ⇒ +1) depuis `fear_greed.json` : le F&G **pèse déjà** sur
+   PORTEUR/NEUTRE/HOSTILE en backtest. Ce qui manque est sa **valeur brute en colonne** (donc
+   tout delta) et le **coupe-circuit**, lui bien neutralisé par `FG_NEUTRAL_BACKTEST = 50`.
+   Q11a reste juste, sa justification était fausse. Plan de code complet des 5 étapes :
+   `DECISIONS.md § A2-quinquies`.
