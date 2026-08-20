@@ -751,3 +751,69 @@ chiffre positif en face de lui**.
 balayer une grille pour **tracer une courbe d'espérance nette** est une mesure ; choisir le `k`
 qui maximise le backtest et le figer en production est une optimisation. Le premier se
 préenregistre (B6) avec sa règle de décision ; le second tombe sous l'interdit n° 5.
+
+## 20/08 (nuit, suite) — Q14 livré, Q13 mesurée et INFIRMÉE, dette T6-ARIT
+
+**`Q14` — FERMÉ.** `risk.plafonnement_stake()` rend visible le clamp silencieux de freqtrade :
+quand le stop est serré, `stake = equity × risk_pct / dist_frac` dépasse `max_stake`, freqtrade
+plafonne, et le risque réel tombe **sous** 1,16 % sans que rien ne le dise. La fonction ne
+corrige pas (freqtrade plafonnera de toute façon), elle **journalise** — `contracts.STAKE_CAP_KIND`.
++6 tests, **438 passed**.
+
+**`Q13` — FERMÉ le 20/08 : mesurée, hypothèse INFIRMÉE dans les deux sens.**
+Préenregistrée puis close (essais cumulés **51**) · `research/balayage_Q13/RAPPORT.md` ·
+code `analysis/balayage_stop.py`.
+
+| Sens | n | E nette k = 1,00 | E nette k = 0,50 | Δ | IC 90 % | MDE |
+|---|---|---|---|---|---|---|
+| long | 50 | −0,3943 R | −0,4914 R | −0,0972 | [−0,3164 ; +0,1337] | 0,4003 |
+| short | 38 | −0,3299 R | −0,9741 R | **−0,6441** | **[−0,9443 ; −0,3674]** | 0,5102 |
+
+**Resserrer le stop DÉGRADE l'espérance nette**, l'inverse de l'hypothèse — et côté short l'IC
+exclut zéro du mauvais côté. Les **150 cellules** de la grille (15 `k` × 5 cibles × 2 sens) sont
+**négatives** ; la meilleure est à −0,1714 R, lue après coup sur 150, donc citée pour la forme
+et pas comme un résultat.
+
+### Le chiffre à retenir de tout le chantier
+
+> **Le coût aller-retour vaut 0,3207 R (long) et 0,4147 R (short) à la distance structurelle.**
+> Un tiers à 40 % d'un R part en frais et slippage **avant qu'on ait parlé d'edge**.
+
+La distance de stop médiane des signaux longs est de **1,54 %**, avec une queue descendant à
+**0,07 %**. Comme le coût vaut `2 × (frais + slippage) / distance`, la moyenne est gouvernée par
+`E[1/distance]` : **une poignée de signaux à stop ultra-serré tire tout le coût**. ⇒ Le problème
+n'est pas le *niveau* des distances de stop, c'est leur **dispersion**.
+
+⚠️ **Contrôle de cohérence passé avant lecture** : E brute reconstituée à `k = 1` côté long
+= **−0,0736 R**, identique au chiffre mesuré indépendamment le même jour
+(`research/regle_direction/RAPPORT.md`). La simulation reproduit la production au chiffre près.
+
+### La note du vault se falsifie elle-même, proprement
+
+`trading/frais et distance de stop.md` annonçait −0,072 R à k=1 et **+0,158 R à k=0,5**, et
+**réclamait ce balayage** (« une décision prise sur une grille de 3 points n'est pas une
+optimisation, c'est un sondage »). Le sondage complet dit l'inverse. Deux causes, aucune n'étant
+une faute de la note : substrat différent (campagne edge 2026-07, 128 trades, macro neutralisée)
+et **coût sous-estimé d'un facteur ~3,7** (0,0875 R supposé, **0,32 R** mesuré signal par signal).
+La variante qu'elle décrivait vraiment — cible en **prix** inchangée, soit (k=0,5 ; cible 3,0 R) —
+rend −0,3614 R contre −0,3943 : **+0,033 R, sous tout MDE**.
+
+### Nouvelle dette
+
+| # | Dette | Détail | Statut |
+|---|---|---|---|
+| **T6-ARIT** | **`FEE_TAKER_FRAC` est le taux SPOT** | `params.py:73` — `0.001  # Binance spot 0,1 % taker`, alors que le bot est en **futures** depuis A2 (`config.dry.json: "trading_mode": "futures"`), où le taker USDⓈ-M vaut **0,05 %**. Portée : **freqtrade utilise sa propre config**, donc backtests et live ne sont pas faussés ; mais la constante sert de fallback de journalisation (`AritV1._journal_exit`) et de source à **toute mesure hors ligne**, qui surestiment donc les frais d'environ 30 %. ⚠️ Le verdict Q13 ne bouge pas, mais **une cellule passerait tout juste positive** ⇒ la re-mesure exige un **nouvel id** (`Q13-bis`), jamais une relance de Q13 (le verrou B6 le refuse, vérifié) | 🔴 ouverte |
+
+### Ce que Q13 ouvre, et qui n'existait pas ce matin
+
+1. **La piste « resserrer le stop » est fermée** pour l'univers de signaux actuel.
+2. **Le levier est le coût lui-même**, avec trois entrées mesurables : corriger le taux (**T6**),
+   passer en **maker** (0,02 % contre 0,05 % en futures), et **écarter les signaux dont la
+   distance de stop est trop serrée pour être rentable** — un signal à stop de 0,2 % paie ~1,5 R
+   de frais et **ne peut structurellement pas gagner**. Ce dernier point est une **porte**, elle
+   se mesure comme Q1, et elle réduit le nombre de signaux : à arbitrer avec le goulot de rareté.
+   ⇒ **`Q16` — porte de distance de stop minimale**, à préenregistrer.
+3. **La cible mérite autant d'attention que le stop** : à `k` fixé, passer la cible de 1,0 R à
+   2,5-3,0 R améliore l'espérance nette dans presque toute la grille (un TP plus lointain amortit
+   un coût fixe sur un R plus grand). Piste **non préenregistrée**, à ne pas lire comme un
+   résultat. ⇒ **`Q17` — balayage de la cible seule**, à préenregistrer.
