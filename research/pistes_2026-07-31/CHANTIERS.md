@@ -684,3 +684,70 @@ par porte.
    tout delta) et le **coupe-circuit**, lui bien neutralisé par `FG_NEUTRAL_BACKTEST = 50`.
    Q11a reste juste, sa justification était fausse. Plan de code complet des 5 étapes :
    `DECISIONS.md § A2-quinquies`.
+
+---
+
+# MISE À JOUR DU 2026-08-20 (nuit) — sept arbitrages de Jonas, et quatre chantiers qu'ils ouvrent
+
+Session de tri des décisions. Arbitrages détaillés : `DECISIONS.md`. Ce qui suit est ce qu'ils
+laissent **à faire**.
+
+## Ce que Jonas a tranché
+
+| # | Décision | Effet ici |
+|---|---|---|
+| **A2-sexies** | (a) — la macro **NEUTRE garde les deux sens** | statu quo, **rien à coder**. Les 78 signaux restent 78 |
+| **A2-quinquies** | **P1, P2 et P3 validés** : +15 pts / 1 j · symétrie · lever le blocage seulement | **Q11a-e passent de « acté sans spec » à codables** |
+| **A2-ter** | levier reste à **1** | ⚠️ le raisonnement de Jonas (« SL serré ⇒ conviction faible ») est faux — la vraie raison est Kelly (`DECISIONS.md`). Ouvre **Q14** |
+| **C1-bis** | le palier binaire devient un **barème de points** (rouge 3, autres 1) | **3 paramètres à fixer**, et ⚠️ **non mesurable en backtest**. Ouvre **Q15** |
+| **G1** | ML **reporté**, reste une hypothèse | rien à coder ; `H2` reste documenté, non ouvert |
+| **A8** | reporté, re-confirmé (« des G-rules fixes me semblent dangereuses ») | inchangé |
+| **G2** | **le suivi à distance part chez BETA** | ⇒ voir « frontière » ci-dessous |
+| **C1-ter** | **supprimée** de `DECISIONS.md` sur sa demande | la connaissance atterrit ici, ligne ci-dessous |
+
+## C1-ter, recueillie ici puisqu'elle quitte DECISIONS.md
+
+**Échéance fin 2026 : saisir les dates CPI/NFP 2027** dans
+`user_data/calendar/economic_calendar.json`. Le BLS publie son calendrier annuel fin 2026.
+Sans cette saisie, la couverture CPI/NFP retombe sur ForexFactory, **qui ne voit que la semaine
+en cours** — un CPI à J+20 n'est connu de personne. `coverage_gaps()` le signalera en `ERROR` à
+chaque run. ⚠️ `bls.gov` refuse toute récupération automatisée (403) : **saisie manuelle**,
+publication 08:30 US Eastern.
+
+## Frontière ARIT / BETA — G2 la déplace, volontairement
+
+Le 19/08, la règle disait : « **F2 / G2 / G8** restent chez ARIT (le dry-run ne tourne que
+là) ». Jonas la révise le 20/08 : « intègre le suivi à distance dans le projet BETA si
+possible, sinon dans un autre dashboard, mais **il faut pouvoir suivre ça sans avoir accès au
+PC** ».
+
+⇒ **L'observabilité (F2 + la moitié « suivi » de G2) devient un bloc `O` chez BETA**
+(`BETA/CHANTIERS.md`). Ce qui **reste ici** : la **relance** du dry-run elle-même et sa survie
+aux redémarrages — c'est-à-dire le bot, pas sa fenêtre. La frontière n'est pas cassée, elle est
+précisée : **ARIT produit les événements, BETA les affiche.** BETA continue de ne jamais écrire
+dans `ARIT2.0`.
+
+⚠️ Le défaut à ne pas reproduire est déjà connu : `services/watchdog.py` alerte si le heartbeat
+est muet > 10 min, **mais il meurt avec la session Windows**. Un dashboard hébergé sur la même
+machine hérite exactement du même angle mort — **le silence y est indiscernable de la santé**.
+Tant que le VPS (G8) n'existe pas, le seul suivi distant honnête est un **push sortant**
+(Discord), avec un signal de vie **positif** et périodique, jamais une page à consulter.
+
+## Les quatre chantiers ouverts par ces arbitrages
+
+| # | Chantier | Effort | Pourquoi, et ce qui le déclenche |
+|---|---|---|---|
+| **Q13** | **Balayage du couple (distance de stop, cible) en espérance NETTE** — `k` de 0,3 à 1,0 par pas de 0,05 | M | **Le plus important des quatre.** Jonas : « le système n'est pas rentable de base ». C'est exact et déjà chiffré : à `k = 1` (réglage actuel) **E nette = −0,072 R**, à `k = 0,5` **+0,158 R** (`frais et distance de stop.md`). Les frais en R varient comme `1/k`. **La grille n'a que 3 points, rien entre 0,5 et 1,0**, et le balayage est gratuit (`analysis/replay_entries.py` existe). ⚠️ Balayer distance **et** cible ensemble : séparément on rate l'optimum |
+| **Q14** | **Journaliser le plafonnement du stake** | S | Quand la distance de stop est serrée, `stake = equity × risk_pct / dist_frac` dépasse l'équité, freqtrade plafonne, et le risque réel tombe **sous** 1,16 % **sans le dire**. Prérequis de Q13 : on ne peut pas mesurer un stop plus serré si le sizing décroche en silence quand il se resserre |
+| **Q15** | **Calendrier économique historique** | M | Sans lui, ni le palier orange ni le barème de points de C1-bis ne sont mesurables : `macro_state.json` ne contient que les événements **à venir**, donc en backtest **la porte news passe toujours**. Même nature de trou que Q11a pour le F&G |
+| **Q12** | *(ouvert plus haut le 20/08)* raison de refus structurée dans le journal | S | inchangé — c'est le `else` de la règle de Jonas |
+
+**Ordre proposé** : **Q14 → Q13** (Q14 est un prérequis de Q13 et coûte une heure), puis **Q1**.
+Q13 et Q1 répondent tous deux à « le système n'est pas rentable » — Q1 dit *combien* de signaux
+on peut avoir, Q13 dit *combien vaut* chacun — et **Q13 est le seul des deux à avoir déjà un
+chiffre positif en face de lui**.
+
+⚠️ **Q13 n'est pas une hyperopt**, et la distinction doit être écrite avant de le lancer :
+balayer une grille pour **tracer une courbe d'espérance nette** est une mesure ; choisir le `k`
+qui maximise le backtest et le figer en production est une optimisation. Le premier se
+préenregistre (B6) avec sa règle de décision ; le second tombe sous l'interdit n° 5.
