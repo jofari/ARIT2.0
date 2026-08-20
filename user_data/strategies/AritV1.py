@@ -116,6 +116,11 @@ class AritV1(IStrategy):
         if stake is None:                                    # skip journalise avec raison (n6)
             self._log("gate_check", sid, [], "skip", reason, pair)
             return 0.0
+        # Q14 : freqtrade clampe le stake a max_stake EN SILENCE => risque reel < risk_pct.
+        cap = risk.plafonnement_stake(stake, kwargs.get("max_stake"), equity, current_rate,
+                                      sl0, risk_pct, sign)
+        if cap is not None:
+            self._log("system", contracts.STAKE_CAP_KIND, dict(cap, pair=pair, signal_id=sid))
         conv = "conviction" if sign > 0 else "conviction_short"
         self._pending[pair] = {
             "initial_sl": sl0, "risk_pct": risk_pct, "signal_id": sid, "tp1": tp1, "tp2": tp2,

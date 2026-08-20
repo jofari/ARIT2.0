@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 import json
 
+import pytest
+
 from arit_lib import contracts, params, risk
 
 NOW = datetime(2026, 7, 6, 12, 0, 0, tzinfo=timezone.utc)  # lundi, semaine ISO 2026-W28
@@ -290,3 +292,54 @@ def test_veto_flag_blocks(tmp_path):
     cfg = _base_cfg(tmp_path, veto_window_min=params.VETO_WINDOW_MIN_CANARI)
     ok, gate, metrics = risk.gate_check("BTC/USDT", NOW, FakeWallets(10_000), [], cfg)
     assert ok is False and gate == "veto_canari" and metrics["veto"] == "human_veto"
+
+
+# --------------------------------------------------- Q14 : plafonnement du stake
+def _plaf(stake, max_stake, **kw):
+    base = {"equity": 10_000.0, "entry": 100.0, "sl_initial": 98.0, "risk_pct": 0.0116,
+            "sign": 1}
+    base.update(kw)
+    return risk.plafonnement_stake(stake, max_stake, base["equity"], base["entry"],
+                                   base["sl_initial"], base["risk_pct"], base["sign"])
+
+
+def test_plafonnement_absent_quand_le_stake_passe():
+    assert _plaf(5_000.0, 8_000.0) is None
+    assert _plaf(8_000.0, 8_000.0) is None       # egalite : freqtrade ne clampe pas
+
+
+def test_plafonnement_none_si_max_stake_inutilisable():
+    assert _plaf(5_000.0, None) is None
+    assert _plaf(5_000.0, float("inf")) is None
+    assert _plaf(5_000.0, "beaucoup") is None
+    assert _plaf(5_000.0, 0.0) is None
+    assert _plaf(None, 8_000.0) is None
+
+
+def test_plafonnement_donne_le_risque_reellement_engage():
+    # dist_frac = 2 % ; risque vise 1,16 % => stake theorique 5 800, plafonne a 2 000.
+    detail = _plaf(5_800.0, 2_000.0)
+    assert detail is not None
+    assert detail["risk_pct_vise"] == pytest.approx(0.0116)
+    assert detail["risk_pct_reel"] == pytest.approx(2_000.0 * 0.02 / 10_000.0)  # 0,40 %
+    assert detail["risk_pct_reel"] < detail["risk_pct_vise"]   # le point du chantier
+    assert detail["ratio"] == pytest.approx(detail["risk_pct_reel"] / 0.0116)
+
+
+def test_plafonnement_plus_le_stop_est_serre_plus_le_risque_decroche():
+    """Prerequis de Q13 : sans ca, resserrer le stop fait decrocher le sizing en silence."""
+    large = _plaf(5_800.0, 2_000.0, sl_initial=98.0)      # dist 2 %
+    serre = _plaf(11_600.0, 2_000.0, sl_initial=99.0)     # dist 1 % => stake x2
+    assert serre["risk_pct_reel"] < large["risk_pct_reel"]
+
+
+def test_plafonnement_short_utilise_le_signe():
+    detail = risk.plafonnement_stake(5_800.0, 2_000.0, 10_000.0, 100.0, 102.0, 0.0116, sign=-1)
+    assert detail["dist_frac"] == pytest.approx(0.02)
+    assert risk.plafonnement_stake(5_800.0, 2_000.0, 10_000.0, 100.0, 102.0, 0.0116) is None
+
+
+def test_plafonnement_ne_produit_que_les_cles_du_contrat():
+    detail = _plaf(5_800.0, 2_000.0)
+    assert set(detail) == set(contracts.STAKE_CAP_KEYS)
+    json.dumps(detail)          # serialisable : il part dans le journal

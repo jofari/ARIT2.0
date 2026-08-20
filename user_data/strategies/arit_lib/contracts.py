@@ -211,6 +211,9 @@ GATE_NAMES = (
     "rr_min",          # 03.2.7 — RR >= 1,5
     "veto_canari",     # 03.2.8 — fenetre veto Discord (canari uniquement)
 )
+STAKE_CAP_KIND = "stake_plafonne"                  # Q14 — evenement system : sizing bride
+STAKE_CAP_KEYS = ("stake_demande", "stake_plafond", "risk_pct_vise", "risk_pct_reel",
+                  "ratio", "dist_frac")                # Q14 — detail de STAKE_CAP_KIND
 SKIP_MIN_NOTIONAL = "skip_min_notional"            # PDR 03.1 — skip journalise hors gates
 SKIP_ZERO_STOP_DISTANCE = "skip_zero_stop_distance"  # M04.4 — entry == sl_initial
 

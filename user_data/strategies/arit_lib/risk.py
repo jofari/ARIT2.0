@@ -24,6 +24,7 @@ Extensions de contrat (BUILD_NOTES, canoniques dans contracts.py) implementees i
 from __future__ import annotations
 
 import json
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -157,6 +158,43 @@ def compute_stake(equity, risk_pct, entry, sl_initial, min_notional=0.0, risk_ca
             return None, contracts.SKIP_MIN_NOTIONAL
         return min_notional, None
     return stake, None
+
+
+def plafonnement_stake(stake, max_stake, equity, entry, sl_initial, risk_pct, sign: int = 1):
+    """Detail du plafonnement que freqtrade VA appliquer, ou None s'il n'y en a pas (Q14).
+
+    `compute_stake` rend `equity * risk_pct / dist_frac` sans borne haute : rien dans ce
+    module ne connait le wallet disponible, les slots ni le cap de config. C'est freqtrade
+    qui clampe le stake a `max_stake`, **en silence**. Quand il le fait, le risque REELLEMENT
+    engage vaut `max_stake * dist_frac / equity`, donc **moins** que le `risk_pct` vise — et
+    le bot continue de croire qu'il risque 1,16 % (docs/03 par.3.7.4).
+
+    Cette fonction ne CORRIGE rien : freqtrade plafonnera de toute facon. Elle rend le
+    plafonnement VISIBLE, ce qui est le prerequis de tout balayage de distance de stop
+    (chantier Q13) : sans elle, resserrer le stop fait decrocher le sizing sans que la
+    mesure puisse le distinguer d'un effet de marche.
+
+    Retour : None si `max_stake` est absent/non fini ou si `stake <= max_stake` ; sinon un
+    dict serialisable JSON (contracts.STAKE_CAP_KEYS) avec le risque vise et le risque reel.
+    """
+    if max_stake is None or stake is None:
+        return None
+    try:
+        borne = float(max_stake)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(borne) or borne <= 0 or stake <= borne:
+        return None
+    if equity <= 0 or entry <= 0:
+        return None
+    dist_frac = sign * (entry - sl_initial) / entry
+    if dist_frac <= 0:
+        return None
+    risque_reel = borne * dist_frac / equity
+    return {"stake_demande": float(stake), "stake_plafond": borne,
+            "risk_pct_vise": float(risk_pct), "risk_pct_reel": risque_reel,
+            "ratio": risque_reel / risk_pct if risk_pct else None,
+            "dist_frac": dist_frac}
 
 
 # --------------------------------------------------- budgets / compteurs (DB)
