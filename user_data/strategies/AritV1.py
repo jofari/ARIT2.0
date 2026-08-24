@@ -125,7 +125,8 @@ class AritV1(IStrategy):
         self._pending[pair] = {
             "initial_sl": sl0, "risk_pct": risk_pct, "signal_id": sid, "tp1": tp1, "tp2": tp2,
             "entry_conviction": _num(row.get(conv)), "entry_regime": row.get("regime"),
-            "is_short": sign < 0, "trade_no": risk.trade_counter(trades) + 1}
+            "is_short": sign < 0, "trade_no": risk.trade_counter(trades) + 1,
+            "ts": current_time}                      # A3 : date de depot, pour la peremption
         return float(stake)
     @_safe(None, "order_filled_error")
     def order_filled(self, pair, trade, order, **kwargs):
@@ -136,7 +137,7 @@ class AritV1(IStrategy):
             return None
         if trade.get_custom_data("initial_sl") is not None or pair not in self._pending:
             return None
-        p = self._pending.pop(pair)
+        p = self._rafraichir_pending(pair, trade, self._pending.pop(pair))
         state = contracts.TradeState(
             initial_sl=p["initial_sl"], risk_pct=p["risk_pct"], trade_no=p["trade_no"],
             entry_conviction=p["entry_conviction"], entry_regime=p["entry_regime"],
@@ -224,6 +225,31 @@ class AritV1(IStrategy):
             for kind, detail in events:                 # macro_unavailable / equity_veto_stale
                 journal.write("system", journal.ev_system(kind, detail))
         return self._macro_cache
+    def _rafraichir_pending(self, pair, trade, p):
+        """A3 : une intention perimee est RECALCULEE, jamais posee telle quelle.
+
+        Les ordres d'entree sont en `limit` : un ordre non rempli est nominal, et sans cette
+        garde son `initial_sl`/`tp1`/`tp2` serait consomme par un fill sans rapport, des jours
+        plus tard. On recalcule sur la row courante et le prix REEL du trade ; si la row
+        manque ou rend un SL non fini, on garde l'intention d'origine — un SL perime vaut
+        mieux qu'aucun SL (cf. audit A1)."""
+        if not risk.pending_perime(p.get("ts"), trade.open_date_utc):
+            return p
+        sign = contracts.direction_sign(bool(getattr(trade, "is_short", p["is_short"])))
+        try:                                   # le recalcul ne doit JAMAIS empecher d'ecrire
+            row = self._closed_1h_row(pair)    # l'etat du trade : sans etat, pas de SL du tout
+            sl0, tp1, tp2 = (gestion.entry_levels(row, trade.open_rate, sign) if row is not None
+                             else (float("nan"), None, None))
+        except Exception:                      # noqa: BLE001 - fail-safe M07 regle 3
+            row, sl0, tp1, tp2 = None, float("nan"), None, None
+        recalcule = row is not None and math.isfinite(sl0)
+        self._log("system", "pending_perime", {"pair": pair, "signal_id": p["signal_id"],
+                                               "depose": p.get("ts"), "fill": trade.open_date_utc,
+                                               "recalcule": recalcule})
+        if not recalcule:
+            return p
+        return dict(p, initial_sl=sl0, tp1=tp1, tp2=tp2,
+                    signal_id=self._signal_id(pair, row), is_short=sign < 0)
     def _trade_state(self, trade):
         data = {k: trade.get_custom_data(k) for k in contracts.CUSTOM_DATA_KEYS}
         return contracts.TradeState.from_dict({k: v for k, v in data.items() if v is not None})

@@ -155,16 +155,21 @@ return stoploss_from_absolute(new_abs, current_rate, is_short=short)</pre>
 
 <h2 id="c">C · Données : ce qui ne se récolte pas, ou se récolte faux</h2>
 
-<div class="f high"><h3><span class="tag t-high">élevé</span> C1 — 52 % des lignes de journal sont des doublons <span class="id">journal.py:212</span></h3>
-<p><code>_append_line</code> ouvre en <code>"a"</code>, le nom de fichier ne dépend que du <b>jour simulé</b>, et <b>aucune ligne ne porte d'identifiant de run</b>. Deux backtests sur la même période s'additionnent dans les mêmes fichiers, sans moyen de les séparer après coup.</p>
-<p>Mesuré sur les 255 fichiers présents :</p>
+<div class="f high"><h3><span class="tag t-high">élevé</span> C1 — des runs se superposent dans les mêmes fichiers de journal <span class="id">journal.py:212</span> · <span class="good">CORRIGÉ</span></h3>
+<p><code>_append_line</code> ouvre en <code>"a"</code>, le nom de fichier ne dépend que du <b>jour simulé</b>, et <b>aucune ligne ne portait d'identifiant de run</b>. Deux backtests sur la même période s'additionnaient dans les mêmes fichiers, sans moyen de les séparer après coup.</p>
+
+<div class="f med" style="margin:12px 0"><b>⚠️ Correction d'un chiffre de cet audit.</b> J'ai d'abord annoncé <b>52 %</b> de doublons. C'était faux : ma mesure dédupliquait sur <code>(event_type, signal_id, ts_utc)</code>, or <code>ts_utc</code> est l'heure d'<b>écriture réelle</b> — identique pour les 12 événements <code>gestion</code> d'un même trade en backtest. Ces lignes parfaitement légitimes étaient comptées comme doublons. <b>Le défaut est réel, son ampleur était surestimée d'un facteur ~9.</b></div>
+
+<p>Chiffres vérifiés, sur les 255 fichiers :</p>
 <table>
-<tr><th>lignes totales</th><th>doublons exacts</th><th>fichier le plus contaminé</th></tr>
-<tr><td>10 377</td><td class="bad">5 382 — <b>51,9 %</b></td><td><code>2026-08-04.jsonl</code> : 5 099 doublons sur 5 545 lignes</td></tr>
+<tr><th>mesure</th><th>valeur</th><th>portée</th></tr>
+<tr><td>lignes strictement identiques</td><td class="warn">1 346 / 10 377 — <b>13,0 %</b></td><td>presque toutes dans <code>2026-08-04.jsonl</code></td></tr>
+<tr><td><code>evaluation</code> en double par (paire, signal_id)</td><td class="warn">260 / 4 744 — <b>5,5 %</b></td><td>11 fichiers, multiplicité max <b>×2</b></td></tr>
+<tr><td><b>total retiré</b></td><td><b>1 606 / 10 377 — 15,5 %</b></td><td>12 fichiers</td></tr>
 </table>
-<p>Des dizaines de fichiers sont exactement doublés (48 lignes dont 24 doublons = deux runs superposés). <b>Toute mesure qui lit <code>logs/decisions/</code> compte double</b> — dont <code>analysis/replay_entries.py</code>, qui y prend le <code>sl_initial</code>.</p>
-<p class="good">Ce qui sauve les mesures récentes : <code>analysis/dataset.py</code> <b>rejoue</b> le pipeline au lieu de lire le journal. C'est pour cette raison que ses chiffres tiennent.</p>
-<p><b>Correctif</b> : un <code>run_id</code> (uuid par démarrage) sur chaque ligne, et une purge des fichiers de la fenêtre avant chaque backtest.</p>
+<p>Il fallait <b>deux passes</b>, et c'est instructif : deux runs du même code produisent des flottants qui diffèrent au dernier bit (<code>76785.3838203401</code> contre <code>76785.38382034007</code>), donc l'égalité stricte ne voit pas la superposition. Les fichiers d'avril portaient <b>48 évaluations pour 24 attendues</b> — deux runs, toutes lignes « distinctes ».</p>
+<p class="good">Ce qui sauve les mesures récentes : <code>analysis/dataset.py</code> <b>rejoue</b> le pipeline au lieu de lire le journal. C'est pour cette raison que ses chiffres tiennent. <code>analysis/replay_entries.py</code>, lui, lit le journal pour le <code>sl_initial</code> : c'est là que la contamination pouvait mordre.</p>
+<p><b>Corrigé le 24/08</b> : <code>run_id</code> (uuid par processus) sur chaque ligne — schéma <b>v4</b> — et <code>scripts/dedupe_journal.py</code> (backup complet obligatoire avant écriture, <code>--apply</code> requis) passé sur l'historique. Journal désormais à <b>8 771 lignes, 0 doublon</b>. Vérifié sur le run suivant : <code>{None: 15, '5249c9492943': 4}</code> — l'ancien run et le nouveau cohabitent dans le même fichier, parfaitement séparables.</p>
 </div>
 
 <div class="f high"><h3><span class="tag t-high">élevé</span> C2 — <code>macro_state.json</code> est gitignoré mais obligatoire au backtest : un clone frais produit 0 trade sans erreur <span class="id">risk.py:333</span></h3>
@@ -267,10 +272,10 @@ S_STRUCTURE_CHOCH_PRIORITY = os.environ.get("ARIT_CHOCH_PRIORITY", "") == "1"</p
 <h2 id="h">H · Ordre de traitement proposé</h2>
 <table>
 <tr><th>#</th><th>Action</th><th>Effort</th><th>Pourquoi dans cet ordre</th></tr>
-<tr><td>1</td><td class="bad"><b>A1</b> — passer <code>is_short</code> aux deux <code>stoploss_from_absolute</code>, + le test short qui manque</td><td>30 min</td><td>Deux lignes. Rien d'autre ne mérite d'être mesuré tant que la moitié du produit tourne sans stop. Corrige A2 par construction.</td></tr>
+<tr><td>1</td><td class="good">✅ <b>A1</b> — passer <code>is_short</code> aux deux <code>stoploss_from_absolute</code>, + le test short qui manque</td><td>30 min</td><td>Deux lignes. Rien d'autre ne mérite d'être mesuré tant que la moitié du produit tourne sans stop. Corrige A2 par construction.</td></tr>
 <tr><td>2</td><td class="bad"><b>Invalider les mesures du short</b></td><td>—</td><td>R1 (BETA), la moitié short de Q13, les 38 shorts du train : tous produits sans stop. À re-mesurer sous de nouveaux id, jamais en relançant les anciens.</td></tr>
-<tr><td>3</td><td><b>C1</b> — <code>run_id</code> + purge de la fenêtre avant backtest</td><td>1 h</td><td>Prérequis de toute mesure à venir. Aujourd'hui un run sur deux est contaminé.</td></tr>
-<tr><td>4</td><td><b>A3</b> — TTL et vérification de <code>signal_id</code> sur <code>_pending</code></td><td>1 h</td><td>Silencieux, et d'autant plus probable en live que les ordres sont en <code>limit</code>.</td></tr>
+<tr><td>3</td><td class="good">✅ <b>C1</b> — <code>run_id</code> + purge de la fenêtre avant backtest</td><td>1 h</td><td>Prérequis de toute mesure à venir. Aujourd'hui un run sur deux est contaminé.</td></tr>
+<tr><td>4</td><td class="good">✅ <b>A3</b> — TTL et vérification de <code>signal_id</code> sur <code>_pending</code></td><td>1 h</td><td>Silencieux, et d'autant plus probable en live que les ordres sont en <code>limit</code>.</td></tr>
 <tr><td>5</td><td class="warn"><b>B1</b> — trancher : la prudence macro s'exprime sur le seuil <b>ou</b> sur le multiplicateur</td><td>décision</td><td>C'est le vrai goulot, et c'est un arbitrage qui t'appartient — pas une mesure. Il reclasse Q1.</td></tr>
 <tr><td>6</td><td><b>D2</b> — remettre <code>docs/README.md</code> au niveau du code (futures, long+short, risque constant)</td><td>30 min</td><td>Tant qu'il ment, il autorise à coder faux de bonne foi.</td></tr>
 <tr><td>7</td><td><b>B3</b> — brancher la porte de spread, ou l'assumer morte par écrit</td><td>1 h</td><td>Gate de capital réel. À faire avant, pas pendant.</td></tr>

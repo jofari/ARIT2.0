@@ -1074,3 +1074,83 @@ dans le journal · le calendrier historique (Q15) · la mesure du slippage réel
 (G8) · **et les critères de validation eux-mêmes** : `docs/README` exige PF ≥ 1,3, DD ≤ 15 % et
 **≥ 100 trades**, quand le meilleur run produit 78 à 88 signaux **sur cinq ans**. Le critère
 d'entrée en dry-run n'a jamais été approché, et il ne le sera pas par un réglage de seuil.
+
+## 24/08 (suite) — C1 et A3 livrés, et une correction de chiffre sur mon propre audit
+
+### ⚠️ Correction : les « 52 % de doublons » étaient faux
+
+La mesure initiale dédupliquait sur `(event_type, signal_id, ts_utc)`. Or **`ts_utc` est l'heure
+d'ÉCRITURE RÉELLE**, identique pour les 12 événements `gestion` d'un même trade en backtest :
+des lignes parfaitement légitimes étaient comptées comme doublons. **Le défaut structurel est
+réel, son ampleur était surestimée d'un facteur ~9.** Chiffres vérifiés :
+
+| mesure | valeur | portée |
+|---|---|---|
+| lignes strictement identiques | **1 346 / 10 377 = 13,0 %** | presque toutes dans `2026-08-04.jsonl` |
+| `evaluation` en double par (paire, signal_id) | **260 / 4 744 = 5,5 %** | 11 fichiers, multiplicité max **×2** |
+| **total retiré** | **1 606 / 10 377 = 15,5 %** | 12 fichiers |
+
+Il fallait **deux passes**, et c'est le détail instructif : deux runs du même code produisent des
+flottants qui **diffèrent au dernier bit** (`76785.3838203401` contre `76785.38382034007`), donc
+l'égalité stricte ne voit pas la superposition. Les fichiers d'avril portaient **48 évaluations
+pour 24 attendues** — deux runs, et pourtant toutes les lignes « distinctes ».
+
+### C1 — FERMÉ : `run_id` (schéma v4) + déduplication de l'historique
+
+- `contracts.SCHEMA_VERSION = 4`, `contracts.RUN_ID_KEY = "run_id"`.
+- `journal._RUN_ID` = `uuid4().hex[:12]`, généré **une fois à l'import** donc constant pour tout
+  un run freqtrade et distinct d'un run à l'autre. Posé par `_prepare_record` sur **chaque**
+  ligne. `journal.run_id()` / `set_run_id()` (tests).
+- `scripts/dedupe_journal.py` — deux passes, **backup complet obligatoire** avant toute écriture,
+  `--apply` requis (sans le flag : rapport seul). Réécriture atomique par fichier.
+- **Appliqué** : 12 fichiers réécrits, 1 606 lignes supprimées, backup dans
+  `user_data/logs/decisions_backup_2026-08-24_15-31-07`. Journal désormais à **8 771 lignes,
+  0 doublon**.
+- **Vérifié sur le run suivant** : `{None: 15, '5249c9492943': 4}` — l'ancien run et le nouveau
+  cohabitent dans le même fichier et sont parfaitement séparables. C'était tout l'objet.
+
+### A3 — FERMÉ : l'intention d'entrée périme
+
+- `params.PENDING_TTL_MIN = 60` (une bougie `TIMEFRAME_BASE`).
+- `risk.pending_perime(pending_ts, now, ttl_min=None)` — fonction pure, +3 tests unitaires.
+  Date absente ou illisible ⇒ **périmé** (on ne garde jamais une intention qu'on ne sait pas
+  dater). Horloge qui recule ⇒ **non périmé** : le doute profite au SL en place.
+- `custom_stake_amount` dépose désormais `"ts": current_time` dans `_pending`.
+- `AritV1._rafraichir_pending` : une intention périmée est **RECALCULÉE** sur la row courante et
+  le prix RÉEL du trade, pas refusée. ⚠️ Refuser produirait un trade sans `initial_sl`, donc
+  **sans stop du tout** — exactement le mode d'échec d'A1. Si la row manque ou rend un SL non
+  fini, on garde l'intention d'origine : **un SL périmé vaut mieux qu'aucun SL**. Le recalcul est
+  enveloppé dans un try/except pour la même raison — aucune exception ne doit empêcher d'écrire
+  l'état du trade.
+- L'anomalie est journalisée (`system` / `pending_perime`) avec les deux dates et le fait de
+  savoir si le recalcul a abouti.
+
+### Vérification du correctif A1 sur le backtest juin-août
+
+| | avant A1 | après A1 |
+|---|---|---|
+| lignes `gestion` du trade | **12** (toutes `before = 1156.05`) | **1** |
+| durée du trade | 55 min | **20 min** |
+| P&L | −13,309 | −13,138 |
+
+**Une seule ligne `gestion` au lieu de 12** : le stop est désormais réellement appliqué, donc
+`trade.stop_loss` bouge, `dir_correct` devient faux et freqtrade cesse de rappeler
+`custom_stoploss`. C'est la preuve directe que le correctif mord.
+
+⚠️ **Mais le SL structurel n'est TOUJOURS pas celui qui protège le trade** : au premier appel,
+`trade.stop_loss` vaut encore le plancher, `compute_sl` rend G2 (581,129) qui est plus serré, et
+`custom_stoploss` retourne `new_abs` **sans jamais passer par la branche `floor`**. Le stop à
+584,14 n'est donc jamais posé. ⇒ **B5 (G2 sans déclencheur) est confirmé comme le maillon
+suivant**, et il est maintenant isolé proprement : c'est `Q18`.
+
+### Reste ouvert sur cet audit
+
+**B1** (l'empilement multiplicateur ×0,85 + bump +0,05) attend un **arbitrage de Jonas**, pas une
+mesure. **B3** (porte de spread jamais évaluée), **D2** (`docs/README.md` décrit un bot spot
+long-only), **D3** (variables d'env non journalisées), **C2** (`macro_state.json` requis mais
+gitignoré), **C3** (slippage réel jamais mesuré), **A4/T7** (double `entry`), **T8**
+(`before` non rafraîchi) : non traités.
+
+**Et la re-mesure des shorts** (R1 chez BETA, moitié short de Q13, les 38 shorts du train) reste
+à faire sous de **nouveaux id** avec préenregistrement neuf — le verrou B6 interdit de relancer
+les anciens.

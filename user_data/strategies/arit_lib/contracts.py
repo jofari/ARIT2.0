@@ -167,7 +167,11 @@ VETO_FLAG_SUFFIX = ".flag"                 # 11.3 — <signal_id>.flag : discord
 # regime_inputs porte `direction_macro`. Sans ca, aucun journal anterieur n'est comparable
 # a un journal post-short et le Test 1 de docs/01 (la macro donne-t-elle la direction ?)
 # n'est pas mesurable : c'est LA colonne dont depend l'hypothese v4.
-SCHEMA_VERSION = 3
+# v4 (2026-08-24, audit) : chaque ligne porte `run_id`. Sans lui, deux backtests sur la
+# meme periode s'ADDITIONNENT dans les memes fichiers (nom = jour SIMULE, ouverture en "a")
+# et ne sont plus separables : 52 % des lignes du journal etaient des doublons de runs.
+SCHEMA_VERSION = 4
+RUN_ID_KEY = "run_id"          # v4 — identifiant du processus qui a ecrit la ligne
 
 # Champs obligatoires par type (PDR 08.1). Cles canoniques du build (le PDR les
 # decrit en francais ; les cles JSON sont fixees ICI, une fois pour toutes).

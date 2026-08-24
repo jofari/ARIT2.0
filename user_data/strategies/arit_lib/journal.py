@@ -21,12 +21,30 @@ hors JOURNAL_REQUIRED_FIELDS, mais elle est structurellement indispensable au da
 import functools
 import json
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import contracts, params
 
 logger = logging.getLogger(__name__)
+
+# v4 (audit 24/08) — identifiant du PROCESSUS qui ecrit. Le nom de fichier ne depend que du
+# jour SIMULE et l'ouverture se fait en "a" : sans cette cle, deux backtests sur la meme
+# periode s'additionnent sans etre separables (52 % de doublons mesures le 24/08). Genere une
+# fois a l'import, donc constant pour tout un run freqtrade et distinct d'un run a l'autre.
+_RUN_ID = uuid.uuid4().hex[:12]
+
+
+def run_id() -> str:
+    """Identifiant du run courant (constant pour tout le processus)."""
+    return _RUN_ID
+
+
+def set_run_id(value: str) -> None:
+    """Force le run_id — tests uniquement, jamais en production."""
+    global _RUN_ID
+    _RUN_ID = str(value)
 
 
 def safe(default, event):
@@ -195,6 +213,7 @@ def write(event_type: str, payload: dict) -> None:
 def _prepare_record(event_type: str, payload) -> dict:
     record = dict(payload) if isinstance(payload, dict) else {}
     record["event_type"] = event_type
+    record.setdefault(contracts.RUN_ID_KEY, _RUN_ID)   # v4 — separe les runs superposes
     record.setdefault("schema_version", contracts.SCHEMA_VERSION)
     record.setdefault("ts_utc", _now_iso())
     required = contracts.JOURNAL_REQUIRED_FIELDS.get(event_type)

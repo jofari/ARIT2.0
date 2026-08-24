@@ -197,6 +197,30 @@ def plafonnement_stake(stake, max_stake, equity, entry, sl_initial, risk_pct, si
             "dist_frac": dist_frac}
 
 
+def pending_perime(pending_ts, now, ttl_min=None) -> bool:
+    """L'intention d'entree a-t-elle expire ? (A3, audit 24/08)
+
+    `custom_stake_amount` depose dans `_pending` le SL structurel, TP1/TP2 et le signal_id
+    du setup ; seul `order_filled` les consomme. Les ordres d'entree etant en `limit`, un
+    ordre non rempli (annulation, timeout, rejet, redemarrage) est un cas NOMINAL — et sans
+    peremption l'intention survit indefiniment, jusqu'a etre consommee par un fill sans
+    rapport sur la meme paire. Le trade serait alors gere et mesure en R sur la reference
+    d'un AUTRE signal, a un autre prix.
+
+    True si `pending_ts` est absent/illisible (on ne garde jamais une intention qu'on ne
+    sait pas dater) ou plus vieux que `ttl_min` minutes. `now` anterieur a `pending_ts`
+    (horloge qui recule) => non perime : le doute profite au SL en place.
+    """
+    ttl = params.PENDING_TTL_MIN if ttl_min is None else ttl_min
+    if pending_ts is None:
+        return True
+    try:
+        depose = _as_utc(pending_ts)
+    except (TypeError, ValueError, AttributeError):
+        return True
+    return (_as_utc(now) - depose) > timedelta(minutes=ttl)
+
+
 # --------------------------------------------------- budgets / compteurs (DB)
 def residual_risk_total(open_trades, equity) -> float:
     """Somme des residuels des positions ouvertes / equite (0 si la position est a BE ou mieux).

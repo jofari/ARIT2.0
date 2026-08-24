@@ -5,6 +5,8 @@ Cas exiges : _closed_1h_row (helper unique teste), anti-look-ahead new_4h, secur
 fear_greed/macro_stale dans l'evaluation, round-trip custom_data, niveaux SL/TP 03.3.
 """
 
+import json
+
 import pandas as pd
 import pytest
 
@@ -656,7 +658,7 @@ def test_order_filled_fige_le_sens_dans_le_custom_data(monkeypatch):
     s._pending["BTC/USDT"] = {
         "initial_sl": 110.0, "risk_pct": 0.0116, "signal_id": "SID", "tp1": 85.0,
         "tp2": 70.0, "entry_conviction": 0.8, "entry_regime": "TREND",
-        "is_short": True, "trade_no": 1}
+        "is_short": True, "trade_no": 1, "ts": T0}   # A3 : tout pending reel porte sa date
     trade = _CDTrade()
     trade.is_open = True
     trade.is_short = True
@@ -666,6 +668,58 @@ def test_order_filled_fige_le_sens_dans_le_custom_data(monkeypatch):
     # ft_order_side 'sell' + is_open : c'est l'ENTREE d'un short, pas une sortie G4.
     state = s._trade_state(trade)
     assert state.is_short is True and state.sign == -1
+
+
+def test_order_filled_pending_perime_est_recalcule(monkeypatch):
+    """A3 (audit 24/08) : une intention deposee il y a des heures ne doit pas etre posee
+    telle quelle sur un fill sans rapport. Ordres d'entree en `limit` => cas nominal."""
+    events = _capture(monkeypatch)
+    monkeypatch.setattr(strat_mod.gestion, "entry_levels", lambda row, entry, sign: (108.0, 84.0, 68.0))
+    s = _inst()
+    s._pending["BTC/USDT"] = {
+        "initial_sl": 110.0, "risk_pct": 0.0116, "signal_id": "VIEUX", "tp1": 85.0,
+        "tp2": 70.0, "entry_conviction": 0.8, "entry_regime": "TREND",
+        "is_short": True, "trade_no": 1, "ts": T0 - pd.Timedelta(hours=5)}
+    monkeypatch.setattr(s, "_closed_1h_row", lambda pair: pd.Series({"date": T0}))
+    trade = _CDTrade()
+    trade.is_open, trade.is_short = True, True
+    trade.pair, trade.open_rate, trade.amount = "BTC/USDT", 100.0, 1.0
+    trade.stake_amount, trade.open_date_utc = 1000.0, T0
+    s.order_filled("BTC/USDT", trade, type("O", (), {"ft_order_side": "sell"})())
+    assert s._trade_state(trade).initial_sl == 108.0          # recalcule, pas les 110 perimes
+    assert any(et == "system" for et, _ in events)            # et l'anomalie est journalisee
+
+
+def test_order_filled_pending_perime_sans_row_garde_le_sl(monkeypatch):
+    """Corollaire : si la row manque, on GARDE l'intention perimee. Un SL perime vaut mieux
+    qu'aucun SL — c'est la lecon de l'audit A1 (shorts sans stop)."""
+    _capture(monkeypatch)
+    s = _inst()
+    s._pending["BTC/USDT"] = {
+        "initial_sl": 110.0, "risk_pct": 0.0116, "signal_id": "VIEUX", "tp1": 85.0,
+        "tp2": 70.0, "entry_conviction": 0.8, "entry_regime": "TREND",
+        "is_short": True, "trade_no": 1, "ts": T0 - pd.Timedelta(hours=5)}
+    monkeypatch.setattr(s, "_closed_1h_row", lambda pair: None)
+    trade = _CDTrade()
+    trade.is_open, trade.is_short = True, True
+    trade.pair, trade.open_rate, trade.amount = "BTC/USDT", 100.0, 1.0
+    trade.stake_amount, trade.open_date_utc = 1000.0, T0
+    s.order_filled("BTC/USDT", trade, type("O", (), {"ft_order_side": "sell"})())
+    assert s._trade_state(trade).initial_sl == 110.0
+
+
+def test_journal_pose_un_run_id_sur_chaque_ligne(tmp_path):
+    """C1 (audit 24/08) : sans run_id, deux backtests sur la meme periode s'additionnent
+    dans les memes fichiers (nom = jour SIMULE, ouverture en 'a') sans etre separables."""
+    strat_mod.journal.set_user_data_dir(tmp_path)
+    strat_mod.journal.set_run_id("runA")
+    strat_mod.journal.write("system", strat_mod.journal.ev_system("k", {"a": 1}))
+    strat_mod.journal.set_run_id("runB")
+    strat_mod.journal.write("system", strat_mod.journal.ev_system("k", {"a": 1}))
+    lignes = [json.loads(x) for f in (tmp_path / "logs" / "decisions").glob("*.jsonl")
+              for x in f.read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert {li[contracts.RUN_ID_KEY] for li in lignes} == {"runA", "runB"}
+    assert all(li["schema_version"] == contracts.SCHEMA_VERSION for li in lignes)
 
 
 def test_signal_id_supporte_les_paires_futures():

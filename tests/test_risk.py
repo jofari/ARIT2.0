@@ -343,3 +343,28 @@ def test_plafonnement_ne_produit_que_les_cles_du_contrat():
     detail = _plaf(5_800.0, 2_000.0)
     assert set(detail) == set(contracts.STAKE_CAP_KEYS)
     json.dumps(detail)          # serialisable : il part dans le journal
+
+
+# ------------------------------------------- A3 (audit 24/08) : peremption du pending
+def test_pending_perime_selon_le_ttl():
+    """Les ordres d'entree sont en `limit` : un ordre non rempli est NOMINAL. Sans
+    peremption, l'intention (SL structurel, TP1/TP2, signal_id) serait consommee par un
+    fill sans rapport sur la meme paire, des heures ou des jours plus tard."""
+    t0 = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+    assert risk.pending_perime(t0, t0 + timedelta(minutes=30)) is False
+    assert risk.pending_perime(t0, t0 + timedelta(minutes=61)) is True
+    assert risk.pending_perime(t0, t0 + timedelta(days=3)) is True
+
+
+def test_pending_perime_cas_degeneres():
+    """Date absente/illisible => perime (on ne garde jamais une intention non datable).
+    Horloge qui recule => NON perime : le doute profite au SL en place."""
+    t0 = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+    assert risk.pending_perime(None, t0) is True
+    assert risk.pending_perime("pas une date", t0) is True
+    assert risk.pending_perime(t0, t0 - timedelta(hours=2)) is False
+
+
+def test_pending_perime_naive_est_lu_en_utc():
+    naive = datetime(2026, 8, 24, 12, 0)
+    assert risk.pending_perime(naive, datetime(2026, 8, 24, 12, 30, tzinfo=timezone.utc)) is False

@@ -211,6 +211,11 @@ TIMEFRAME_CONTEXT = "1d"          # README
 TIMEFRAME_DETAIL = "5m"           # PDR 07.2 — miroir CLI (--timeframe-detail obligatoire)
 TRADABLE_BALANCE_RATIO = 0.99     # PDR 07.1 — miroir config
 COOLDOWN_POST_EXIT_CANDLES = 2    # PDR 07.1 — cablee le 2026-08-04 (C6), cf. PROTECTIONS
+# A3 (audit 24/08) : duree de vie d'une intention d'entree (`_pending` de M07). Les ordres
+# d'entree sont en `limit` : un ordre non rempli est un cas NOMINAL, et sans peremption son
+# `initial_sl`/`tp1`/`tp2`/`signal_id` serait consomme par le prochain fill de la meme paire,
+# des jours plus tard. Une bougie TIMEFRAME_BASE : au-dela, le setup n'est plus le meme.
+PENDING_TTL_MIN = 60              # audit A3 — minutes
 
 # ------- 07.1 Protections freqtrade NATIVES (dette C6, cablee le 2026-08-04) -------
 # docs/07 §7.1 : les Protections natives *approchent* les coupe-circuits 03.5, le custom
