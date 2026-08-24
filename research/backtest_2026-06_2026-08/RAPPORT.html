@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>ARIT — backtest 2026-06-01 → 2026-08-24</title>
+<style>
+ :root{--bg:#0f1115;--card:#171a21;--fg:#e7e9ee;--mut:#9aa3b2;--acc:#6ea8fe;--bad:#ff6b6b;--good:#4ade80;--warn:#fbbf24;--line:#262b36}
+ *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:32px}
+ .wrap{max-width:1080px;margin:0 auto}
+ h1{font-size:26px;margin:0 0 4px} h2{font-size:19px;margin:34px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+ h3{font-size:16px;margin:22px 0 8px;color:var(--acc)}
+ .sub{color:var(--mut);margin-bottom:22px}
+ .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:16px 0}
+ .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+ .kpi .v{font-size:24px;font-weight:600} .kpi .l{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+ table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;display:block;overflow-x:auto}
+ th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+ th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase}
+ .bad{color:var(--bad)} .good{color:var(--good)} .warn{color:var(--warn)} .mut{color:var(--mut)}
+ .box{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:8px;padding:14px 16px;margin:14px 0}
+ .box.w{border-left-color:var(--warn)} .box.b{border-left-color:var(--bad)}
+ code{background:#0b0d11;padding:2px 6px;border-radius:4px;font-size:13px}
+ .bar{height:10px;background:#0b0d11;border-radius:5px;overflow:hidden;min-width:90px}
+ .bar>i{display:block;height:100%;background:var(--acc)}
+ footer{color:var(--mut);font-size:12px;margin-top:40px;border-top:1px solid var(--line);padding-top:12px}
+ ol li{margin-bottom:10px}
+</style></head><body><div class="wrap">
+
+<h1>ARIT V1 — backtest 2026-06-01 → 2026-08-24</h1>
+<div class="sub">4 paires perp (BTC · ETH · SOL · BNB) · <code>--timeframe-detail 5m</code> · <code>--enable-protections</code> · <code>--cache none</code> · capital 10 000 USDT · run <code>backtest-result-2026-08-24_16-28-20</code></div>
+
+<div class="box b"><b>⚠️ Cette période est entièrement dans le hold-out scellé (B5).</b>
+<code>HOLDOUT_DEBUT = 2025-01-01</code>. Ce run est donc un test <b>hors-échantillon</b> — le plus honnête qui existe — mais rien de ce qui suit ne doit servir à <b>choisir</b> un paramètre, un seuil ou une règle. Le lire, oui. Calibrer dessus, non : ce serait brûler le seul jeu de données qui n'a jamais servi.</div>
+
+<h2>1. Le résultat en une ligne</h2>
+<div class="grid">
+ <div class="kpi"><div class="l">Trades</div><div class="v">1</div><div class="mut">en 84 jours</div></div>
+ <div class="kpi"><div class="l">Résultat</div><div class="v bad">−13,31 USDT</div><div class="mut">−0,13 %</div></div>
+ <div class="kpi"><div class="l">Marché sur la période</div><div class="v">+10,53 %</div><div class="mut">buy &amp; hold</div></div>
+ <div class="kpi"><div class="l">Signaux rejetés</div><div class="v">0</div><div class="mut">aucun filtre n'a mordu</div></div>
+ <div class="kpi"><div class="l">Drawdown</div><div class="v">0,13 %</div><div class="mut">13,31 USDT</div></div>
+ <div class="kpi"><div class="l">Longs / shorts</div><div class="v">0 / 1</div><div class="mut">zéro long en 84 j</div></div>
+</div>
+
+<div class="box"><b>Le résultat n'est pas la perte, c'est le nombre de trades.</b> Perdre 13 USDT sur 10 000 n'est pas une information : c'est du bruit. Ce qui est une information, c'est qu'ARIT a passé 84 jours à ne rien faire, sur 4 paires, pendant que le marché montait de 10,5 %. Et que le journal ne contient <b>aucun rejet</b> : le bot n'a pas refusé des signaux, il n'en a pas <b>eu</b>.</div>
+
+<h2>2. Où meurent les signaux — l'entonnoir mesuré</h2>
+<p class="mut">Rejeu hors-ligne du pipeline (<code>analysis/dataset.py</code>, mêmes fonctions pures qu'en production) sur les 2 016 évaluations de la période — 504 bougies 4h × 4 paires.</p>
+
+<table>
+<tr><th>Porte</th><th>Longs qui passent</th><th></th><th>Shorts qui passent</th><th></th></tr>
+<tr><td>Direction macro autorisée</td><td>864 / 2016 · 42,9 %</td><td><div class="bar"><i style="width:42.9%"></i></div></td><td>2016 / 2016 · 100 %</td><td><div class="bar"><i style="width:100%"></i></div></td></tr>
+<tr><td>Multiplicateur &gt; 0 (pas RISK_OFF)</td><td>1080 / 2016 · 53,6 %</td><td><div class="bar"><i style="width:53.6%"></i></div></td><td>1080 / 2016 · 53,6 %</td><td><div class="bar"><i style="width:53.6%"></i></div></td></tr>
+<tr><td>Véto equity OK</td><td>1752 / 2016 · 86,9 %</td><td><div class="bar"><i style="width:86.9%"></i></div></td><td>1752 / 2016 · 86,9 %</td><td><div class="bar"><i style="width:86.9%"></i></div></td></tr>
+<tr><td><code>rr_dispo ≥ 1,5</code></td><td>340 / 2016 · 16,9 %</td><td><div class="bar"><i style="width:16.9%"></i></div></td><td>346 / 2016 · 17,2 %</td><td><div class="bar"><i style="width:17.2%"></i></div></td></tr>
+<tr><td class="bad"><b><code>conviction ≥ seuil</code></b></td><td class="bad"><b>12 / 2016 · 0,60 %</b></td><td><div class="bar"><i style="width:0.6%"></i></div></td><td class="bad"><b>30 / 2016 · 1,49 %</b></td><td><div class="bar"><i style="width:1.5%"></i></div></td></tr>
+<tr><td><b>Toutes ensemble</b></td><td><b>0</b></td><td></td><td><b>1</b></td><td></td></tr>
+</table>
+
+<h3>Le goulot, c'est la conviction — et l'écart n'est pas marginal</h3>
+<table>
+<tr><th></th><th>p50</th><th>p75</th><th>p90</th><th>p95</th><th>p99</th><th>max</th><th>seuil</th></tr>
+<tr><td>conviction long</td><td>0,038</td><td>0,170</td><td>0,302</td><td>0,387</td><td>0,489</td><td>0,684</td><td class="warn">0,50–0,65</td></tr>
+<tr><td>conviction short</td><td>0,038</td><td>0,191</td><td>0,325</td><td>0,425</td><td>0,548</td><td>0,645</td><td class="warn">0,50–0,65</td></tr>
+</table>
+
+<div class="box b"><b>La conviction médiane vaut 0,038 pour un seuil à 0,55.</b> Un facteur <b>14</b>. Le système n'émet un signal que dans le tout dernier centile de sa propre distribution : le p99 long (0,489) est encore <b>sous</b> le seuil TREND. Ce n'est pas un seuil « un peu trop haut », c'est une agrégation qui ne produit presque jamais de valeur élevée.</div>
+
+<h3>Est-ce la période qui est mauvaise, ou le système ?</h3>
+<table>
+<tr><th></th><th>train 2019→2024 (n=42 958)</th><th>juin→août 2026 (n=2 016)</th></tr>
+<tr><td>conviction p50</td><td>0,0382</td><td>0,0382</td></tr>
+<tr><td>conviction p90 (long)</td><td>0,340</td><td>0,302</td></tr>
+<tr><td>part <code>conviction ≥ seuil</code> (long)</td><td>2,13 %</td><td class="bad">0,60 %</td></tr>
+<tr><td>part <code>conviction ≥ seuil</code> (short)</td><td>1,25 %</td><td>1,49 %</td></tr>
+<tr><td>taux de signal</td><td>88 / 42 958 = 0,205 %</td><td>1 / 2 016 = 0,050 %</td></tr>
+</table>
+<p><b>La distribution est la même</b> — p50 identique à la quatrième décimale. La rareté n'est pas un accident de période, elle est <b>structurelle</b>. Au taux du train on attendrait <b>4,1 signaux</b> sur cette fenêtre ; on en a 1. Sous Poisson(4,1), P(X ≤ 1) ≈ <b>8,5 %</b> : bas, mais pas anormal. Le seul écart réel est côté <b>long</b> (0,60 % contre 2,13 %), et il s'explique : la macro n'a jamais été PORTEUR sur la période (50 % NEUTRE, 50 % HOSTILE) et a interdit le long <b>57 % du temps</b>.</p>
+
+<h2>3. Le trade unique, au microscope</h2>
+<table>
+<tr><th>Paire</th><th>Sens</th><th>Entrée</th><th>Sortie</th><th>Durée</th><th>Motif de sortie</th><th>Stake</th><th>P&amp;L</th></tr>
+<tr><td>BNB/USDT:USDT</td><td>short</td><td>2026-06-20 04:00 · 580,93</td><td>04:55 · 581,13</td><td>55 min</td><td class="bad">trailing_stop_loss</td><td>9 899,05</td><td class="bad">−13,31 USDT</td></tr>
+</table>
+
+<h3>a) Le stop a été divisé par 16 avant que le trade ait bougé</h3>
+<table>
+<tr><th>Grandeur</th><th>Valeur</th><th>Distance à l'entrée</th></tr>
+<tr><td>SL initial <b>structurel</b> (docs/03 §3.3)</td><td>584,1424</td><td>0,553 %</td></tr>
+<tr><td>SL posé par <b>G2</b> au 1<sup>er</sup> appel de <code>custom_stoploss</code></td><td class="bad">581,1291</td><td class="bad">0,0343 %</td></tr>
+<tr><td>Prix de sortie</td><td>581,13</td><td>— touché</td></tr>
+<tr><td>TP1 / TP2</td><td>576,11 / 571,32</td><td>0,83 % / 1,65 %</td></tr>
+</table>
+
+<div class="box b"><b>G2 est la seule G-rule sans déclencheur.</b> <code>G1_TRIGGER_R = 1.0</code>, <code>G3_TRIGGER_R = 1.0</code> — les deux attendent +1 R. G2, lui, s'exécute dès le premier appel (<code>gestion.py:165</code> : <code>if active["G2"]:</code>, sans condition de MFE). Il a posé le stop à <b>0,034 %</b> de l'entrée alors que le stop structurel en offrait <b>0,553 %</b>.
+<br><br><b>Et la comparaison qui aurait dû l'en empêcher ne mord pas.</b> <code>compute_sl</code> ne retient G2 que s'il « resserre » : <code>sign * (g2 - current_sl) &gt; 0</code>, avec <code>current_sl = trade.stop_loss</code>. Or <code>trade.stop_loss</code> vaut <b>1156,05</b> — <code>entry × 1,99</code>, le plancher <code>stoploss = -0.99</code> de la classe — et il vaut encore 1156,05 <b>aux 12 appels</b>, tel que journalisé. <b>Face à 1156, tout resserre.</b> Le SL structurel à 584,14 n'entre jamais dans la comparaison : dans <code>custom_stoploss</code>, le <code>floor</code> structurel n'est renvoyé que si <code>compute_sl</code> rend <code>None</code>.
+<br><br>⇒ Ce trade n'a jamais eu son stop structurel. Il avait 0,034 % de marge pour respirer, et n'importe quel bruit le sortait. C'est ce qui s'est passé en 55 minutes.
+<br><br><b>Ce qui est certain, et ce qui ne l'est pas.</b> Certain : G2 propose 581,129 dès le premier appel sans aucune condition de profit, et le trade sort exactement à ce prix (581,13). Certain aussi : <code>current_sl</code> vaut 1156,05 au moment du calcul, aux 12 appels. Moins certain : que <code>trade.stop_loss</code> reste figé à 1156,05 sur les 12 appels signifie que la valeur journalisée en <code>before</code> n'est pas rafraîchie par freqtrade en backtest — donc le <code>before</code> du journal ne décrit pas forcément le stop réellement en vigueur à cet instant. <b>La conclusion ne dépend pas de ce point</b> (le prix de sortie tranche), mais toute mesure future qui lira <code>before</code> comme « le stop courant » se trompera.</div>
+
+<h3>b) La décomposition de la perte</h3>
+<table>
+<tr><th>Composante</th><th>USDT</th><th>en R</th><th>part</th></tr>
+<tr><td>Mouvement de marché (580,93 → 581,13)</td><td>−3,41</td><td>−0,062 R</td><td>26 %</td></tr>
+<tr><td class="bad">Frais aller-retour (2 × 0,05 %)</td><td class="bad">−9,90</td><td class="bad">−0,181 R</td><td class="bad">74 %</td></tr>
+<tr><td><b>Total</b></td><td><b>−13,31</b></td><td><b>−0,243 R</b></td><td>100 %</td></tr>
+</table>
+<p><b>Les trois quarts de la perte sont des frais.</b> Le marché n'a bougé que de 0,034 % contre le trade. C'est le chiffre de Q13 vu sur un cas réel : 0,181 R de frais <b>seuls</b>, sans slippage, parce que la distance de stop retenue par le sizing était déjà courte (0,553 %) — <code>coût = 2 × frais / distance</code>.</p>
+
+<h3>c) Q14 a servi dès son premier backtest</h3>
+<table>
+<tr><th>Stake demandé</th><th>Plafond</th><th>Risque visé</th><th>Risque réel</th><th>Ratio</th></tr>
+<tr><td>20 767,54 USDT</td><td>9 900,00</td><td>1,16 %</td><td class="warn">0,553 %</td><td>0,477</td></tr>
+</table>
+<p>Le sizing a demandé <b>2,1 × l'équité</b> et freqtrade a clampé. Sans <code>risk.plafonnement_stake()</code> (livré le 20/08), le bot aurait cru risquer 1,16 % en en risquant <b>0,55 %</b>, sans une ligne de journal. Sur 1 trade sur 1, le plafonnement a mordu — ce n'est pas un cas limite.</p>
+
+<h2>4. Contrôles de cohérence — tous passés</h2>
+<table>
+<tr><th>Contrôle</th><th>Attendu</th><th>Mesuré</th><th></th></tr>
+<tr><td>Rejeu hors-ligne vs backtest freqtrade</td><td>mêmes signaux</td><td>1 short BNB le 20/06 des deux côtés</td><td class="good">✓ identique</td></tr>
+<tr><td>Taux de frais appliqué par freqtrade</td><td>0,05 % (futures)</td><td><code>fee_open = fee_close = 0,0005</code></td><td class="good">✓ T6 ne faussait aucun run</td></tr>
+<tr><td>R journalisé vs P&amp;L du zip</td><td>cohérent</td><td>−0,062 R marché ↔ −3,41 USDT</td><td class="good">✓ au centième</td></tr>
+<tr><td>Levier</td><td>1,0 (A2-ter)</td><td>1,0</td><td class="good">✓</td></tr>
+<tr><td>Funding payé</td><td>—</td><td>0,00 (55 min, aucun snap 8 h traversé)</td><td class="good">✓</td></tr>
+</table>
+
+<div class="box w"><b>Un défaut de journalisation repéré au passage.</b> L'événement <code>entry</code> est écrit <b>deux fois</b> pour ce trade unique, avec deux stakes différents (9 620,20 puis 9 899,05) et deux quantités (16,56 puis 17,04) — le double appel <code>confirm_trade_entry</code> / <code>order_filled</code> de freqtrade. Toute analyse qui compte les <code>entry</code> du journal comptera <b>double</b>, et prendra le mauvais stake une fois sur deux. À corriger avant la prochaine mesure qui s'appuie sur ce journal.</div>
+
+<h2>5. Ce que ce run change dans les priorités</h2>
+<ol>
+<li><b>Le goulot n'est pas le seuil, c'est l'agrégation.</b> Q1 (courbe N(seuil)) reste utile, mais la conviction médiane vaut 0,038 face à un seuil de 0,55 : baisser le seuil revient à piocher dans une distribution qui n'a presque aucune masse au-dessus de 0,3. Ça rejoint exactement ce que Q4/G3 a mesuré — l'agrégation à cinq termes détruit ce qu'elle agrège (IC 0,0642 → 0,0848 en retirant deux termes).</li>
+<li><b>G2 sans déclencheur est un candidat sérieux au diagnostic du 18/08</b> (« ce n'est pas le signal, c'est la gestion ») et au R1 de BETA (« le trailing détruit les shorts », statistiquement indécidable — <b>en voici le mécanisme</b>). C'est une lecture de code, vraie indépendamment de la taille de l'échantillon : G2 se compare au plancher −0,99, jamais au SL structurel. <b>À mesurer sur le train</b>, pas ici.</li>
+<li><b>La sortie de ce trade n'est pas son stop</b>, c'est un trailing à 0,034 %. Le TP1 était à 0,83 %. Le trade n'a jamais eu la géométrie qu'on lui avait calculée.</li>
+<li><b>Zéro long en 84 jours</b> pendant un marché à +10,5 % : la macro n'a jamais été PORTEUR et a interdit le long <b>57 % du temps</b>. À rapprocher d'A2-quinquies (F&amp;G adaptatif), qui vise précisément à <b>lever</b> des blocages plutôt qu'à en poser.</li>
+</ol>
+
+<footer>Généré le 2026-08-24 · run <code>backtest-result-2026-08-24_16-28-20.zip</code> · rejeu <code>analysis/dataset.py</code> · rapport local, non publié.
+<br>Données rafraîchies ce jour : OHLCV 4 paires jusqu'au 24/08 · 8 séries macro (le <code>fear_greed.json</code> figé au 03/08 est reparti à 3 123 points — Q11d couvert de fait).</footer>
+</div></body></html>

@@ -855,3 +855,95 @@ stop minimale) garde donc tout son sens — c'est le seul des trois leviers de c
 volontaire — la valeur couvre désormais **exactement** l'aller-retour taker futures (2 × 0,05 %),
 donc elle est juste par accident après avoir été juste par construction. Y toucher serait modifier
 une G-rule (interdit n° 5), pas payer une dette.
+
+## 24/08 — backtest hors-échantillon juin→août 2026 : 1 trade en 84 jours
+
+Rapport complet : `research/backtest_2026-06_2026-08/RAPPORT.html` (local, trade-par-trade).
+Run `backtest-result-2026-08-24_16-28-20.zip` · 4 paires · `--timeframe-detail 5m`
+`--enable-protections` · données OHLCV et macro rafraîchies le jour même (le `fear_greed.json`
+figé au 03/08 est reparti à 3 123 points ⇒ **Q11d couvert de fait**).
+
+⚠️ **La période est entièrement dans le hold-out scellé** (`HOLDOUT_DEBUT = 2025-01-01`, B5).
+Tout ce qui suit est **descriptif**. Rien ici ne doit servir à choisir un seuil ou une règle :
+les mesures de décision se font sur le train.
+
+**Résultat : 1 trade, −13,31 USDT (−0,13 %), 0 long / 1 short, 0 signal rejeté**, pendant que le
+marché faisait +10,5 %. Le résultat n'est pas la perte — 13 USDT sur 10 000 est du bruit — c'est
+que le bot n'a pas *refusé* des signaux, il n'en a pas **eu**.
+
+### L'entonnoir : le goulot est la conviction, pas le seuil
+
+Rejeu hors-ligne (`analysis/dataset.py`) sur les 2 016 évaluations de la période :
+
+| Porte | longs | shorts |
+|---|---|---|
+| direction macro autorisée | 42,9 % | 100 % |
+| multiplicateur > 0 | 53,6 % | 53,6 % |
+| véto equity ok | 86,9 % | 86,9 % |
+| `rr_dispo >= 1,5` | 16,9 % | 17,2 % |
+| **`conviction >= seuil`** | **0,60 %** | **1,49 %** |
+| toutes ensemble | **0** | **1** |
+
+> **Conviction médiane = 0,038 pour un seuil à 0,55 — un facteur 14.** Le p99 long (0,489) est
+> encore *sous* le seuil TREND. Baisser le seuil revient à piocher dans une distribution qui n'a
+> presque aucune masse au-dessus de 0,3. **Q1 garde son sens, mais ne suffira pas** : le problème
+> est en amont, dans l'agrégation — exactement ce que Q4/G3 a mesuré (IC 0,0642 → 0,0848 en
+> retirant deux termes).
+
+**La rareté est structurelle, pas conjoncturelle** : la distribution de conviction du train et
+celle de juin-août 2026 ont le **même p50 à la quatrième décimale** (0,0382). Au taux du train
+(88/42 958) on attendait 4,1 signaux ; on en a 1, P(X≤1 | Poisson 4,1) ≈ 8,5 %. Bas, pas anormal.
+Le seul vrai écart est côté long (0,60 % contre 2,13 %) : la macro n'a **jamais** été PORTEUR sur
+la période et a interdit le long **57 % du temps**.
+
+### Le trade unique : G2 divise le stop par 16 avant que le trade ait bougé
+
+| Grandeur | Valeur | Distance à l'entrée |
+|---|---|---|
+| SL initial **structurel** (docs/03 §3.3) | 584,1424 | **0,553 %** |
+| SL posé par **G2** au 1ᵉʳ appel de `custom_stoploss` | 581,1291 | **0,0343 %** |
+| Prix de sortie (`trailing_stop_loss`, 55 min) | 581,13 | touché |
+| TP1 / TP2 | 576,11 / 571,32 | 0,83 % / 1,65 % |
+
+**G2 est la seule G-rule sans déclencheur.** `G1_TRIGGER_R = 1.0` et `G3_TRIGGER_R = 1.0` attendent
++1 R ; `gestion.py:165` fait `if active["G2"]:`, sans condition de MFE. Et la garde qui devrait
+l'arrêter ne mord pas : `compute_sl` compare G2 à `current_sl = trade.stop_loss`, qui vaut
+**1156,05** (`entry × 1,99`, le plancher `stoploss = -0.99`) — **face à 1156, tout resserre**. Le
+SL structurel n'entre jamais dans la comparaison : dans `custom_stoploss`, le `floor` structurel
+n'est renvoyé **que si** `compute_sl` rend `None`.
+
+⇒ **`Q18` — G2 sans déclencheur, à mesurer sur le train** (préenregistrement B6 obligatoire) :
+ablation de G2 seul, et variante « G2 comparé à `max(current_sl, initial_sl)` ». C'est le
+**mécanisme** que le diagnostic du 18/08 cherchait (« ce n'est pas le signal, c'est la gestion »)
+et que R1 chez BETA n'a pas pu trancher statistiquement (« le trailing détruit les shorts »,
++0,5272 R par short pour la barrière fixe, p = 0,0175, mort sous Benjamini-Hochberg).
+⚠️ Le lien est une **lecture de code**, vraie indépendamment de l'échantillon ; l'**effet** ne
+l'est pas et ne se mesure pas sur 1 trade.
+
+### Décomposition de la perte : 74 % de frais
+
+| Composante | USDT | en R | part |
+|---|---|---|---|
+| mouvement de marché (580,93 → 581,13) | −3,41 | −0,062 R | 26 % |
+| **frais aller-retour (2 × 0,05 %)** | **−9,90** | **−0,181 R** | **74 %** |
+| total | −13,31 | −0,243 R | 100 % |
+
+0,181 R de frais **seuls, sans slippage** — le chiffre de Q13 sur un cas réel, et la mécanique
+`coût = 2 × frais / distance` en pleine lumière : la distance de sizing valait 0,553 %.
+
+### Q14 a servi dès son premier backtest
+
+`stake_demandé = 20 767,54` (2,1 × l'équité) plafonné à **9 900** ⇒ risque réel **0,553 %** contre
+1,16 % visé (ratio 0,477). Sur 1 trade sur 1, le plafonnement a mordu : ce n'est pas un cas limite.
+
+### Contrôles passés
+
+Rejeu hors-ligne et backtest freqtrade donnent **le même signal unique** · `fee_open = fee_close
+= 0,0005` ⇒ **T6 ne faussait aucun run**, confirmé sur pièce · levier 1,0 · funding 0 (55 min).
+
+### Deux dettes de journalisation ouvertes
+
+| # | Dette | Détail | Statut |
+|---|---|---|---|
+| **T7-ARIT** | **`entry` journalisé deux fois par trade** | Deux événements pour le trade unique, avec deux stakes (9 620,20 puis 9 899,05) et deux quantités (16,56 / 17,04) — double appel `confirm_trade_entry` / `order_filled`. Toute analyse qui compte les `entry` comptera **double** et prendra le mauvais stake une fois sur deux | 🔴 ouverte |
+| **T8-ARIT** | **`before` de l'événement `gestion` n'est pas rafraîchi** | `trade.stop_loss` vaut 1156,05 aux **12** appels, alors que le stop appliqué a changé (le trade sort à 581,13). Le `before` journalisé ne décrit donc pas le stop en vigueur ⇒ ne pas le lire comme tel. N'affecte pas le verdict ci-dessus (le prix de sortie tranche) | 🔴 ouverte |
