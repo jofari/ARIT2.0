@@ -802,7 +802,7 @@ rend −0,3614 R contre −0,3943 : **+0,033 R, sous tout MDE**.
 
 | # | Dette | Détail | Statut |
 |---|---|---|---|
-| **T6-ARIT** | **`FEE_TAKER_FRAC` est le taux SPOT** | `params.py:73` — `0.001  # Binance spot 0,1 % taker`, alors que le bot est en **futures** depuis A2 (`config.dry.json: "trading_mode": "futures"`), où le taker USDⓈ-M vaut **0,05 %**. Portée : **freqtrade utilise sa propre config**, donc backtests et live ne sont pas faussés ; mais la constante sert de fallback de journalisation (`AritV1._journal_exit`) et de source à **toute mesure hors ligne**, qui surestiment donc les frais d'environ 30 %. ⚠️ Le verdict Q13 ne bouge pas, mais **une cellule passerait tout juste positive** ⇒ la re-mesure exige un **nouvel id** (`Q13-bis`), jamais une relance de Q13 (le verrou B6 le refuse, vérifié) | 🔴 ouverte |
+| **T6-ARIT** | **`FEE_TAKER_FRAC` est le taux SPOT** | `params.py:73` — `0.001  # Binance spot 0,1 % taker`, alors que le bot est en **futures** depuis A2 (`config.dry.json: "trading_mode": "futures"`), où le taker USDⓈ-M vaut **0,05 %**. Portée : **freqtrade utilise sa propre config**, donc backtests et live ne sont pas faussés ; mais la constante sert de fallback de journalisation (`AritV1._journal_exit`) et de source à **toute mesure hors ligne**, qui surestiment donc les frais d'environ 30 %. ⚠️ Le verdict Q13 ne bouge pas, mais **une cellule passerait tout juste positive** ⇒ la re-mesure exige un **nouvel id** (`Q13-bis`), jamais une relance de Q13 (le verrou B6 le refuse, vérifié) | ~~🔴 ouverte~~ **✅ fermée le 24/08** |
 
 ### Ce que Q13 ouvre, et qui n'existait pas ce matin
 
@@ -817,3 +817,41 @@ rend −0,3614 R contre −0,3943 : **+0,033 R, sous tout MDE**.
    2,5-3,0 R améliore l'espérance nette dans presque toute la grille (un TP plus lointain amortit
    un coût fixe sur un R plus grand). Piste **non préenregistrée**, à ne pas lire comme un
    résultat. ⇒ **`Q17` — balayage de la cible seule**, à préenregistrer.
+
+## 24/08 — T6-ARIT fermée : le taux de frais passe du spot au futures
+
+`params.FEE_TAKER_FRAC` : **0,001 → 0,0005** (Binance USDⓈ-M taker 0,05 %). `docs/03 §3.6` corrigé
+dans la foulée. **438 passed**, aucun test ne dépendait de la constante.
+
+**Portée exacte, pour ne pas se raconter d'histoire** : freqtrade utilise sa propre configuration
+de frais, donc **aucun backtest ni run live n'était faussé**. La constante ne sert qu'à deux
+choses : le **fallback de journalisation** de `AritV1._journal_exit` (quand `trade.fee_close` est
+absent) et **toute mesure hors ligne** — `analysis/balayage_stop.py:70` en tête.
+
+### Ce que ça déplace dans les chiffres de Q13, sans rien re-mesurer
+
+Le coût aller-retour vaut `2 × (frais + slippage) / distance`. Seul le terme `frais` bouge, et le
+slippage dépend de la paire (0,0005 BTC/ETH · 0,0010 SOL/BNB sur un univers de 4 paires) — le
+facteur de correction est donc **borné**, pas unique :
+
+| | mesuré avec le taux spot | facteur | **encadrement corrigé** |
+|---|---|---|---|
+| coût long | 0,3207 R | ×2/3 … ×4/5 | **0,214 → 0,257 R** |
+| coût short | 0,4147 R | ×2/3 … ×4/5 | **0,277 → 0,332 R** |
+
+⚠️ **Le verdict de Q13 ne bouge pas** : les 150 cellules restent négatives, la meilleure était à
+−0,1714 R et regagne au mieux ~0,10 R. **Une cellule pourrait passer tout juste positive** — c'est
+précisément pourquoi la re-mesure exige un **nouvel id `Q13-bis`** (préenregistrement neuf), jamais
+une relance de Q13 : le verrou B6 le refuse, et lire la grille corrigée en cherchant la cellule qui
+passe au-dessus de zéro sur 150 essais, c'est du p-hacking avec un habillage arithmétique.
+
+**Et le chiffre à retenir survit intact** : même corrigé, **un cinquième à un tiers d'un R part en
+frais et slippage avant qu'on ait parlé d'edge**, et la cause reste la **dispersion** des distances
+de stop (médiane 1,54 % côté long, queue à 0,07 %), pas leur niveau. `Q16` (porte de distance de
+stop minimale) garde donc tout son sens — c'est le seul des trois leviers de coût qui attaque
+`E[1/distance]` plutôt que le numérateur.
+
+⚠️ **Ce que T6 ne corrige pas** : `params.G1_BE_BUFFER_FRAC = 0.001` reste à 0,1 %. C'est
+volontaire — la valeur couvre désormais **exactement** l'aller-retour taker futures (2 × 0,05 %),
+donc elle est juste par accident après avoir été juste par construction. Y toucher serait modifier
+une G-rule (interdit n° 5), pas payer une dette.

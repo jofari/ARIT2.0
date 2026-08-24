@@ -68,7 +68,7 @@ Invariant absolu (natif freqtrade, ne pas contourner) : **le SL ne descend jamai
 - **CB séquentiel** : 2 trades consécutifs clôturés ≤ −0,8R → cooldown 12 bougies 1h sans entrée + cap de risque ÷2 pendant les 5 trades suivants. (Implémentation : Protections freqtrade StoplossGuard + CooldownPeriod là où elles suffisent, complément custom sinon — vérifier la syntaxe exacte dans la doc au moment du code.)
 
 ## 3.6 Frais & slippage (backtest et journal)
-Frais Binance spot réels (0,1 % taker par défaut, config). Slippage modélisé : 0,05 % (BTC/ETH) · 0,10 % (SOL/BNB) par côté. Le slippage réel mesuré en live est journalisé et comparé (invalidation si > 2× modèle).
+Frais Binance **USDⓈ-M futures** réels (**0,05 % taker** par défaut, config ; le maker vaut 0,02 %). ⚠️ Le taux spot 0,1 % ne s'applique plus depuis A2 (04/08, passage en `trading_mode: futures`). Slippage modélisé : 0,05 % (BTC/ETH) · 0,10 % (SOL/BNB) par côté. Le slippage réel mesuré en live est journalisé et comparé (invalidation si > 2× modèle).
 
 ## 3.7 AMENDEMENT du 2026-08-04 — géométrie SHORT (décision A2 de Jonas)
 

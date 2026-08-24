@@ -70,7 +70,12 @@ CB_SEQ_RISK_DIVISOR = 2           # PDR 03.5 — cap de risque / 2
 CB_SEQ_PENALTY_TRADES = 5         # PDR 03.5 — pendant les 5 trades suivants
 
 # ------------------------------------------------------ 03.6 Frais & slippage
-FEE_TAKER_FRAC = 0.001            # PDR 03.6 — Binance spot 0,1 % taker
+FEE_TAKER_FRAC = 0.0005           # PDR 03.6 — Binance USDⓈ-M futures 0,05 % taker
+                                  # (T6-ARIT, 24/08) : etait 0,001 = le taux SPOT, alors que le
+                                  # bot est en futures depuis A2. freqtrade utilise sa propre
+                                  # config ; cette constante ne sert qu'au fallback de
+                                  # journalisation et aux mesures hors ligne, qui surestimaient
+                                  # donc le cout aller-retour d'environ 30 %.
 SLIPPAGE_FRAC = {                 # PDR 03.6 — par cote
     "BTC/USDT": 0.0005, "ETH/USDT": 0.0005,
     "SOL/USDT": 0.0010, "BNB/USDT": 0.0010,
