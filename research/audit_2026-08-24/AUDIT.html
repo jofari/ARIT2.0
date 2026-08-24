@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>ARIT — audit complet du 24/08/2026</title>
+<style>
+ :root{--bg:#0f1115;--card:#171a21;--fg:#e7e9ee;--mut:#9aa3b2;--acc:#6ea8fe;--bad:#ff6b6b;--good:#4ade80;--warn:#fbbf24;--line:#262b36;--crit:#ff3b30}
+ *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.65 -apple-system,Segoe UI,Roboto,sans-serif;padding:32px}
+ .wrap{max-width:1100px;margin:0 auto}
+ h1{font-size:27px;margin:0 0 4px} h2{font-size:20px;margin:40px 0 12px;border-bottom:1px solid var(--line);padding-bottom:7px}
+ h3{font-size:16px;margin:26px 0 8px}
+ .sub{color:var(--mut);margin-bottom:24px}
+ table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;display:block;overflow-x:auto}
+ th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+ th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;white-space:nowrap}
+ .bad{color:var(--bad)} .good{color:var(--good)} .warn{color:var(--warn)} .mut{color:var(--mut)}
+ code{background:#0b0d11;padding:2px 6px;border-radius:4px;font-size:13px;white-space:nowrap}
+ pre{background:#0b0d11;border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:13px}
+ .f{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:16px 0;border-left:4px solid var(--acc)}
+ .f.crit{border-left-color:var(--crit)} .f.high{border-left-color:var(--bad)}
+ .f.med{border-left-color:var(--warn)} .f.low{border-left-color:var(--mut)}
+ .f h3{margin-top:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+ .tag{font-size:11px;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+ .t-crit{background:var(--crit);color:#fff} .t-high{background:var(--bad);color:#3b0000}
+ .t-med{background:var(--warn);color:#3b2a00} .t-low{background:#39404d;color:var(--fg)}
+ .id{font-family:ui-monospace,monospace;color:var(--mut);font-size:13px}
+ .toc{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px}
+ .toc a{color:var(--acc);text-decoration:none} .toc li{margin:3px 0}
+ footer{color:var(--mut);font-size:12px;margin-top:44px;border-top:1px solid var(--line);padding-top:12px}
+</style></head><body><div class="wrap">
+
+<h1>ARIT V1 — audit complet</h1>
+<div class="sub">24 août 2026 · 5 698 lignes de Python de production relues intégralement · 22 fichiers <code>docs/</code> · 438 tests · 5 ans de journaux · rejeu du pipeline sur 57 370 évaluations</div>
+
+<div class="f crit"><h3>Le résultat en une phrase</h3>
+<b>Aucun short n'a jamais eu de stop-loss.</b> Depuis A2 (04/08), la moitié du produit tourne avec l'interdit n° 2 vidé de son sens — pas contourné, simplement inopérant. Et le second constat est structurel : <b>hors macro PORTEUR, le seuil de conviction est arithmétiquement hors de portée</b>, ce qui explique la rareté des entrées mieux que n'importe quel réglage de seuil.
+<br><br>21 constats au total : 2 critiques, 5 élevés, 8 moyens, 6 mineurs. Aucun problème de sécurité informatique : les secrets sont propres, dans l'arbre comme dans l'historique.</div>
+
+<div class="toc"><b>Sommaire</b>
+<ul>
+<li><a href="#a">A · Ce qui tue le bot</a> — 2 critiques, 2 élevés</li>
+<li><a href="#b">B · Ce qui empêche le profit et les trades</a> — 1 critique, 4 constats</li>
+<li><a href="#c">C · Données : ce qui ne se récolte pas, ou se récolte faux</a> — 5 constats</li>
+<li><a href="#d">D · Écarts à la doctrine du projet</a> — 5 constats</li>
+<li><a href="#e">E · Chantiers lancés jamais achevés</a></li>
+<li><a href="#f">F · Ce qui manque, clairement</a></li>
+<li><a href="#g">G · Cybersécurité — RAS, et pourquoi</a></li>
+<li><a href="#h">H · Ordre de traitement proposé</a></li>
+</ul></div>
+
+<h2 id="a">A · Ce qui tue le bot</h2>
+
+<div class="f crit"><h3><span class="tag t-crit">critique</span> A1 — <code>stoploss_from_absolute</code> est appelé sans <code>is_short</code> : aucun short n'a de stop <span class="id">AritV1.py:163, :173</span></h3>
+
+<p>La signature freqtrade est <code>stoploss_from_absolute(stop_rate, current_rate, is_short=False, leverage=1.0)</code>. Les deux appels d'ARIT omettent le troisième argument :</p>
+<pre>floor = stoploss_from_absolute(state.initial_sl, current_rate)          # ligne 163
+return stoploss_from_absolute(new_abs, current_rate)                    # ligne 173</pre>
+
+<p>Pour un short, le stop est <b>au-dessus</b> du prix. La formule interne fait <code>1 - stop_rate/current_rate</code>, obtient une valeur négative, et retourne <code>max(valeur, 0)</code> — c'est-à-dire <b>0,0</b>. Vérifié sur les valeurs réelles du seul short du dernier backtest :</p>
+
+<table>
+<tr><th>current_rate</th><th>SL structurel (584,14)</th><th>SL G2 (581,13)</th><th>ce que <code>is_short=True</code> rendrait</th></tr>
+<tr><td>580,93 (entrée)</td><td class="bad">0.0</td><td class="bad">0.0</td><td class="good">0,005530</td></tr>
+<tr><td>580,68</td><td class="bad">0.0</td><td class="bad">0.0</td><td class="good">0,005963</td></tr>
+<tr><td>581,43</td><td class="bad">0.0</td><td>0,000518</td><td class="good">0,004665</td></tr>
+</table>
+
+<p>Et côté freqtrade, dans <code>ft_stoploss_adjust</code> :</p>
+<pre>if stop_loss_value_custom and not (isnan(...) or isinf(...)):
+    trade.adjust_stop_loss(...)
+else:
+    logger.debug("CustomStoploss function did not return valid stoploss")</pre>
+<p><b><code>0.0</code> est falsy.</b> La valeur est jetée, silencieusement, avec un simple <code>debug</code>. Le stop d'un short reste donc le plancher de classe <code>stoploss = -0.99</code>, soit <code>entry × 1,99</code>.</p>
+
+<p><b>Preuve indépendante dans le journal du dernier backtest</b> : les 12 événements <code>gestion</code> du short BNB portent tous <code>before = 1156.05</code>, exactement <code>580,93 × 1,99</code>. Le stop n'a jamais bougé du plancher, sur toute la vie du trade.</p>
+
+<p class="warn"><b>Portée.</b> Les <b>longs ne sont pas touchés</b> (leur stop est sous le prix, la formule sans <code>is_short</code> y est correcte). Ce sont les <b>shorts, et eux seuls</b>, depuis A2 le 04/08 — soit trois semaines de dry-run et la totalité des backtests long+short qui ont servi à mesurer R1 chez BETA, Q13, et l'edge du short en général. <b>Tout résultat de mesure portant sur des shorts a été produit par un système sans stop.</b></p>
+
+<p><b>Correctif</b> — deux lignes :</p>
+<pre>short = state.sign &lt; 0
+floor = stoploss_from_absolute(state.initial_sl, current_rate, is_short=short)
+...
+return stoploss_from_absolute(new_abs, current_rate, is_short=short)</pre>
+<p>⚠️ Ne pas le corriger sans re-mesurer : les chiffres du short de Q13 et de R1 changent tous.</p>
+</div>
+
+<div class="f crit"><h3><span class="tag t-crit">critique</span> A2 — corollaire : un seul short ouvert sature le budget de risque et bloque toutes les entrées <span class="id">risk.py:201</span></h3>
+<p><code>residual_risk_total</code> calcule le risque résiduel depuis <code>trade.stop_loss</code> :</p>
+<pre>total += qty * max(0.0, sign * (entry - sl))</pre>
+<p>Pour un short dont le <code>stop_loss</code> est resté au plancher (conséquence directe d'A1) : <code>sign × (580,93 − 1156,05) = +575,12</code>, multiplié par la quantité, ça donne <b>≈ 98 % de l'équité</b> de risque résiduel déclaré.</p>
+<p>Le gate n° 5 exige <code>residual_total + new_risk ≤ 6 %</code>. <b>Donc dès qu'un short est ouvert, plus aucune entrée n'est possible</b> — ni long ni short — jusqu'à sa clôture. Les 3 slots annoncés n'en font qu'un.</p>
+<p>Ce n'est pas une hypothèse sur le comportement de freqtrade : c'est de l'arithmétique sur la valeur mesurée dans le journal. La correction d'A1 corrige celui-ci par construction ; en attendant, <b>le budget résiduel est aveugle dans le mauvais sens</b> — il croit risquer 98 % et refuse tout.</p>
+</div>
+
+<div class="f high"><h3><span class="tag t-high">élevé</span> A3 — <code>_pending</code> n'est jamais invalidé : un trade peut hériter du stop d'un signal périmé <span class="id">AritV1.py:41, :125, :137</span></h3>
+<p><code>custom_stake_amount</code> écrit <code>self._pending[pair] = {initial_sl, tp1, tp2, signal_id, ...}</code>. Seul <code>order_filled</code> le consomme (<code>pop</code>). Si l'ordre n'est jamais rempli — annulation, timeout, rejet exchange, redémarrage du bot — <b>l'entrée reste dans le dict indéfiniment</b>.</p>
+<p>Le prochain fill sur la même paire, même trois jours plus tard, consommera ce <code>_pending</code> périmé : <code>initial_sl</code>, <code>tp1</code>, <code>tp2</code> et <code>signal_id</code> d'un <b>autre signal, à un autre prix</b>. Le trade sera géré, journalisé et mesuré en R sur une référence qui n'a rien à voir avec son entrée.</p>
+<p>Il n'y a ni TTL, ni horodatage, ni vérification que le <code>signal_id</code> du pending correspond à la bougie courante. <code>order_types.entry</code> vaut <code>"limit"</code> : les ordres non remplis sont un cas <b>nominal</b>, pas un cas limite.</p>
+</div>
+
+<div class="f med"><h3><span class="tag t-med">moyen</span> A4 — l'événement <code>entry</code> est écrit deux fois par trade, avec deux stakes différents <span class="id">T7-ARIT</span></h3>
+<p>Sur le trade unique du dernier backtest : deux lignes <code>entry</code>, <code>stake</code> 9 620,20 puis 9 899,05, <code>qty</code> 16,56 puis 17,04. La garde <code>if trade.get_custom_data("initial_sl") is not None</code> ne suffit pas. Toute analyse qui compte les <code>entry</code> compte double et prend le mauvais stake une fois sur deux.</p>
+</div>
+
+<h2 id="b">B · Ce qui empêche le profit et les trades</h2>
+
+<div class="f crit"><h3><span class="tag t-crit">critique</span> B1 — hors PORTEUR, le seuil de conviction est arithmétiquement hors de portée <span class="id">regimes.py + cio.py:104</span></h3>
+<p>Deux pénalités s'appliquent à la même situation, l'une <b>multiplicative</b>, l'autre <b>additive</b>, et elles n'ont jamais été calibrées ensemble :</p>
+<ul>
+<li><code>multiplicateur = 0,85</code> hors accord macro/technique (<code>regimes._classify_macro</code>) ;</li>
+<li><code>seuil += 0,05</code> en macro NEUTRE (<code>cio.conviction</code>, ligne 106).</li>
+</ul>
+<p>Comme <code>conviction = produit_pondéré × multiplicateur</code>, le seuil <b>effectif</b> sur le produit pondéré vaut <code>seuil / multiplicateur</code>. Mesuré sur les 19 704 bougies en régime TREND du rejeu :</p>
+
+<table>
+<tr><th>macro</th><th>n</th><th>mult</th><th>seuil</th><th>seuil effectif</th><th>% de bougies qui passent</th></tr>
+<tr><td class="good">PORTEUR</td><td>7 179</td><td>1,00</td><td>0,50</td><td class="good">0,500</td><td class="good"><b>14,31 %</b></td></tr>
+<tr><td class="bad">NEUTRE</td><td>9 670</td><td>0,85</td><td>0,55</td><td class="bad">0,647</td><td class="bad"><b>1,65 %</b></td></tr>
+<tr><td class="bad">HOSTILE</td><td>2 855</td><td>0,85</td><td>0,50</td><td class="bad">0,588</td><td class="bad"><b>1,37 %</b></td></tr>
+</table>
+
+<p><b>Un facteur 9</b> entre PORTEUR et le reste. Et le régime NEUTRE — le plus verrouillé des trois — représente <b>49 % du temps</b>. Pour référence : le p99 du produit pondéré vaut <b>0,695</b> et son maximum absolu sur 5 ans est <b>0,875</b>. Exiger 0,647 revient à demander le dernier centile.</p>
+
+<p class="warn"><b>C'est l'explication complète du « zéro long en 84 jours » de juin-août 2026</b> : sur cette période la macro n'a <b>jamais</b> été PORTEUR (50 % NEUTRE, 50 % HOSTILE). Le seuil effectif était de 0,647 tous les jours, sur les quatre paires.</p>
+<p>Aucune de ces deux pénalités n'est fautive en soi — elles sont dans <code>docs/04 §4.2</code>. C'est leur <b>composition</b> qui n'a jamais été regardée. Et elle ne se corrige pas par hyperopt (interdit n° 5) : elle se corrige en décidant si la prudence macro doit s'exprimer sur le seuil <b>ou</b> sur le multiplicateur, jamais sur les deux.</p>
+</div>
+
+<div class="f high"><h3><span class="tag t-high">élevé</span> B2 — <code>s_patterns</code> n'est pas un score, c'est un offset constant <span class="id">features.py, docs/05 §5.4</span></h3>
+<p>Distribution des 5 scores sur les 42 958 évaluations du train :</p>
+<table>
+<tr><th>score</th><th>poids</th><th>% de valeurs nulles</th><th>moyenne</th><th>contribution moyenne</th></tr>
+<tr><td>s_structure</td><td>0,40</td><td class="warn">64,3 %</td><td>0,190</td><td>0,0759</td></tr>
+<tr><td>s_momentum</td><td>0,20</td><td>74,7 %</td><td>0,201</td><td>0,0403</td></tr>
+<tr><td>s_sr</td><td>0,15</td><td class="bad">86,0 %</td><td>0,124</td><td>0,0187</td></tr>
+<tr><td class="bad">s_patterns</td><td>0,15</td><td class="bad"><b>0,1 %</b></td><td>0,378</td><td>0,0567</td></tr>
+<tr><td>s_volume</td><td>0,10</td><td>61,9 %</td><td>0,271</td><td>0,0271</td></tr>
+</table>
+<p>Le barème donne <b>0,3 quand il n'y a aucune figure</b>. Résultat : <code>s_patterns</code> est non nul <b>99,9 % du temps</b> et injecte ~0,045 de manière quasi constante. Un terme constant dans une somme à seuil ne discrimine rien — il <b>déplace le seuil</b>. Ça explique mécaniquement son IC de −0,0162 mesuré en Q4, sans avoir à débattre de la valeur prédictive des bougies japonaises.</p>
+<p>À l'autre bout : <code>s_structure</code> porte <b>40 % du poids et vaut 0 dans 64 % des cas</b>. Le score le plus important est celui qui parle le moins souvent.</p>
+</div>
+
+<div class="f high"><h3><span class="tag t-high">élevé</span> B3 — la porte de spread n'est jamais évaluée <span class="id">AritV1.py:94</span></h3>
+<pre>cfg = {"regime": ..., "spread_frac": None,   # spread gate : cf. ecart</pre>
+<p>Et dans <code>gate_check</code> : <code>if spread is not None and spread &gt; SPREAD_MAX_FRAC</code>. Avec <code>None</code> câblé en dur, <b>la porte est morte</b>. <code>SPREAD_MAX_FRAC</code> existe dans <code>params.py</code>, la spec la prévoit (docs/06), le journal réserve son champ — et elle ne s'exécute jamais.</p>
+<p>En backtest c'est sans conséquence (pas de carnet). <b>En capital réel, c'est le seul garde-fou de liquidité du système</b>, et il est débranché.</p>
+</div>
+
+<div class="f med"><h3><span class="tag t-med">moyen</span> B4 — G4 vend une quantité calculée au prix du pic, pas au prix courant <span class="id">gestion.py:205</span></h3>
+<pre>current_rate = trade.open_rate + current_profit_r * (trade.open_rate - state.initial_sl)</pre>
+<p><code>current_profit_r</code> est <code>state.mfe_r</code>, c'est-à-dire le <b>maximum historique</b> du trade (sémantique « premier touch », voulue). Mais le prix reconstruit à partir de ce maximum n'est pas le prix auquel la vente s'exécute. Si le prix a reculé depuis le pic, le stake demandé est surévalué et la fraction réellement vendue n'est pas 50 %.</p>
+</div>
+
+<div class="f med"><h3><span class="tag t-med">moyen</span> B5 — G2 est la seule G-rule sans déclencheur <span class="id">gestion.py:165</span></h3>
+<p><code>G1_TRIGGER_R = 1.0</code> et <code>G3_TRIGGER_R = 1.0</code> ; G2 s'exécute dès le premier appel, sans condition de MFE. Sa garde « ne resserre que si ça resserre » se compare à <code>trade.stop_loss</code>, qui vaut le plancher tant que rien ne l'a remplacé — <b>face au plancher, tout resserre</b>.</p>
+<p class="mut">Note : c'est ce que j'avais identifié hier comme cause de la mort du trade BNB. <b>La cause première est A1</b> ; G2 sans déclencheur reste un vrai constat, mais c'est le second maillon, pas le premier.</p>
+</div>
+
+<h2 id="c">C · Données : ce qui ne se récolte pas, ou se récolte faux</h2>
+
+<div class="f high"><h3><span class="tag t-high">élevé</span> C1 — 52 % des lignes de journal sont des doublons <span class="id">journal.py:212</span></h3>
+<p><code>_append_line</code> ouvre en <code>"a"</code>, le nom de fichier ne dépend que du <b>jour simulé</b>, et <b>aucune ligne ne porte d'identifiant de run</b>. Deux backtests sur la même période s'additionnent dans les mêmes fichiers, sans moyen de les séparer après coup.</p>
+<p>Mesuré sur les 255 fichiers présents :</p>
+<table>
+<tr><th>lignes totales</th><th>doublons exacts</th><th>fichier le plus contaminé</th></tr>
+<tr><td>10 377</td><td class="bad">5 382 — <b>51,9 %</b></td><td><code>2026-08-04.jsonl</code> : 5 099 doublons sur 5 545 lignes</td></tr>
+</table>
+<p>Des dizaines de fichiers sont exactement doublés (48 lignes dont 24 doublons = deux runs superposés). <b>Toute mesure qui lit <code>logs/decisions/</code> compte double</b> — dont <code>analysis/replay_entries.py</code>, qui y prend le <code>sl_initial</code>.</p>
+<p class="good">Ce qui sauve les mesures récentes : <code>analysis/dataset.py</code> <b>rejoue</b> le pipeline au lieu de lire le journal. C'est pour cette raison que ses chiffres tiennent.</p>
+<p><b>Correctif</b> : un <code>run_id</code> (uuid par démarrage) sur chaque ligne, et une purge des fichiers de la fenêtre avant chaque backtest.</p>
+</div>
+
+<div class="f high"><h3><span class="tag t-high">élevé</span> C2 — <code>macro_state.json</code> est gitignoré mais obligatoire au backtest : un clone frais produit 0 trade sans erreur <span class="id">risk.py:333</span></h3>
+<pre>data = _read_json(user_data_dir / contracts.MACRO_STATE_FILE)
+if data is None:
+    return False, "missing"</pre>
+<p>Et dans <code>gate_check</code>, <code>news_ok = False</code> ferme la porte n° 2 pour <b>toutes</b> les entrées. Le fichier est dans <code>.gitignore</code> (à juste titre, c'est un état runtime). Sur une machine fraîche, ou après un nettoyage, <b>le backtest tourne, ne lève rien, et rend zéro trade</b> — indiscernable d'une stratégie qui ne signale rien.</p>
+<p>Vu ce que ce projet vient de traverser (deux mois à chercher pourquoi les entrées sont rares), un mode d'échec qui <b>ressemble exactement au symptôme étudié</b> est un risque de diagnostic, pas seulement un défaut d'ergonomie.</p>
+</div>
+
+<div class="f med"><h3><span class="tag t-med">moyen</span> C3 — le slippage réel n'est jamais mesuré, alors que la spec l'exige <span class="id">docs/03 §3.6, journal.py:366</span></h3>
+<p><code>docs/03 §3.6</code> : « Le slippage réel mesuré en live est journalisé et <b>comparé</b> (invalidation si &gt; 2× modèle) ». Dans le code, <code>ev_exit</code> reçoit <code>params.SLIPPAGE_FRAC.get(...)</code> — <b>la valeur du modèle</b>, une constante. Le slippage réel (écart entre prix attendu et prix obtenu) n'est calculé nulle part, donc la comparaison annoncée ne peut pas exister et le critère d'invalidation ne se déclenchera jamais.</p>
+</div>
+
+<div class="f med"><h3><span class="tag t-med">moyen</span> C4 — la porte news ne filtre jamais rien en backtest, et le F&amp;G brut n'existe pas en colonne</h3>
+<p>Deux trous déjà identifiés (Q15, Q11a), confirmés à la lecture : <code>macro_state.json</code> ne contient que les événements <b>à venir</b>, donc en backtest la fenêtre <code>±30 min</code> ne tombe jamais sur une bougie de 2021 ; et <code>_journal_evaluation</code> écrit <code>fear_greed: None</code> hors live. <b>Ni le barème de points de C1-bis ni le F&amp;G adaptatif d'A2-quinquies ne seront mesurables</b> tant que ces deux trous ne sont pas comblés — ce sont des chantiers de données, pas des chantiers de règles.</p>
+</div>
+
+<div class="f low"><h3><span class="tag t-low">mineur</span> C5 — aucune rétention sur les journaux</h3>
+<p>13 Mo, 255 fichiers, croissance linéaire, aucune purge ni compression. Sans conséquence aujourd'hui ; à traiter avant un VPS 24/24.</p>
+</div>
+
+<h2 id="d">D · Écarts à la doctrine du projet</h2>
+
+<div class="f crit"><h3><span class="tag t-crit">critique</span> D1 — l'interdit n° 3 (zéro look-ahead) n'a jamais été vérifié, et il ne peut pas l'être <span class="id">analysis/out/bias/, 04/08</span></h3>
+<pre>## lookahead-analysis — <b>INDETERMINE</b>
+check non concluant : too few trades caught (0/20). Test failed.</pre>
+<p>Le vérificateur natif de freqtrade exige 20 trades pour conclure. La stratégie en produit <b>zéro</b> sur la fenêtre testée. <b>La rareté des entrées empêche de prouver l'absence du biais le plus grave du projet.</b> Les deux problèmes sont liés : tant que B1 n'est pas traité, l'interdit n° 3 restera invérifiable.</p>
+<p>Le <code>recursive-analysis</code>, lui, est en <b>FAIL</b> (20 indicateurs, écart max 0,313 %) — mais la lecture du tableau montre que l'écart vient des warm-ups <b>courts</b> (199/499) et que tout est à 0,000 % au warm-up réellement utilisé (<code>STARTUP_CANDLES = 999</code>). <b>Ce FAIL-là est un artefact de la grille de test</b>, pas un défaut. Il mérite d'être requalifié une bonne fois, pour cesser de le relire chaque trimestre.</p>
+<p class="warn">Et surtout : <b>ces checks datent du 04/08</b>, avant A2-quater, avant G3, avant Q13/Q14. Ils ne décrivent plus le code qui tourne.</p>
+</div>
+
+<div class="f high"><h3><span class="tag t-high">élevé</span> D2 — la spécification « verrouillée » décrit un autre bot que celui qui tourne <span class="id">docs/README.md</span></h3>
+<table>
+<tr><th>docs/README.md dit</th><th>le code fait</th><th>depuis</th></tr>
+<tr><td>« Instrument : <b>Binance spot long-only</b> »</td><td><code>trading_mode: futures</code>, long ET short, paires perp</td><td class="bad">A2, 04/08</td></tr>
+<tr><td>« Risque/trade : mapping conviction <b>1 % → 2 %</b> »</td><td><code>compute_risk_pct</code> ne lit plus la conviction : risque <b>constant</b> 1,16 %</td><td class="bad">A6, 03/08</td></tr>
+<tr><td>« Pairlist V1 : BTC/USDT · ETH/USDT · … »</td><td><code>BTC/USDT:USDT</code> · …</td><td class="bad">A2, 04/08</td></tr>
+</table>
+<p>Le README porte l'en-tête « <b>SPÉCIFICATION VERROUILLÉE. Zéro question ouverte.</b> » et le CLAUDE.md ordonne de le lire avant tout code. Un document qui fait autorité et qui a trois semaines de retard sur deux décisions structurelles est plus dangereux qu'un document absent : il <b>autorise</b> à coder faux de bonne foi. <span class="good">(<code>docs/03 §3.6</code> a été corrigé aujourd'hui sur les frais ; le README, lui, ne l'est pas.)</span></p>
+</div>
+
+<div class="f med"><h3><span class="tag t-med">moyen</span> D3 — trois variables d'environnement changent le comportement de trading en silence <span class="id">params.py:55, :58, :113</span></h3>
+<pre>CONTROL_A_MODE = os.environ.get("ARIT_CONTROL_A", "") == "1"     # désactive TOUTES les G-rules
+_G_OFF = os.environ.get("ARIT_G_OFF", "")                         # désactive une G-rule
+S_STRUCTURE_CHOCH_PRIORITY = os.environ.get("ARIT_CHOCH_PRIORITY", "") == "1"</pre>
+<p><code>ARIT_CONTROL_A=1</code> laissé dans un terminal transforme le bot en « entrées + TP + SL, zéro gestion ». <b>Rien ne le journalise au démarrage</b> et rien ne l'écrit dans les résultats de backtest. Un run d'ablation oublié devient un run de production, sans trace. Ces trois flags devraient apparaître dans un événement <code>system</code> au premier <code>bot_loop_start</code>, à côté du <code>run_id</code> de C1.</p>
+</div>
+
+<div class="f med"><h3><span class="tag t-med">moyen</span> D4 — un commentaire périmé annonce un bloquant qui n'existe plus <span class="id">cio.py:30-34</span></h3>
+<p>« ⚠️ Tant que M08 n'écrit pas ce régime, le live reste long-only alors que le backtest est long+short : rupture de parité, BLOQUANT déclaré du dry-run. » <b>C'est faux depuis la parité A2</b> : <code>macro_regime.attach_regime_now</code> pose bien la colonne, et <code>services/macro_state.py</code> écrit bien le sous-objet des 5 scores. Un avertissement en majuscules qui ne correspond plus à rien use la crédibilité de tous les autres.</p>
+</div>
+
+<div class="f low"><h3><span class="tag t-low">mineur</span> D5 — quatre constantes de <code>params.py</code> dupliquent la config sans être lues</h3>
+<p><code>DRY_RUN_WALLET_USDT</code>, <code>PAIR_WHITELIST</code>, <code>TIMEFRAME_DETAIL</code>, <code>TRADABLE_BALANCE_RATIO</code> : documentées comme « miroir config », donc volontaires. Mais rien ne vérifie que le miroir reflète encore — une divergence entre <code>params.py</code> et <code>config.dry.json</code> passerait inaperçue. Un test d'égalité coûte cinq lignes.</p>
+</div>
+
+<h2 id="e">E · Chantiers lancés jamais achevés</h2>
+<table>
+<tr><th>Chantier</th><th>État réel</th><th>Ce qui bloque</th></tr>
+<tr><td><b>A2-quinquies</b> — F&amp;G adaptatif (Q11a→e)</td><td class="warn">acté, P1-P3 tranchés le 20/08, <b>zéro ligne de code</b></td><td>rien — c'est du travail disponible, et Q11d est couvert de fait depuis le rafraîchissement d'aujourd'hui</td></tr>
+<tr><td><b>C1-bis</b> — barème de points news</td><td class="warn">acté, 3 paramètres (N1-N3) non fixés</td><td>Q15 : sans calendrier historique, non mesurable</td></tr>
+<tr><td><b>G3</b> — ablation <code>s_sr</code> + <code>s_patterns</code></td><td class="warn">mesurée et retenue, <b>non appliquée</b></td><td>ta décision : appliquer maintenant ou attendre Q1</td></tr>
+<tr><td><b>G8</b> — VPS</td><td class="bad">acté, rien provisionné</td><td>le watchdog meurt avec la session qu'il surveille : le silence reste indiscernable de la santé</td></tr>
+<tr><td><b>Bot Discord</b> (véto canari, digest quotidien)</td><td class="bad">codé, <b>ne démarre pas</b></td><td><code>DISCORD_BOT_TOKEN</code> absent du <code>.env</code> (qui ne contient que le webhook)</td></tr>
+<tr><td><b>Q1</b> — courbe N(seuil)</td><td>ouvert, placé en tête des priorités le 20/08</td><td>à re-cadrer : B1 montre que le seuil n'est pas la bonne variable</td></tr>
+<tr><td><b>Q3</b> — biais de sélection sur <code>rr_dispo</code></td><td>ouvert, non conclu</td><td>—</td></tr>
+<tr><td><b>Q12</b> — raison de refus structurée</td><td>ouvert</td><td>—</td></tr>
+<tr><td><b>Q15 · Q16 · Q17 · Q18</b></td><td>ouverts, non préenregistrés</td><td>—</td></tr>
+<tr><td><b>T7 · T8</b> (journalisation)</td><td>ouvertes depuis hier</td><td>—</td></tr>
+<tr><td><b>Checks de biais</b></td><td class="bad">lancés le 04/08, <b>look-ahead jamais concluant</b></td><td>voir D1</td></tr>
+</table>
+
+<h2 id="f">F · Ce qui manque, clairement</h2>
+<table>
+<tr><th>Manquant</th><th>Pourquoi ça compte</th></tr>
+<tr><td class="bad"><b>Tout test de <code>custom_stoploss</code> sur un short</b></td><td>C'est le trou exact par lequel A1 est passé. Pire : le test existant, <code>test_custom_stoploss_floor_posed_sans_after_fill</code>, compare le résultat à <code>stoploss_from_absolute(94.0, 100.0)</code> — <b>le même appel fautif</b>. Il passerait quelle que soit l'erreur. 438 tests verts, et le chemin le plus critique de la moitié du produit n'est pas couvert.</td></tr>
+<tr><td><b><code>confirm_trade_exit</code></b></td><td>Aucune garde sur les sorties : rien ne peut refuser ou journaliser un refus de sortie.</td></tr>
+<tr><td><b>Un <code>run_id</code> dans le journal</b></td><td>Sans lui, C1 est irréparable rétroactivement : les doublons déjà écrits ne sont plus séparables.</td></tr>
+<tr><td><b>Le calendrier économique historique</b> (Q15)</td><td>Bloque la mesure de deux chantiers actés (C1-bis et le palier orange).</td></tr>
+<tr><td><b>La mesure du slippage réel</b></td><td>Le critère d'invalidation de docs/03 §3.6 est inapplicable (C3).</td></tr>
+<tr><td><b>Un hôte extérieur</b></td><td>Sans lui, le suivi à distance ne peut être qu'un push sortant. Le watchdog local ne peut pas signaler sa propre mort.</td></tr>
+<tr><td class="warn"><b>Les critères de validation, tout simplement</b></td><td><code>docs/README</code> exige <b>PF ≥ 1,3, DD ≤ 15 %, ≥ 100 trades</b> pour valider un backtest. Le meilleur run disponible produit <b>78 à 88 signaux sur 5 ans</b>. Le critère d'entrée en dry-run n'a jamais été approché — et il ne le sera pas par un réglage de seuil.</td></tr>
+</table>
+
+<h2 id="g">G · Cybersécurité — RAS, et voici ce qui a été vérifié</h2>
+<table>
+<tr><th>Vérification</th><th>Résultat</th></tr>
+<tr><td>Secrets dans l'arbre de travail</td><td class="good">✓ <code>config.api.json</code> (jwt, ws_token, mot de passe) et <code>.env</code> sont gitignorés et non suivis</td></tr>
+<tr><td>Secrets dans l'<b>historique</b> git (dépôt public)</td><td class="good">✓ aucun — recherche sur <code>git rev-list --all</code> ; seul <code>config.api.example.json</code> est versionné, avec des <code>REMPLACER_*</code></td></tr>
+<tr><td>Clés d'exchange</td><td class="good">✓ <code>config.dry.json</code> : <code>key</code> et <code>secret</code> vides · <code>dry_run: true</code> · interdit n° 7 respecté</td></tr>
+<tr><td>Exposition réseau de FreqUI</td><td class="good">✓ <code>listen_ip_address: 127.0.0.1</code>, <code>CORS_origins: []</code>, <code>enable_openapi: false</code></td></tr>
+<tr><td>Injection / exécution dynamique</td><td class="good">✓ aucun <code>eval</code>, <code>exec</code>, ni <code>shell=True</code> ; <code>subprocess</code> toujours en liste d'arguments</td></tr>
+<tr><td>Appels réseau</td><td class="good">✓ tous avec <code>timeout</code>, HTTPS, aucun <code>verify=False</code></td></tr>
+<tr><td>Action destructive (<code>flatten</code> du watchdog)</td><td class="good">✓ correctement verrouillée : opt-in par env, exige une exposition réelle, 2 lectures de confirmation, flag d'idempotence à reset manuel</td></tr>
+<tr><td>Secrets dans les logs</td><td class="good">✓ le webhook n'est jamais journalisé ; le journal ne contient aucune donnée d'identification</td></tr>
+</table>
+<p class="mut">Seule réserve, et elle est d'exploitation plutôt que de sécurité : <code>config.api.json</code> contient un mot de passe en clair sur le disque. C'est le fonctionnement normal de freqtrade et l'interface n'écoute que sur la boucle locale.</p>
+
+<h2 id="h">H · Ordre de traitement proposé</h2>
+<table>
+<tr><th>#</th><th>Action</th><th>Effort</th><th>Pourquoi dans cet ordre</th></tr>
+<tr><td>1</td><td class="bad"><b>A1</b> — passer <code>is_short</code> aux deux <code>stoploss_from_absolute</code>, + le test short qui manque</td><td>30 min</td><td>Deux lignes. Rien d'autre ne mérite d'être mesuré tant que la moitié du produit tourne sans stop. Corrige A2 par construction.</td></tr>
+<tr><td>2</td><td class="bad"><b>Invalider les mesures du short</b></td><td>—</td><td>R1 (BETA), la moitié short de Q13, les 38 shorts du train : tous produits sans stop. À re-mesurer sous de nouveaux id, jamais en relançant les anciens.</td></tr>
+<tr><td>3</td><td><b>C1</b> — <code>run_id</code> + purge de la fenêtre avant backtest</td><td>1 h</td><td>Prérequis de toute mesure à venir. Aujourd'hui un run sur deux est contaminé.</td></tr>
+<tr><td>4</td><td><b>A3</b> — TTL et vérification de <code>signal_id</code> sur <code>_pending</code></td><td>1 h</td><td>Silencieux, et d'autant plus probable en live que les ordres sont en <code>limit</code>.</td></tr>
+<tr><td>5</td><td class="warn"><b>B1</b> — trancher : la prudence macro s'exprime sur le seuil <b>ou</b> sur le multiplicateur</td><td>décision</td><td>C'est le vrai goulot, et c'est un arbitrage qui t'appartient — pas une mesure. Il reclasse Q1.</td></tr>
+<tr><td>6</td><td><b>D2</b> — remettre <code>docs/README.md</code> au niveau du code (futures, long+short, risque constant)</td><td>30 min</td><td>Tant qu'il ment, il autorise à coder faux de bonne foi.</td></tr>
+<tr><td>7</td><td><b>B3</b> — brancher la porte de spread, ou l'assumer morte par écrit</td><td>1 h</td><td>Gate de capital réel. À faire avant, pas pendant.</td></tr>
+<tr><td>8</td><td>Q11a-d (F&amp;G), puis le reste des chantiers ouverts</td><td>—</td><td>Travail disponible, sans effet sur les trades avant Q11b.</td></tr>
+</table>
+
+<div class="f"><h3>Ce que l'audit ne dit pas</h3>
+<p>Il ne dit pas que le bot serait rentable une fois ces 21 points corrigés. Les mesures de juillet-août restent valables sur ce qu'elles ont établi : l'edge d'entrée est nul ou négatif, et le coût de transaction mange un cinquième à un tiers d'un R avant qu'on parle de signal. <b>A1 explique pourquoi les shorts se comportaient de façon incompréhensible ; B1 explique pourquoi il n'y a presque jamais d'entrées. Ni l'un ni l'autre ne crée d'espérance positive.</b></p>
+<p>Ce qu'ils changent, c'est qu'à partir de maintenant les mesures porteront sur le système qu'on croit mesurer.</p>
+</div>
+
+<footer>Audit du 2026-08-24 · code de production relu intégralement (<code>user_data/strategies/</code>, <code>arit_lib/</code>, <code>services/</code>, <code>scripts/</code>, <code>start_arit.py</code>) · <code>docs/</code> et <code>docs/modules/</code> · 438 tests · <code>research/EXPERIMENTS.jsonl</code> · journaux <code>logs/decisions/</code> (255 fichiers) · rejeu <code>analysis/dataset.py</code> (57 370 évaluations, train + hold-out).
+<br>Rapport local, non publié.</footer>
+</div></body></html>

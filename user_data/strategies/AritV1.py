@@ -158,9 +158,12 @@ class AritV1(IStrategy):
         # 8,5 ans, BUILD_NOTES 2026-07-17). Idempotent : freqtrade ne bouge le SL que vers le
         # haut, le floor est ignore des qu'un G-rule l'a depasse. initial_sl == 0 (custom_data
         # pas encore ecrit) => None, jamais un floor a ~0.
+        # A1 (24/08) : `is_short` OBLIGATOIRE — sans lui un stop de short (au-DESSUS du prix)
+        # rend 0.0, que freqtrade jette (0.0 est falsy) : aucun short n'avait de stop.
+        short = state.sign < 0
         floor = None
         if state.initial_sl:
-            floor = stoploss_from_absolute(state.initial_sl, current_rate)
+            floor = stoploss_from_absolute(state.initial_sl, current_rate, is_short=short)
         if row is None:
             return floor
         gestion.update_excursions(state, row, trade.open_rate)
@@ -170,7 +173,7 @@ class AritV1(IStrategy):
             r = gestion.r_multiple(current_rate, trade.open_rate, state.initial_sl, state.sign)
             self._log("gestion", {"pair": trade.pair, "signal_id": state.signal_id},
                       "SL", trade.stop_loss, new_abs, r)
-            return stoploss_from_absolute(new_abs, current_rate)
+            return stoploss_from_absolute(new_abs, current_rate, is_short=short)
         return floor
     @_safe(None, "adjust_error")
     def adjust_trade_position(self, trade, **kwargs):

@@ -947,3 +947,130 @@ Rejeu hors-ligne et backtest freqtrade donnent **le même signal unique** · `fe
 |---|---|---|---|
 | **T7-ARIT** | **`entry` journalisé deux fois par trade** | Deux événements pour le trade unique, avec deux stakes (9 620,20 puis 9 899,05) et deux quantités (16,56 / 17,04) — double appel `confirm_trade_entry` / `order_filled`. Toute analyse qui compte les `entry` comptera **double** et prendra le mauvais stake une fois sur deux | 🔴 ouverte |
 | **T8-ARIT** | **`before` de l'événement `gestion` n'est pas rafraîchi** | `trade.stop_loss` vaut 1156,05 aux **12** appels, alors que le stop appliqué a changé (le trade sort à 581,13). Le `before` journalisé ne décrit donc pas le stop en vigueur ⇒ ne pas le lire comme tel. N'affecte pas le verdict ci-dessus (le prix de sortie tranche) | 🔴 ouverte |
+
+## 24/08 — AUDIT COMPLET du code de production : 21 constats, dont 2 tueurs
+
+Rapport : `research/audit_2026-08-24/AUDIT.html`. Périmètre relu intégralement : 5 698 lignes de
+Python de production, les 22 fichiers `docs/`, 438 tests, 255 fichiers de journal, et un rejeu du
+pipeline sur 57 370 évaluations.
+
+### A1 — CORRIGÉ CE JOUR : aucun short n'avait de stop-loss
+
+`AritV1.custom_stoploss` appelait `stoploss_from_absolute(sl, current_rate)` **sans `is_short`**
+(deux endroits). Pour un short, le stop est AU-DESSUS du prix : la formule interne rend
+`1 - stop/prix < 0`, ramené à **0.0** par le `max(..., 0)` final. Et freqtrade teste
+`if stop_loss_value_custom and ...` — **0.0 est falsy**, la valeur est jetée avec un simple
+`logger.debug`. Le SL d'un short restait donc au plancher de classe `stoploss = -0.99`.
+
+**Preuve indépendante** : les 12 événements `gestion` du short BNB du dernier backtest portent
+tous `before = 1156.05`, soit exactement `580,93 × 1,99`. Le stop n'a jamais quitté le plancher.
+
+| current_rate | SL structurel (584,14) | SL G2 (581,13) | avec `is_short=True` |
+|---|---|---|---|
+| 580,93 (entrée) | **0.0** | **0.0** | 0,005530 |
+| 580,68 | **0.0** | **0.0** | 0,005963 |
+| 581,43 | **0.0** | 0,000518 | 0,004665 |
+
+⚠️ **Les longs n'étaient pas touchés** (leur stop est sous le prix, la formule sans `is_short` y
+est correcte). Ce sont les shorts, et eux seuls, **depuis A2 le 04/08**.
+
+⚠️⚠️ **Conséquence sur les mesures** : R1 (BETA), la moitié short de Q13, et les 38 shorts du
+train ont tous été produits par un système **sans stop**. À re-mesurer sous de **nouveaux id**,
+jamais en relançant les anciens (verrou B6).
+
+**Correctif appliqué** : `short = state.sign < 0` puis `is_short=short` aux deux appels.
+**+3 tests** dont deux qui échouaient avant (441 passed). ⚠️ Le test qui existait,
+`test_custom_stoploss_floor_posed_sans_after_fill`, **reproduisait l'erreur** : il comparait le
+résultat à `stoploss_from_absolute(94.0, 100.0)`, le même appel fautif, sur un LONG. Il passait
+quelle que soit l'erreur, et aucun test n'exerçait `custom_stoploss` sur un short.
+
+### A2 — corollaire non corrigé : un short ouvert saturait le budget résiduel
+
+`risk.residual_risk_total` lit `trade.stop_loss`. Tant que celui-ci restait au plancher, un short
+déclarait `sign × (580,93 − 1156,05) = +575,12` par unité, soit **≈ 98 % de l'équité** de risque
+résiduel. Le gate n° 5 exige `≤ 6 %` ⇒ **dès qu'un short était ouvert, plus aucune entrée n'était
+possible**, dans aucun sens. Les 3 slots n'en faisaient qu'un. Corrigé par construction avec A1.
+
+### B1 — le vrai goulot : hors PORTEUR, le seuil est arithmétiquement hors de portée
+
+Deux pénalités s'empilent sur la même situation, jamais calibrées ensemble : le **multiplicateur
+×0,85** (`regimes._classify_macro`) et le **bump de seuil +0,05** en NEUTRE (`cio.conviction:106`).
+Comme `conviction = produit_pondéré × multiplicateur`, le seuil effectif sur le produit vaut
+`seuil / multiplicateur`. Mesuré sur les 19 704 bougies TREND du rejeu :
+
+| macro | n | mult | seuil | seuil effectif | % qui passent |
+|---|---|---|---|---|---|
+| PORTEUR | 7 179 | 1,00 | 0,50 | **0,500** | **14,31 %** |
+| NEUTRE | 9 670 | 0,85 | 0,55 | **0,647** | **1,65 %** |
+| HOSTILE | 2 855 | 0,85 | 0,50 | **0,588** | **1,37 %** |
+
+**Facteur 9** entre PORTEUR et le reste, et NEUTRE représente **49 % du temps**. Pour référence :
+p99 du produit pondéré = **0,695**, max absolu sur 5 ans = **0,875**. Exiger 0,647 revient à
+demander le dernier centile. ⇒ **explication complète du « 0 long en 84 jours »** de juin-août
+2026 : la macro n'y a jamais été PORTEUR.
+
+⚠️ Ce n'est pas un chantier de mesure, c'est un **arbitrage pour Jonas** : la prudence macro
+s'exprime sur le seuil **ou** sur le multiplicateur, pas sur les deux. Et ça reclasse Q1 (la
+courbe N(seuil) mesure la mauvaise variable).
+
+### B2 — `s_patterns` est un offset constant, pas un score
+
+Distribution des 5 scores sur les 42 958 évaluations du train :
+
+| score | poids | % de zéros | moyenne | contribution moyenne |
+|---|---|---|---|---|
+| s_structure | 0,40 | **64,3 %** | 0,190 | 0,0759 |
+| s_momentum | 0,20 | 74,7 % | 0,201 | 0,0403 |
+| s_sr | 0,15 | **86,0 %** | 0,124 | 0,0187 |
+| **s_patterns** | 0,15 | **0,1 %** | 0,378 | 0,0567 |
+| s_volume | 0,10 | 61,9 % | 0,271 | 0,0271 |
+
+Le barème donne **0,3 quand il n'y a aucune figure** ⇒ non nul **99,9 % du temps**, il injecte
+~0,045 quasi constants. Un terme constant dans une somme à seuil ne discrimine rien, il **déplace
+le seuil**. Explication mécanique de son IC de −0,0162 (Q4), sans débat sur les bougies japonaises.
+À l'autre bout : `s_structure` porte 40 % du poids et vaut 0 dans 64 % des cas.
+
+### C1 — 52 % des lignes de journal sont des doublons
+
+`journal._append_line` ouvre en `"a"`, le nom de fichier ne dépend que du **jour simulé**, et
+**aucune ligne ne porte de `run_id`**. Deux backtests sur la même période s'additionnent sans
+pouvoir être séparés après coup. Mesuré : **5 382 doublons exacts sur 10 377 lignes** ;
+`2026-08-04.jsonl` porte 5 099 doublons sur 5 545 lignes ; des dizaines de fichiers sont
+exactement doublés (48 lignes dont 24 doublons = deux runs superposés).
+⚠️ `analysis/replay_entries.py` y lit le `sl_initial`. `analysis/dataset.py` est épargné : il
+**rejoue** le pipeline au lieu de lire le journal — c'est pour ça que ses chiffres tiennent.
+
+### Le reste des constats (détail et preuves dans AUDIT.html)
+
+| # | Constat | Gravité |
+|---|---|---|
+| A3 | `_pending` jamais invalidé : un ordre `limit` non rempli laisse un `initial_sl`/`tp1`/`tp2`/`signal_id` périmé que le prochain fill de la même paire consommera | élevé |
+| A4 | `entry` journalisé **deux fois** par trade, avec deux stakes (T7) | moyen |
+| B3 | **La porte de spread n'est jamais évaluée** : `"spread_frac": None` câblé en dur (`AritV1.py:94`). Sans conséquence en backtest ; en capital réel c'est le seul garde-fou de liquidité, et il est débranché | élevé |
+| B4 | G4 calcule la quantité à vendre au prix du **pic** (`mfe_r`), pas au prix courant | moyen |
+| B5 | G2 est la seule G-rule sans déclencheur (G1/G3 attendent +1R) et sa garde se compare au plancher — face au plancher, tout resserre | moyen |
+| C2 | **`macro_state.json` est gitignoré mais requis au backtest** : absent ⇒ `_macro_ok` = "missing" ⇒ porte news fermée ⇒ **0 trade, sans erreur**. Un mode d'échec identique au symptôme qu'on étudie depuis deux mois | élevé |
+| C3 | Le **slippage réel n'est jamais mesuré** : `ev_exit` reçoit `params.SLIPPAGE_FRAC`, une constante. Le critère d'invalidation « > 2× modèle » de docs/03 §3.6 ne peut pas se déclencher | moyen |
+| C4 | Porte news inerte en backtest (Q15) + F&G brut absent en colonne (Q11a) : **ni C1-bis ni A2-quinquies ne seront mesurables** avant de combler ces deux trous | moyen |
+| C5 | Aucune rétention sur les journaux (13 Mo, 255 fichiers, croissance linéaire) | mineur |
+| D1 | **L'interdit n° 3 (zéro look-ahead) n'a jamais été vérifié** : `lookahead-analysis` rend « too few trades caught (0/20) ». La rareté des entrées empêche de prouver l'absence du biais le plus grave. Le `recursive-analysis` en FAIL est en revanche un **artefact de grille** (écarts nuls au warm-up réel de 999) — à requalifier une bonne fois. Et ces checks datent du **04/08** | critique |
+| D2 | **`docs/README.md` décrit un autre bot** : « Binance spot long-only » (futures long+short depuis A2), « mapping conviction 1 %→2 % » (risque constant depuis A6), pairlist spot. Un document estampillé « SPÉCIFICATION VERROUILLÉE » avec trois semaines de retard **autorise à coder faux de bonne foi** | élevé |
+| D3 | Trois variables d'env changent le trading en silence (`ARIT_CONTROL_A`, `ARIT_G_OFF`, `ARIT_CHOCH_PRIORITY`) — aucune n'est journalisée au démarrage. Un run d'ablation oublié devient un run de production sans trace | moyen |
+| D4 | Commentaire périmé `cio.py:30-34` annonçant un « BLOQUANT déclaré du dry-run » (live long-only) **résolu depuis la parité A2** | moyen |
+| D5 | 4 constantes « miroir config » de `params.py` jamais lues et jamais vérifiées contre `config.dry.json` | mineur |
+
+### Cybersécurité : RAS, et c'est vérifié
+
+Secrets absents de l'arbre **et de tout l'historique** (`git rev-list --all`) · `.env` et
+`config.api.json` gitignorés et jamais commités · clés exchange vides, `dry_run: true` ·
+FreqUI sur `127.0.0.1`, CORS vide, openapi off · aucun `eval`/`exec`/`shell=True` · tous les
+appels réseau avec timeout et HTTPS · le `flatten` du watchdog est correctement verrouillé
+(opt-in par env, exige une exposition, 2 lectures de confirmation, flag d'idempotence).
+
+### Ce qui manque, clairement
+
+Tout test de `custom_stoploss` en short (comblé aujourd'hui) · `confirm_trade_exit` · un `run_id`
+dans le journal · le calendrier historique (Q15) · la mesure du slippage réel · un hôte extérieur
+(G8) · **et les critères de validation eux-mêmes** : `docs/README` exige PF ≥ 1,3, DD ≤ 15 % et
+**≥ 100 trades**, quand le meilleur run produit 78 à 88 signaux **sur cinq ans**. Le critère
+d'entrée en dry-run n'a jamais été approché, et il ne le sera pas par un réglage de seuil.

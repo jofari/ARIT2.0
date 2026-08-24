@@ -252,6 +252,55 @@ def test_custom_stoploss_floor_posed_sans_after_fill(monkeypatch):
     assert not [e for e in events if e[0] == "system"]        # aucune exception avalee
 
 
+def test_custom_stoploss_floor_short_nest_jamais_zero(monkeypatch):
+    """A1 (24/08) : le floor d'un SHORT doit etre un ratio STRICTEMENT positif.
+
+    `stoploss_from_absolute` sans `is_short` rend 0.0 pour un stop situe au-dessus du prix
+    (le cas de TOUT short), et freqtrade jette cette valeur : `if stop_loss_value_custom`
+    est faux pour 0.0. Consequence mesuree avant correctif : aucun short n'avait de stop,
+    ni structurel ni G-rule, le SL restait au plancher de classe (-0.99).
+    Valeurs = le short BNB du backtest 20/06/2026 (entree 580,93 / SL structurel 584,14).
+    """
+    _capture(monkeypatch)
+    s = _inst()
+    s.dp = _DP(pd.DataFrame())                    # aucune bougie cloturee -> branche floor pure
+    trade = _CDTrade()
+    trade.set_custom_data("initial_sl", 584.1424175479987)
+    trade.set_custom_data("is_short", True)
+    got = s.custom_stoploss("BNB/USDT:USDT", trade, 580.93, after_fill=False)
+    assert got > 0.0, "un floor a 0.0 est jete par freqtrade => short sans stop"
+    assert got == pytest.approx(
+        strat_mod.stoploss_from_absolute(584.1424175479987, 580.93, is_short=True))
+
+
+def test_custom_stoploss_grule_short_nest_jamais_zero(monkeypatch):
+    """Meme exigence sur le retour d'une G-rule : un SL de short reste au-dessus du prix."""
+    _capture(monkeypatch)
+    monkeypatch.setattr(strat_mod.gestion, "update_excursions", lambda st, r, e: st)
+    monkeypatch.setattr(strat_mod.gestion, "compute_sl", lambda t, r, st: 581.1290741282827)
+    s = _inst()
+    trade = _CDTrade()
+    trade.pair, trade.open_rate, trade.stop_loss = "BNB/USDT:USDT", 580.93, 1156.05
+    s._save_state(trade, contracts.TradeState(
+        initial_sl=584.1424175479987, signal_id="x", is_short=True))
+    monkeypatch.setattr(s, "_closed_1h_row", lambda pair: pd.Series({"date": 0}))
+    got = s.custom_stoploss("BNB/USDT:USDT", trade, 580.93, after_fill=False)
+    assert got > 0.0
+    assert got == pytest.approx(
+        strat_mod.stoploss_from_absolute(581.1290741282827, 580.93, is_short=True))
+
+
+def test_custom_stoploss_long_inchange(monkeypatch):
+    """Controle de non-regression : le chemin LONG n'etait pas touche, il ne bouge pas."""
+    _capture(monkeypatch)
+    s = _inst()
+    s.dp = _DP(pd.DataFrame())
+    trade = _CDTrade()
+    trade.set_custom_data("initial_sl", 94.0)
+    got = s.custom_stoploss("BTC/USDT", trade, 100.0, after_fill=False)
+    assert got == pytest.approx(strat_mod.stoploss_from_absolute(94.0, 100.0, is_short=False))
+
+
 def test_custom_stoploss_none_avant_custom_data(monkeypatch):
     """Avant order_filled (custom_data vide) : None — on garde le stoploss par defaut,
     jamais un floor a ~0."""
