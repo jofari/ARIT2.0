@@ -1,6 +1,8 @@
 # ARCHITECTURE — ARIT 2.0 en deux images
 
-> Vue générée depuis le code réel (`user_data/strategies/`, `services/`, `scripts/`) au 2026-07-31.
+> Vue générée depuis le code réel (`user_data/strategies/`, `services/`, `scripts/`) au 2026-08-24.
+> Mise à jour des décisions A1-A6 et C1-C4 (03-04/08/2026) : futures long ET short, calendrier en
+> deux sources, veto actions c6/c7, warm-up 999, risque constant.
 > Carte des dossiers : [`../guide.md`](../guide.md) · fiches par module : [`README.md`](README.md).
 > Toutes les valeurs chiffrées viennent de `arit_lib/params.py` (chacune cite sa source PDR).
 
@@ -16,12 +18,13 @@ flowchart LR
 
   subgraph EXT["Sources externes (réseau)"]
     direction TB
-    OHLCV["Binance<br/>OHLCV 5m / 1h / 4h / 1d"]
+    OHLCV["Binance perp futures<br/>OHLCV 5m / 1h / 4h / 1d<br/>BTC ETH SOL BNB /USDT:USDT"]
     FNG["alternative.me<br/>Fear and Greed"]
     FRED["FRED<br/>DXY DTWEXBGS · taux Fed DFF"]
     LLAMA["DefiLlama<br/>mcap stablecoins"]
     FUND["Binance perp<br/>funding 8h"]
-    FINN["Finnhub<br/>calendrier éco"]
+    FF["ForexFactory<br/>flux public, fetch HEBDO<br/>C1 : Finnhub abandonné 03/08"]
+    NDX["FRED NASDAQ100<br/>c6 cassure actions (A3)"]
   end
 
   subgraph P1["Process 1 — collecte, hors bot"]
@@ -33,16 +36,17 @@ flowchart LR
   subgraph DATA["Données sur disque"]
     direction TB
     FEATHER[("user_data/data/binance/*.feather")]
-    MACRODATA[("user_data/data/macro/<br/>dxy.csv · taux_fed.csv · stablecoins.json<br/>funding_BTCUSDT.json · fear_greed.json")]
-    MSTATE[("user_data/macro_state.json<br/>fear_greed · risk_off · next_events · stale")]
+    MACRODATA[("user_data/data/macro/<br/>dxy.csv · taux_fed.csv · stablecoins.json<br/>funding_BTCUSDT.json · funding_ETHUSDT.json · fear_greed.json<br/>nasdaq100.csv · btc_daily.json (c6/c7, A4)")]
+    MSTATE[("user_data/macro_state.json<br/>fear_greed BRUT · risk_off · next_events · stale<br/>macro_scores IMBRIQUÉ — sous-objet des 5 scores 06.2")]
+    CALDATA[("user_data/calendar/<br/>economic_calendar.json PRIMAIRE, versionné, zéro réseau<br/>forexfactory_week.json cache hebdo, âge max 8 j")]
   end
 
   subgraph BOT["Process 2 — LE BOT : freqtrade + AritV1.py, M07, moins de 250 lignes, zéro métier"]
     direction TB
-    M01["M01 features.py<br/>indicateurs · pivots confirmés shift 2 · structure<br/>S/R · patterns · rr_dispo · 5 scores"]
-    MREG["macro_regime.py<br/>5 composants vers PORTEUR / NEUTRE / HOSTILE<br/>backtest : décalé +1 jour, point-in-time"]
+    M01["M01 features.py<br/>indicateurs · pivots confirmés shift 2 · structure<br/>S/R · patterns · rr_dispo · 5 scores + 5 miroirs _short<br/>warm-up 999 bougies (A1)"]
+    MREG["macro_regime.py<br/>5 composants vers PORTEUR / NEUTRE / HOSTILE<br/>+ veto actions c6/c7 SÉPARÉ, ablatable seul (A4)<br/>direction_macro : long / short / both / none (A2)<br/>backtest : décalé +1 jour, point-in-time"]
     M02["M02 regimes.py<br/>TREND · TRANSITION · RANGE · RISK_OFF<br/>puis seuil + multiplicateur"]
-    M03["M03 cio.py<br/>conviction = min de 1 et somme poids x score x mult<br/>puis signal_long"]
+    M03["M03 cio.py<br/>conviction = min de 1 et somme poids x score x mult<br/>puis signal_long ET signal_short (A2)"]
     M04["M04 risk.py<br/>8 gates · sizing · circuit breakers"]
     M05["M05 gestion.py<br/>G1 à G7 · SL jamais élargi"]
     M06["M06 journal.py<br/>1 décision = 1 ligne JSONL"]
@@ -76,7 +80,9 @@ flowchart LR
   FUND --> DL
   DL --> MACRODATA
   FNG --> MACROSVC
-  FINN --> MACROSVC
+  NDX --> DL
+  FF -->|"tâche hebdo séparée"| CALDATA
+  CALDATA -->|"lecture du cache, zéro réseau"| MACROSVC
   MACROSVC --> MSTATE
 
   FEATHER --> M01
@@ -112,10 +118,10 @@ flowchart LR
   classDef file fill:#fef3c7,stroke:#d97706,color:#3b2606
   classDef danger fill:#fee2e2,stroke:#dc2626,color:#450a0a
 
-  class OHLCV,FNG,FRED,LLAMA,FUND,FINN ext
+  class OHLCV,FNG,FRED,LLAMA,FUND,FF,NDX ext
   class DL,MACROSVC,DISCORD,WD proc
   class M01,M02,M03,M04,M05,M06,MREG mod
-  class FEATHER,MACRODATA,MSTATE,DB,DAYEQ,CBDAY,HB,VETO,JOURNAL file
+  class FEATHER,MACRODATA,MSTATE,CALDATA,DB,DAYEQ,CBDAY,HB,VETO,JOURNAL file
   class RESTART,EXCH danger
 ```
 
@@ -123,6 +129,10 @@ flowchart LR
 touche jamais le réseau en dehors de l'exécution d'ordre, il *lit* `macro_state.json` · le watchdog
 n'importe rien du projet, il ne connaît que des fichiers et ses propres clés · le journal est
 append-only, un skip est journalisé aussi richement qu'une entrée.
+
+**Porte inerte** : la gate n°3 (`spread`) est câblée mais reçoit `spread_frac: None` depuis la
+stratégie — elle ne bloque rien. La brancher demanderait un accès order book dans un callback, ce
+que l'architecture interdit. Une porte inerte qui *paraît* active est pire qu'une porte absente.
 
 **Angle mort mesuré** : `lookahead-analysis` ne tronque que l'OHLCV. Les fichiers macro sont
 identiques dans un run complet et dans un run tronqué — un look-ahead macro ne serait donc **pas**
@@ -144,11 +154,11 @@ flowchart TD
     IND["Informatives 4h et 1d<br/>add_indicators · find_pivots N=2 confirmés shift 2<br/>track_structure · sr_levels · candle_patterns"]
     ONEH["compute_all sur le 1h mergé<br/>atr_1h · last_hl_1h · choch_bear_event_1h<br/>new_4h · rr_dispo · s_structure momentum sr patterns volume"]
     MACRO{"Mode d'exécution"}
-    MLIVE["live et dry<br/>lecture de macro_state.json<br/>fear_greed · risk_off · stale"]
+    MLIVE["live et dry<br/>lecture de macro_state.json<br/>fear_greed BRUT · risk_off · stale<br/>macro_scores vers regime_now (A2 07/08)"]
     MBT["backtest<br/>macro_regime.daily_regimes<br/>décalé +1 jour"]
-    REG["regimes.classify<br/>ADX_4h sous 20 = RANGE<br/>ADX_4h sous 25 = TRANSITION<br/>ADX 25+ et ema50 sur ema200 et close sur ema50 = TREND<br/>F/G sous 25 ou macro HOSTILE = RISK_OFF"]
+    REG["regimes.classify<br/>ADX_4h sous 20 = RANGE<br/>ADX_4h sous 25 = TRANSITION<br/>ADX 25+ et EMAs alignées = TREND, dans les DEUX sens<br/>F/G sous 25 = RISK_OFF<br/>+ trend_dir : +1 / -1 / 0 — l'ÉTAT séparé du SENS (A2)"]
     SEUIL["seuil : TREND 0,50 · TRANSITION 0,65<br/>+0,05 si macro NEUTRE<br/>multiplicateur : 1,0 ou 0,85 ou 0,0"]
-    CONV["cio.conviction — poids FIGÉS<br/>structure 0,40 · momentum 0,20 · sr 0,15<br/>patterns 0,15 · volume 0,10"]
+    CONV["cio.conviction — poids FIGÉS, jamais hyperoptés<br/>structure 0,40 · momentum 0,20 · sr 0,15<br/>patterns 0,15 · volume 0,10<br/>calculée pour les DEUX sens, mêmes poids"]
     IND --> ONEH --> MACRO
     MACRO -->|"live"| MLIVE
     MACRO -->|"backtest"| MBT
@@ -157,9 +167,9 @@ flowchart TD
     REG --> SEUIL --> CONV
   end
 
-  CONV --> SIG{"signal_long ?<br/>conviction au moins égale au seuil<br/>ET rr_dispo au moins 1,5<br/>ET régime TREND ou TRANSITION<br/>ET new_4h"}
+  CONV --> SIG{"signal_long OU signal_short ?<br/>conviction au moins égale au seuil<br/>ET rr_dispo au moins 1,5<br/>ET régime TREND ou TRANSITION<br/>ET new_4h<br/>ET direction autorisée par direction_macro"}
   SIG -->|"non"| NOSIG["journal evaluation<br/>decision = no_signal"]
-  SIG -->|"oui"| ENTER["populate_entry_trend<br/>enter_long = signal_long ET new_4h<br/>une seule évaluation par setup 4h"]
+  SIG -->|"oui"| ENTER["populate_entry_trend<br/>enter_long = signal_long ET new_4h<br/>enter_short = signal_short ET new_4h (A2)<br/>une seule évaluation par setup 4h"]
 
   ENTER --> CB{"Circuit breakers<br/>confirm_trade_entry"}
   CB -->|"2 pertes consécutives sous -0,8R<br/>cooldown 12 bougies 1h"| STOP1["journal system<br/>circuit_breaker"]
@@ -170,7 +180,7 @@ flowchart TD
     direction TB
     G1["1 · regime — TREND ou TRANSITION"]
     G2["2 · news_window — aucun event high +/-30 min<br/>macro_state absent ou périmé plus de 2h = ÉCHEC, fail-safe"]
-    G3["3 · spread — au plus 0,05 pourcent"]
+    G3["3 · spread — au plus 0,05 pourcent<br/>INERTE : la stratégie passe spread_frac = None"]
     G4["4 · slots — moins de 3 positions ouvertes"]
     G5["5 · residual_risk — résiduels + nouveau au plus 6 pourcent"]
     G6["6 · weekly_budget — au plus 8 pourcent par semaine ISO ET moins de 10 entrées"]
@@ -184,8 +194,8 @@ flowchart TD
 
   subgraph SIZE["3 — Niveaux et sizing, custom_stake_amount"]
     direction TB
-    LEVELS["gestion.initial_levels<br/>SL = last_hl_4h moins 0,1 x ATR_4h<br/>fallback : entrée moins 1,5 x ATR_4h<br/>TP1 = entrée +1,5R · TP2 = nearest_res_4h si au dessus de TP1"]
-    RISKPCT["risk.compute_risk_pct<br/>n = conviction moins seuil sur 1 moins seuil, borné 0 à 1<br/>risque = 1 pourcent + n x cap moins 1 pourcent, divisé par le diviseur CB<br/>cap 2 pourcent trades 1 à 100 puis 3 pourcent"]
+    LEVELS["gestion.initial_levels — géométrie signée d = +1 / -1<br/>SL = ancre structurelle moins d x 0,1 x ATR_4h<br/>long : last_hl_4h · short : last_lh_4h<br/>fallback : entrée moins d x 1,5 x ATR_4h<br/>TP1 = +1,5R · TP2 = niveau S/R opposé"]
+    RISKPCT["risk.compute_risk_pct — CONSTANT depuis A6 03/08<br/>risque = min de 1,16 pourcent et du cap, divisé par le diviseur CB<br/>cap 2 pourcent trades 1 à 100 puis 3 pourcent<br/>sizing proportionnel à la conviction SUSPENDU vers V2<br/>motif : la conviction n'a jamais montré de pouvoir prédictif"]
     STAKE["risk.compute_stake<br/>stake = équité x risque sur distance au SL en fraction<br/>équité courante donc compounding"]
     LEVELS --> RISKPCT --> STAKE
   end
@@ -194,9 +204,9 @@ flowchart TD
   STAKE -->|"stake sous le minimum notional<br/>et le forcer dépasserait le cap"| SKIP3["journal skip<br/>skip_min_notional"]
   STAKE -->|"stake valide"| ORDER["Ordre freqtrade puis Binance"]
 
-  ORDER --> FILL["order_filled — écrit TradeState en custom_data<br/>initial_sl immuable, unité R · risk_pct · trade_no<br/>entry_conviction · entry_regime · signal_id · tp2"]
+  ORDER --> FILL["order_filled — écrit TradeState en custom_data<br/>is_short FIGÉ, toute la géométrie en dépend (A2)<br/>initial_sl immuable, unité R · risk_pct · trade_no<br/>entry_conviction · entry_regime · signal_id · tp2"]
   FILL --> LOG["journal entry<br/>prix · quantité · stake · TP1 · TP2 · signal_id"]
-  LOG --> OPEN(["TRADE OUVERT — SL initial posé en plancher<br/>puis gestion G1 à G7 à chaque clôture 1h"])
+  LOG --> OPEN(["TRADE OUVERT — SL initial posé en plancher<br/>puis gestion G1 à G7 à chaque clôture 1h<br/>journal entry porte direction : long ou short (schéma v3)"])
 
   classDef ok fill:#dcfce7,stroke:#16a34a,color:#0f2e18
   classDef gate fill:#e0f2fe,stroke:#0284c7,color:#0c2b3d
@@ -213,7 +223,8 @@ flowchart TD
 
 À **chaque clôture 1 h**, dans cet ordre (`docs/modules/M05 §2`) : `update_excursions` (MAE/MFE en R,
 une action par bougie) → `check_exit` (**G6 > G7 > TP2**) → `partial_tp` (**G4**) → **G5** →
-`compute_sl` = `max(G1, G2, G3)` — et **jamais un SL plus large** (invariant re-vérifié dans le code).
+`compute_sl` = l'extremum **resserrant** de G1, G2, G3 selon le sens — et **jamais un SL plus large**
+(invariant re-vérifié dans le code, quel que soit le sens de la position).
 
 | Règle | Déclencheur | Effet |
 |---|---|---|
@@ -222,7 +233,7 @@ une action par bougie) → `check_exit` (**G6 > G7 > TP2**) → `partial_tp` (**
 | G3 | MFE ≥ +1,0R | SL → close − 2,0 × ATR_1h (1,5 × en RISK_OFF) |
 | G4 | premier +1,5R | vend 50 % de la quantité, une seule fois |
 | G5 | BOS 4h frais après TP1 | neutralise TP2 (on laisse courir) |
-| G6 | CHoCH baissier 1h (événement, pendant la vie du trade) | sortie totale |
+| G6 | CHoCH **adverse** 1h (événement, pendant la vie du trade) — `choch_bear_event_1h` en long, `choch_bull_event_1h` en short | sortie totale |
 | G7 | 24 bougies 1h et MFE < +0,5R | sortie totale (trade mort) |
 
 ### Preuve mécanique associée
