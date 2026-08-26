@@ -476,65 +476,28 @@ peut être qu'un **push sortant** (Discord), jamais une page à consulter.
 
 ---
 
-## Mode COLLECTE — arbitrage B1 tranché par Jonas le 2026-08-26
+## Mode COLLECTE — ACTIF depuis le 2026-08-26, à refermer
 
-Constat de Jonas au retour : **aucun trade pendant ses vacances**. Vérifié — 0 ligne dans
-`tradesv3.dryrun.sqlite`, 298 évaluations du 07/08 au 26/08, toutes `no_signal`.
+Arbitrage B1 (audit du 24/08) tranché par Jonas : « qu'il prenne plus de trades pour qu'on
+récolte plus de data », après un dry-run à **0 trade sur 19 jours** (298 évaluations, toutes
+`no_signal` — ce n'était pas une panne : heartbeat, macro et historique étaient sains).
 
-### Ce n'était pas une panne
+`ARIT_COLLECTE=1` ⇒ `SEUIL_TREND` 0,50 → **0,30** et `SEUIL_TRANSITION` 0,65 → **0,45**.
+`RR_MIN` reste à 1,5 : le RR n'était pas le verrou (le rejeu donne 0 signal à seuil contractuel
+même avec `RR_MIN` à 0,80) et l'abaisser fabriquerait des setups structurellement mauvais.
+Rendement attendu du rejeu sur données réelles : ~3,5 signaux/semaine.
 
-Aucune des quatre dépendances muettes du dispositif d'absence n'a lâché : heartbeat à 0 min,
-`macro_state` non *stale*, historique macro à 1 h, `equity_veto` jamais levé. Le bot a évalué
-et refusé, conformément au contrat.
+Activé **par environnement uniquement**, dans `ARIT_relance.cmd` (dossier Démarrage) pour
+survivre aux redémarrages. Env non défini ⇒ valeurs PDR strictement inchangées : backtests et
+tests lancés à la main ne sont pas affectés. Le mécanisme (anticorrélation conviction ↔ RR) est
+consigné dans `BUILD_NOTES.md` (26/08).
 
-### La cause mesurée
+**Ce qui reste ouvert, et pourquoi cette section n'est pas purgée :**
 
-L'entrée exige **conjointement** `conviction >= seuil` ET `rr_dispo >= RR_MIN` (`cio.py:53`).
-Sur les 176 évaluations en régime d'entrée :
-
-| Condition | Fois remplie |
-|---|---|
-| `conviction >= seuil` | 2 (BNB, 19/08 à 15 h et 19 h — `rr_dispo` valait alors 0,25) |
-| `rr_dispo >= 1,5` | 12 (jusqu'à 5,94 sur ETH le 23/08 — conviction alors trop basse) |
-| **les deux** | **0** |
-
-**Anticorrélation structurelle**, pas malchance : `rr_dispo = (résistance_4h − close) / (close − SL)`
-(`features.py:294`). Ce qui fait monter la conviction — le prix qui progresse vers la résistance —
-écrase le numérateur du RR. Le setup est le plus convaincant au moment où il reste le moins de
-place jusqu'à la cible.
-
-C'est le même mécanisme que **B1 de l'audit du 24/08**, laissé en arbitrage ouvert : mult 0,85
-et bump +0,05 s'empilent, seuil effectif = `seuil/mult` = 0,647 en NEUTRE vs 0,500 en PORTEUR.
-La macro a été NEUTRE sur **289 des 298** évaluations de la période.
-
-### L'arbitrage
-
-Demande : « qu'il prenne plus de trades pour qu'on récolte plus de data ». Rejeu des
-évaluations réelles sous grille de paramètres :
-
-| SEUIL_TREND / TRANSITION | RR_MIN | signaux (14 j) | /semaine |
-|---|---|---|---|
-| 0,50 / 0,65 *(contrat)* | 1,50 | 0 | 0 |
-| 0,40 / 0,55 | 1,00 | 0 | 0 |
-| **0,30 / 0,45** | **1,50** | **7** | **3,5** |
-| 0,30 / 0,45 | 0,80 | 10 | 5,0 |
-
-Retenu : **0,30 / 0,45, `RR_MIN` inchangé à 1,5**. Le RR n'est pas le verrou (l'abaisser à 0,80
-n'ajoute que 3 signaux) et le baisser fabriquerait des setups structurellement mauvais — soit
-l'inverse du but recherché.
-
-### Ce que ce mode n'est PAS
-
-Les trades produits sous `ARIT_COLLECTE=1` sont **hors contrat PDR 04.2** : des observations,
-pas une mesure d'edge. Ils doivent être **exclus des stats B2/B6** (préenregistrement +
-Benjamini-Hochberg). Séparables par `run_id` et par la date de relance.
-
-Activation par **variable d'environnement uniquement** (`ARIT_COLLECTE=1`), sur le modèle des
-overrides A/B existants : env non défini ⇒ valeurs PDR strictement inchangées, backtests et
-tests non affectés (446 passed, 1 skipped). Réversible en relançant sans le flag.
-
-### Effet de bord de la relance
-
-Le process qui tournait datait d'avant le 24/08 (ses lignes de journal n'ont pas de `run_id`).
-Il tournait donc **sans le correctif A1 « aucun short n'avait de stop-loss »**. La relance
-embarque ce correctif : c'était une raison indépendante de relancer.
+1. **Aucun critère de sortie n'est fixé.** Combien de trades observés avant de refermer et de
+   revenir aux seuils contractuels ? Tant que ce n'est pas tranché, le bot tourne hors contrat
+   PDR 04.2 indéfiniment.
+2. **Les trades produits sous ce flag doivent être exclus des stats B2/B6** (préenregistrement
+   + Benjamini-Hochberg). Ce sont des observations, **pas une mesure d'edge** : les seuils ont
+   été choisis pour produire des trades, donc tout test d'edge sur cet échantillon est
+   circulaire. Séparables par `run_id` et par la date de relance (26/08 ~20:00 locale).

@@ -1,5 +1,28 @@
 # BUILD_NOTES — leçons et décisions de build
 
+## 2026-08-26 — « zéro trade » : deux pièges, dont un qui n'est pas dans le code
+
+**1. `conviction` et `rr_dispo` sont structurellement anticorrélés.** L'entrée exige les deux
+(`cio.py` : `conviction >= seuil` ET `rr_dispo >= RR_MIN`). Or
+`rr_dispo = (résistance_4h − close) / (close − SL)` : ce qui fait monter la conviction — le
+prix qui progresse vers la résistance — écrase le numérateur du RR. Sur 19 jours de dry-run,
+la conviction est passée **2 fois** (RR valait alors 0,25) et le RR **12 fois** (jusqu'à 5,94,
+conviction alors trop basse) : **intersection vide**. Conséquence pour qui diagnostique un
+zéro-trade : compter les franchissements de chaque porte séparément ne dit rien, il faut
+compter leur **intersection**. Et desserrer le RR ne sert à rien — à seuil 0,50/0,65, le rejeu
+donne zéro signal même avec `RR_MIN` abaissé à 0,80.
+
+**2. Le checkout local peut être des semaines derrière `origin/main` sans que rien ne le
+signale.** Le 26/08, `main` local était sur `96d6cbe` (8 août) alors qu'`origin/main` était sur
+`25e1fba` (24 août) : tout le travail du 24/08 avait été poussé depuis un worktree sans jamais
+être ramené en local. Le bot tournait donc depuis trois semaines sur du code **antérieur au
+correctif A1 « aucun short n'avait de stop-loss »**, et produisait des données de dry-run avec
+ce bug. Symptôme diagnostique : les lignes de journal du process vivant n'avaient pas de
+`run_id` (schéma v4, ajouté le 24/08) alors que `contracts.py` sur disque l'exigeait — **un
+écart entre le code sur disque et le code en mémoire du process**. Vérifier
+`git log --oneline -1 main` contre `origin/main` fait partie du diagnostic d'un bot qui se
+comporte « comme avant ».
+
 ## 2026-08-18 — A5 mesurée (indécidable), B6 fermé : trois pièges qui restent
 
 **1. Le `seuil` du dataset est DÉJÀ bumpé.** `cio.conviction` ajoute
