@@ -87,8 +87,31 @@ ADX_RANGE_BELOW = 20              # PDR 04.1 — ADX(14)_4h < 20 => RANGE
 ADX_TREND_MIN = 25                # PDR 04.1 — ADX >= 25 (+ EMAs) => TREND
 
 # ------------------------------------------------ 04.2 Comportement par regime
-SEUIL_TREND = 0.50                # PDR 04.2 — seuil conviction TREND
-SEUIL_TRANSITION = 0.65           # PDR 04.2 — seuil conviction TRANSITION
+# --- Mode COLLECTE (dry-run) — override d'ENVIRONNEMENT : ARIT_COLLECTE=1 ------------
+# Demande Jonas 2026-08-26 : « qu'il prenne plus de trades pour qu'on recolte plus de data ».
+# C'est l'arbitrage B1 laisse ouvert par l'audit du 24/08, tranche par Jonas.
+#
+# Constat qui motive la valeur (journaux 06.2 du 07/08 au 26/08, 298 evaluations, 0 entree) :
+#   - la conviction n'a franchi son seuil que 2 fois, et JAMAIS en meme temps qu'un
+#     rr_dispo >= RR_MIN => l'intersection des deux portes est restee vide 19 jours durant ;
+#   - le verrou est le SEUIL, pas le RR : a 0,50/0,65 le rejeu donne 0 signal quel que soit
+#     RR_MIN (meme abaisse a 0,80), tandis que 0,30/0,45 en donne 7 sur 14 jours (~3,5/sem) ;
+#   - mecanisme (audit 24/08 B1) : mult 0,85 et bump +0,05 s'empilent, seuil effectif =
+#     seuil/mult = 0,647 en NEUTRE contre 0,500 en PORTEUR. La macro a ete NEUTRE sur
+#     289 des 298 evaluations de la periode.
+#
+# RR_MIN reste INTOUCHE (1,5) : abaisser le RR fabriquerait des setups structurellement
+# mauvais, soit l'inverse du but. Les plafonds MAX_OPEN_TRADES / WEEKLY_MAX_ENTRIES restent
+# les garde-fous si la macro repasse PORTEUR (taux de passage x9).
+#
+# /!\ Les trades produits sous ce flag sont HORS CONTRAT PDR 04.2 : ce sont des
+# observations, PAS une mesure d'edge. Ils doivent etre exclus des stats B2/B6
+# (CHANTIERS.md : preenregistrement + Benjamini-Hochberg). Separables par run_id.
+# Env non defini => valeurs PDR strictement inchangees (aucun impact sur backtest/tests).
+COLLECTE_MODE = _os.environ.get("ARIT_COLLECTE", "") == "1"
+
+SEUIL_TREND = 0.30 if COLLECTE_MODE else 0.50        # PDR 04.2 — seuil conviction TREND
+SEUIL_TRANSITION = 0.45 if COLLECTE_MODE else 0.65   # PDR 04.2 — seuil conviction TRANSITION
 FG_MULT_FULL_FROM = 45            # PDR 04.2 / 06.2 — F&G >= 45 => x1,0
 MULT_FULL = 1.0                   # PDR 04.2
 MULT_REDUCED = 0.85               # PDR 04.2 — 25 <= F&G < 45 ou TRANSITION => x0,85
