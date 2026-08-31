@@ -184,8 +184,9 @@ class AritV1(IStrategy):
         state = self._trade_state(trade)
         gestion.update_excursions(state, row, trade.open_rate)
         stake = gestion.partial_tp(trade, state.mfe_r, state)    # G4 : premier touch +1,5R
-        if state.tp1_done and not state.extension_on and bool(row.get("bos_fresh_4h")):
-            state.extension_on = True                           # G5 (M05 par.2.5)
+        if gestion.set_extension(state, row):                   # G5 (M05 par.2.5)
+            self._log("gestion", {"pair": trade.pair, "signal_id": state.signal_id},
+                      "G5", False, True, state.mfe_r)
         self._save_state(trade, state)
         if stake is not None:
             self._log("gestion", {"pair": trade.pair, "signal_id": state.signal_id},

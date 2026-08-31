@@ -43,8 +43,28 @@ def run_id() -> str:
 
 def set_run_id(value: str) -> None:
     """Force le run_id — tests uniquement, jamais en production."""
-    global _RUN_ID
+    global _RUN_ID, _PROTOCOLE_ECRIT
     _RUN_ID = str(value)
+    _PROTOCOLE_ECRIT = False        # le protocole se reecrit sous le nouveau run_id
+
+
+# D3 (audit 24/08) — trois variables d'env changent le comportement de trading sans
+# laisser de trace : un run n'etait pas rejouable depuis son propre journal.
+_PROTOCOLE_ECRIT = False
+
+
+def _emit_protocole() -> None:
+    """Ecrit UNE fois par run la ligne 'system' qui decrit l'environnement du run.
+
+    Emis a la PREMIERE ecriture, pas a l'import : le repertoire user_data peut etre
+    redefini apres l'import (set_user_data_dir), et la politique fail-safe interdit
+    d'ecrire dans un chemin non resolu.
+    """
+    global _PROTOCOLE_ECRIT
+    if _PROTOCOLE_ECRIT:
+        return
+    _PROTOCOLE_ECRIT = True     # pose AVANT le write : sinon write -> emit -> write -> ...
+    write("system", ev_system(contracts.SYSTEM_KIND_PROTOCOLE, dict(params.PROTOCOLE_ACTIF)))
 
 
 def safe(default, event):
@@ -205,6 +225,7 @@ def write(event_type: str, payload: dict) -> None:
     des champs contracts.JOURNAL_REQUIRED_FIELDS ; champ manquant => "schema_incomplete": true
     + logging.error, mais la ligne est ecrite quand meme. Ne leve JAMAIS (M06).
     """
+    _emit_protocole()                       # D3 — une fois par run, avant tout le reste
     record = _prepare_record(event_type, payload)
     path = _decisions_dir() / f"{_utc_day(record.get('ts_utc'))}.jsonl"
     _append_line(path, record, event_type)

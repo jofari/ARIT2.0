@@ -1,5 +1,6 @@
 """Tests M05 — arit_lib/gestion.py (G1-G7). Voir docs/modules/M05_gestion.md (tests exiges)."""
 
+import pathlib
 import random
 
 import pandas as pd
@@ -23,7 +24,7 @@ class _Trade:
 
 def _row(date=T0, close=100.0, high=100.0, low=100.0, atr_1h=1.0, last_hl_1h=0.0,
          choch_bear_1h=False, choch_bear_event_1h=False, bos_fresh_4h=False,
-         regime="TREND", nearest_res_4h=999.0):
+         bos_fresh_bear_4h=False, regime="TREND", nearest_res_4h=999.0):
     """Bougie 1h cloturee (Series, colonnes contractuelles 11.3).
 
     G6 lit choch_bear_event_1h (EVENEMENT de cassure, decision Jonas 10/07) ; choch_bear_1h
@@ -33,7 +34,8 @@ def _row(date=T0, close=100.0, high=100.0, low=100.0, atr_1h=1.0, last_hl_1h=0.0
         "date": date, "close": close, "high": high, "low": low, "atr_1h": atr_1h,
         "last_hl_1h": last_hl_1h, "choch_bear_1h": choch_bear_1h,
         "choch_bear_event_1h": choch_bear_event_1h,
-        "bos_fresh_4h": bos_fresh_4h, "regime": regime, "nearest_res_4h": nearest_res_4h,
+        "bos_fresh_4h": bos_fresh_4h, "bos_fresh_bear_4h": bos_fresh_bear_4h,
+        "regime": regime, "nearest_res_4h": nearest_res_4h,
     })
 
 
@@ -452,3 +454,116 @@ def test_tradestate_sign_et_retrocompat():
     assert TradeState(is_short=True).sign == -1
     assert "is_short" in TradeState().as_dict()
     assert TradeState.from_dict({"is_short": True}).sign == -1
+
+
+# --------------------------------------------------------------------------------------
+# Garde-fou ARIT_G_OFF (2026-08-31). Avant lui, toute valeur hors des sept laissait les
+# sept flags a True sans erreur, sans log et sans test : un run d'ablation rate se lisait
+# « cette regle ne coute rien ». params.flags_ablation() est le chemin exact utilise a
+# l'import — on l'appelle directement plutot que de recharger le module (un reload recree
+# params.PROTECTIONS et casse test_protections_declarees_dans_la_strategie).
+# --------------------------------------------------------------------------------------
+
+
+def test_g_off_absent_laisse_le_produit_b():
+    assert set(params.flags_ablation("").values()) == {True}
+    assert set(params.G_FLAGS_DEFAULT.values()) == {True}      # defaut reel du depot
+
+
+def test_g_off_nominal_desactive_une_seule_regle():
+    flags = params.flags_ablation("G3")
+    assert flags["G3"] is False
+    assert all(v for k, v in flags.items() if k != "G3")
+
+
+def test_g_off_tolere_les_espaces_du_shell():
+    assert params.flags_ablation("G3 ")["G3"] is False
+
+
+def test_g_off_casse_refusee_avec_la_correction():
+    with pytest.raises(ValueError, match="ARIT_G_OFF=G3"):
+        params.flags_ablation("g3")
+
+
+@pytest.mark.parametrize("valeur", ["G8", "A8", "gestion", "G3,G4", "3"])
+def test_g_off_valeur_inconnue_refusee(valeur):
+    with pytest.raises(ValueError, match="invalide"):
+        params.flags_ablation(valeur)
+
+
+def test_g5_est_ablatable_depuis_son_cablage():
+    """G5 etait refusee tant que son flag n'etait pas lu (le garde-fou aurait menti).
+    Depuis gestion.set_extension, les sept regles sont ablatables."""
+    assert params.flags_ablation("G5")["G5"] is False
+    assert params.G_ABLATABLES == params.G_RULES
+
+
+def test_toutes_les_g_rules_ablatables_sont_gardees_par_leur_flag():
+    """Verrou de coherence : une regle declaree ablatable DOIT etre lue quelque part dans
+    gestion.py. C'est ce test qui aurait attrape le trou de G5."""
+    source = pathlib.Path(gestion.__file__).read_text(encoding="utf-8")
+    manquantes = [g for g in params.G_ABLATABLES if f'active["{g}"]' not in source]
+    assert not manquantes, f"declarees ablatables mais jamais lues dans gestion.py : {manquantes}"
+
+
+# --------------------------------------------------------------------------------------
+# G5 — extension post-BOS (docs/03 par.3.4, M05 par.2.5). Cablee dans gestion.py le
+# 2026-08-31 : elle vivait en ligne dans AritV1.py, ignorait son flag d'ablation, et lisait
+# la cassure HAUSSIERE meme sur un short (donc s'activait contre la position).
+# --------------------------------------------------------------------------------------
+
+
+def test_g5_long_s_active_sur_cassure_haussiere():
+    state = TradeState(tp1_done=True)
+    assert gestion.set_extension(state, _row(bos_fresh_4h=True)) is True
+    assert state.extension_on is True
+
+
+def test_g5_long_ignore_la_cassure_baissiere():
+    state = TradeState(tp1_done=True)
+    assert gestion.set_extension(state, _row(bos_fresh_bear_4h=True)) is False
+    assert state.extension_on is False
+
+
+def test_g5_short_s_active_sur_cassure_baissiere():
+    """A2 — la cassure FAVORABLE a un vendeur est baissiere (miroir bos_fresh_bear_4h)."""
+    state = _state_s(tp1_done=True)
+    assert gestion.set_extension(state, _row_s(bos_fresh_bear_4h=True)) is True
+    assert state.extension_on is True
+
+
+def test_g5_short_ignore_la_cassure_haussiere():
+    """LE BUG CORRIGE : avant le 2026-08-31, un short etendait sa position sur une cassure
+    haussiere, c'est-a-dire exactement quand le marche partait CONTRE lui."""
+    state = _state_s(tp1_done=True)
+    assert gestion.set_extension(state, _row_s(bos_fresh_4h=True)) is False
+    assert state.extension_on is False
+
+
+def test_g5_exige_tp1_done():
+    """G5 est une extension APRES G4 : sans TP1 pris, il n'y a rien a etendre."""
+    state = TradeState(tp1_done=False)
+    assert gestion.set_extension(state, _row(bos_fresh_4h=True)) is False
+
+
+def test_g5_ne_s_active_qu_une_fois():
+    state = TradeState(tp1_done=True)
+    assert gestion.set_extension(state, _row(bos_fresh_4h=True)) is True
+    assert gestion.set_extension(state, _row(bos_fresh_4h=True)) is False
+
+
+def test_g5_inerte_quand_son_flag_est_coupe():
+    """ARIT_G_OFF=G5 : c'etait un no-op SILENCIEUX avant le cablage."""
+    state = TradeState(tp1_done=True)
+    coupe = params.flags_ablation("G5")
+    assert gestion.set_extension(state, _row(bos_fresh_4h=True), flags=coupe) is False
+    assert state.extension_on is False
+
+
+def test_g5_neutralise_tp2():
+    """L'effet de G5 (docs/03 par.3.4) : TP2 ne sort plus, le reste court sous G2/G3."""
+    trade, state = _Trade(), TradeState(initial_sl=95.0, tp1_done=True)
+    row = _row(date=_hours(1), high=120.0, bos_fresh_4h=True)
+    assert gestion.check_exit(trade, row, state, tp2=110.0) == "TP2"
+    gestion.set_extension(state, row)
+    assert gestion.check_exit(trade, row, state, tp2=110.0) is None

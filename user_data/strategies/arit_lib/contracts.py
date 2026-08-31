@@ -197,6 +197,9 @@ JOURNAL_REQUIRED_FIELDS = {
     "system": ("ts_utc", "kind", "detail"),
 }
 
+# D3 — `kind` de la ligne 'system' qui decrit l'environnement du run (journal.py).
+SYSTEM_KIND_PROTOCOLE = "protocole"
+
 # regime_inputs de `evaluation` (PDR 08.1 / 04.5) :
 REGIME_INPUT_KEYS = ("adx4h", "ema50_4h", "ema200_4h", "close_vs_ema", "fear_greed", "macro_stale",
                      MACRO_REGIME_COL, EQUITY_VETO_COL, EQUITY_VETO_REASON_COL,  # v2, 03/08

@@ -55,10 +55,52 @@ G7_MIN_R = 0.5                 # PDR 03.4 G7 — si jamais atteint +0,5R
 CONTROL_A_MODE = _os.environ.get("ARIT_CONTROL_A", "") == "1"
 
 # Flags d'ablation (PDR 03.4 / 09.1.4). Override : ARIT_G_OFF=G3 (desactive UNE regle).
-_G_OFF = _os.environ.get("ARIT_G_OFF", "")
-G_FLAGS_DEFAULT = {
-    g: (g != _G_OFF) for g in ("G1", "G2", "G3", "G4", "G5", "G6", "G7")
-}
+G_RULES = ("G1", "G2", "G3", "G4", "G5", "G6", "G7")   # ordre contractuel PDR 03.4
+
+# Les sept sont ablatables depuis le cablage de G5 (2026-08-31, gestion.set_extension).
+# G5 en etait exclue tant que son flag n'etait pas lu : l'accepter aurait rendu un produit B
+# complet qu'on aurait lu « G5 ne coute rien ». test_gestion verrouille la coherence entre
+# cette liste et les flags reellement lus dans gestion.py.
+G_ABLATABLES = G_RULES
+
+
+def _valider_g_off(brut: str) -> str:
+    """Garde-fou (2026-08-31) : une valeur invalide ARRETE le run au lieu de rendre un
+    produit B deguise en ablation.
+
+    Avant ce garde-fou, toute valeur hors des sept laissait les sept flags a True sans
+    erreur, sans log et sans test : un run d'ablation rate se lisait « cette regle ne
+    coute rien ». Demontre le 2026-08-31 sur 'g3', 'G8', 'A8' et 'G3 '.
+
+    Pas de question interactive ici : ces backtests se lancent EN PARALLELE (cf. bloc
+    09 §9.1 ci-dessus), et un process qui attend une reponse se bloque en silence — pire
+    qu'un arret. Le message porte donc la correction exacte a relancer. L'erreur tombe a
+    l'import, avant tout calcul : elle coute deux secondes.
+    """
+    valeur = brut.strip()
+    if not valeur or valeur in G_ABLATABLES:
+        return valeur
+    lignes = [f"ARIT_G_OFF={valeur!r} invalide."]
+    if valeur.upper() in G_ABLATABLES:
+        lignes.append(f"  -> tu voulais dire {valeur.upper()!r} ? (la casse compte)")
+        lignes.append(f"  Relance avec : ARIT_G_OFF={valeur.upper()}")
+    else:
+        lignes.append(f"  -> attendu : un de {', '.join(G_ABLATABLES)}, ou variable absente.")
+        lignes.append("  Rappel : G1-G7 sont les regles de GESTION (PDR 03.4), PAS les "
+                      "decisions G1/G3/G8 de DECISIONS.md.")
+    raise ValueError("\n".join(lignes))
+
+
+def flags_ablation(brut: str) -> dict:
+    """Les 7 flags a partir de la valeur BRUTE d'ARIT_G_OFF. Fonction pure : c'est elle
+    que les tests appellent, pour ne pas avoir a recharger le module (un reload recree
+    les objets de params et casse les tests d'identite ailleurs)."""
+    off = _valider_g_off(brut)
+    return {g: (g != off) for g in G_RULES}
+
+
+_G_OFF = _valider_g_off(_os.environ.get("ARIT_G_OFF", ""))
+G_FLAGS_DEFAULT = flags_ablation(_G_OFF)   # revalidation idempotente d'une valeur deja sure
 
 # --------------------------------------------------------- 03.5 Circuit breakers
 CB_DAY_EQUITY_DROP_PCT = 0.06     # PDR 03.5 — equite <= -6 % vs 00:00 UTC => stop entrees
@@ -111,6 +153,15 @@ BOS_FRESH_CANDLES_4H = 3          # PDR 05.1 — BOS "frais" 3 bougies 4h
 # décision Jonas 09/07 (BUILD_NOTES) — A/B : True = CHoCH prime sur BOS frais ; défaut = actuel.
 # Override protocole (voir bloc 09 §9.1 plus haut) : ARIT_CHOCH_PRIORITY=1
 S_STRUCTURE_CHOCH_PRIORITY = _os.environ.get("ARIT_CHOCH_PRIORITY", "") == "1"
+
+# D3 (audit 24/08) — les 3 variables d'env qui changent le comportement de trading en
+# silence. Journalisees une fois par run (journal._emit_protocole) : sans ca, un run n'est
+# pas rejouable depuis son propre journal. Doit rester APRES les trois constantes.
+PROTOCOLE_ACTIF = {
+    "ARIT_G_OFF": _G_OFF or None,
+    "ARIT_CONTROL_A": CONTROL_A_MODE,
+    "ARIT_CHOCH_PRIORITY": S_STRUCTURE_CHOCH_PRIORITY,
+}
 SR_CLUSTER_TOL_ATR = 0.5          # PDR 05.2 — meme niveau si ecart <= 0,5 x ATR
 # SR_FORCE_TOUCHES_DIV : SUPPRIME le 2026-08-03 (C4, decision Jonas « annuler »). La force
 # des S/R par nombre de touches ne sera pas implementee en V1 — constante morte depuis le 13/07.

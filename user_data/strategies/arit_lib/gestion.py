@@ -19,14 +19,16 @@ Protocole `trade` (duck-typed, pas d'import freqtrade — docs/11 §11.5) :
 
 Protocole `row_1h` : pandas Series de la bougie 1h CLOTUREE, colonnes 11.3 —
     close, high, low, date, atr_1h, last_hl_1h, last_lh_1h (A2),
-    choch_bear_event_1h / choch_bull_event_1h (bool, G6), bos_fresh_4h (bool), regime (str).
+    choch_bear_event_1h / choch_bull_event_1h (bool, G6),
+    bos_fresh_4h / bos_fresh_bear_4h (bool, G5), regime (str).
 
 SENS DU TRADE (A2, 2026-08-04) — le bot est long ET short. Le sens vit dans
 `state.is_short` et se lit via `state.sign` (+1/-1, contracts.direction_sign). Toute
 comparaison de prix passe par `sign x (a - b)` : aucune G-rule ne contient de `if
 is_short`, ce qui garantit qu'aucune ne peut etre symetrisee A MOITIE. Les trois
-asymetries reelles, elles, sont explicites : l'ancre de G2, l'evenement de G6, et
-l'extreme de bougie (high/low) utilise pour l'excursion et pour atteindre une cible.
+asymetries reelles, elles, sont explicites : l'ancre de G2, l'evenement de G6, la
+CASSURE de G5, et l'extreme de bougie (high/low) utilise pour l'excursion et pour
+atteindre une cible.
 Le niveau TP2 de sortie est fourni explicitement par l'appelant (parametre `tp2`) :
 depuis la decision Jonas 09/07 c'est la resistance 4h COURANTE (nearest_res_4h de la
 row), recalculee a chaque cloture 1h — plus le TP2 fige a l'entree (docs/03 par.3.3
@@ -209,6 +211,33 @@ def _age_candles(trade, row_1h) -> int:
     delta = row_1h["date"] - trade.open_date_utc
     # 3600 s = 1 bougie TIMEFRAME_BASE (1h) : conversion secondes -> nb de bougies 1h.
     return int(delta.total_seconds() // 3600)
+
+
+def set_extension(state: TradeState, row_1h, flags: dict | None = None) -> bool:
+    """G5 (docs/03 par.3.4, M05 par.2.5) : apres G4, une NOUVELLE cassure 4h dans le sens du
+    trade neutralise TP2 — le reste court sous trailing G2/G3 seul. Rend True si G5 vient de
+    s'activer (donc une seule fois par trade), False sinon.
+
+    Vivait en ligne dans AritV1.py jusqu'au 2026-08-31, avec trois consequences :
+      - `active["G5"]` n'etait jamais lu : ARIT_G_OFF=G5 etait un no-op SILENCIEUX, et un run
+        d'ablation sur G5 rendait un produit B complet lu a tort comme « G5 ne coute rien » ;
+      - la colonne testee etait `bos_fresh_4h`, c'est-a-dire la cassure HAUSSIERE seule
+        (features.py:202) : sur un short, G5 s'activait donc quand le marche repartait CONTRE
+        la position. Meme famille que A1 (audit 24/08) ;
+      - c'etait du metier dans la coquille freqtrade, que docs/M05 par.2.5 place ici.
+
+    A2 : la cassure FAVORABLE est haussiere pour un acheteur, BAISSIERE pour un vendeur —
+    quatrieme asymetrie explicite du module (cf. docstring).
+    """
+    if state.extension_on or not state.tp1_done:
+        return False
+    if not _resolve(flags)["G5"]:
+        return False
+    colonne = "bos_fresh_4h" if state.sign > 0 else "bos_fresh_bear_4h"
+    if not bool(row_1h.get(colonne)):
+        return False
+    state.extension_on = True
+    return True
 
 
 def check_exit(trade, row_1h, state: TradeState, tp2: float | None,

@@ -239,3 +239,48 @@ def test_evaluation_direction_macro_absente_reste_none():
     rec = journal.ev_evaluation({"regime": "RANGE"}, {"pair": "BTC/USDT:USDT"})
     assert "direction_macro" in rec["regime_inputs"]
     assert rec["regime_inputs"]["direction_macro"] is None
+
+
+# --------------------------------------------------------------------------------------
+# D3 (audit 24/08) — trois variables d'env changent le comportement de trading sans laisser
+# de trace : un run n'etait pas rejouable depuis son propre journal. Une ligne 'system'
+# kind='protocole' est desormais emise UNE fois par run, a la premiere ecriture.
+# --------------------------------------------------------------------------------------
+
+
+def _lignes_du_jour(base):
+    fichiers = sorted(_decisions_dir(base).glob("*.jsonl"))
+    assert fichiers, "aucun fichier de journal ecrit"
+    records = []
+    for fichier in fichiers:
+        records.extend(_read_records(fichier))
+    return records
+
+
+def test_protocole_ecrit_une_fois_et_en_premier(_base_dir):
+    journal.set_run_id("run-protocole")          # rearme l'emission
+    journal.write("system", journal.ev_system("premier", {}))
+    journal.write("system", journal.ev_system("second", {}))
+    records = _lignes_du_jour(_base_dir)
+    protocoles = [r for r in records if r["kind"] == contracts.SYSTEM_KIND_PROTOCOLE]
+    assert len(protocoles) == 1, "le protocole doit etre emis une seule fois par run"
+    assert records[0]["kind"] == contracts.SYSTEM_KIND_PROTOCOLE
+    assert records[0]["run_id"] == "run-protocole"
+
+
+def test_protocole_porte_les_trois_variables(_base_dir):
+    journal.set_run_id("run-detail")
+    journal.write("system", journal.ev_system("declencheur", {}))
+    protocole = _lignes_du_jour(_base_dir)[0]
+    assert set(protocole["detail"]) == {
+        "ARIT_G_OFF", "ARIT_CONTROL_A", "ARIT_CHOCH_PRIORITY"}
+
+
+def test_set_run_id_rearme_le_protocole(_base_dir):
+    journal.set_run_id("run-a")
+    journal.write("system", journal.ev_system("a", {}))
+    journal.set_run_id("run-b")
+    journal.write("system", journal.ev_system("b", {}))
+    protocoles = [r for r in _lignes_du_jour(_base_dir)
+                  if r["kind"] == contracts.SYSTEM_KIND_PROTOCOLE]
+    assert [p["run_id"] for p in protocoles] == ["run-a", "run-b"]
