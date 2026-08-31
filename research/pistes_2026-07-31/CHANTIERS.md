@@ -1154,3 +1154,127 @@ gitignoré), **C3** (slippage réel jamais mesuré), **A4/T7** (double `entry`),
 **Et la re-mesure des shorts** (R1 chez BETA, moitié short de Q13, les 38 shorts du train) reste
 à faire sous de **nouveaux id** avec préenregistrement neuf — le verrou B6 interdit de relancer
 les anciens.
+
+---
+
+# MISE À JOUR DU 2026-08-31 — l'outillage d'ablation d'A8 était cassé, et G5 branchée à l'envers
+
+**A8 (« G-set v2 : supprimer G1/G2/G3/G5/G6, garder G4+G7 », ligne 44) reste OUVERT**, mais son
+état est précisé : ce n'est pas « mesurer », c'est **re-mesurer**. Les ablations par règle
+existent (`research/edge_2026-07/RAPPORT.md` §2) — elles sont juste **long-only** (le short
+arrive le 04/08 avec A2) et **antérieures au correctif A1**. Elles ne disent rien du short.
+
+⚠️ **Correction d'un énoncé de `DECISIONS.md`** : la phrase « aucune ablation individuelle
+G1…G7 n'existe », écrite dans A8 le 25/08, était **fausse** — elle contredisait la définition
+d'origine d'A8 ligne 44, qui *est* la conclusion de ces ablations. Corrigé dans `DECISIONS.md`
+le 31/08.
+
+## Deux prérequis livrés (commit `91a25f0`, 469 tests)
+
+1. **`ARIT_G_OFF` échouait en silence** : toute valeur hors des sept laissait les sept flags à
+   `True`, sans erreur ni log ni test. Un run d'ablation raté rendait un produit B complet, lu
+   « cette règle ne coûte rien ». Démontré sur `g3`, `G8`, `A8`, `G3 `. Validé à l'import
+   désormais. Chaque run journalise son protocole ⇒ **D3 de l'audit du 24/08 est FERMÉ**.
+2. **G5 avait quatre défauts**, dont le sens inversé sur les shorts (elle lisait la cassure
+   haussière quel que soit le sens : sur un short, elle supprimait TP2 quand le marché repartait
+   **contre** la position — même famille que A1). Câblée dans `gestion.set_extension()`.
+   ⇒ **Les 7 G-rules sont ablatables ; elles ne l'étaient qu'à 6, sans que ça se voie.**
+
+Détail et leçons : `for claude build/BUILD_NOTES.md` § 2026-08-31.
+
+## Ce qui bloque encore A8, dans l'ordre
+
+| # | Blocage | Nature | Coût |
+|---|---|---|---|
+| B5 | G2 s'exécute **sans déclencheur** — face au plancher, tout resserre | bug | ~1 h |
+| B4 | G4 calcule la quantité au **prix du pic**, pas au prix courant | bug | ~1 h |
+| B1 | seuil effectif 0,647 hors PORTEUR (p99 = 0,695) | **arbitrage de Jonas** | décision |
+| B6 | préenregistrer `A8-ablation-g-rules` dans `EXPERIMENTS.jsonl` | verrou | 15 min |
+
+Ablater G2 ou G4 **avant** B5/B4 mesurerait le bug, pas la règle. B1 commande le `n` disponible.
+
+## ⚠️ Piège de vocabulaire, vérifié le 31/08
+
+`Lettre+chiffre` désigne plusieurs objets : **B1** = modèle nul (ici) *vs* seuil hors de portée
+(audit) · **B5** = hold-out scellé *vs* G2 sans déclencheur · **A2**, **A3**, **C1**, **D2**,
+**D3**, **G1**, **G2**, **G3** idem. Ne jamais écrire un identifiant nu sans sa source.
+Les 3 dégâts réels sont venus de **mots ordinaires** (« signal », « F&G », « régime »), pas des
+identifiants — détail dans `BUILD_NOTES.md` § 2026-08-31.
+
+## 2026-08-31 (soir) — backtest complet post-correctifs : +3,20 %, et 2 trades portent tout
+
+Premier backtest de l'historique complet depuis les correctifs A1/A3/C1 (24/08) et G5 (31/08).
+Commit `91a25f0` · run_id `7481c40a4e89` · 2019-10-20 → 2026-08-24 (2 500 j) · 4 paires futures
+· `--timeframe-detail 5m --enable-protections`.
+
+| | Valeur |
+|---|---|
+| Profit total | **+3,20 %** (+319,57 USDT) |
+| Trades · win · PF | 105 · **42,9 %** · **1,12** |
+| CAGR | **0,46 %/an** — le marché a fait **+1 978 %** sur la période |
+| Long / Short | 64 / 41 · profits quasi égaux (+1,64 % / +1,56 %) |
+| Sorties | `trailing_stop_loss` **99**, TP2 **4**, G6 **1**, G7 **1** |
+
+⚠️ **Le résultat n'est porté que par 2 trades sur 105** :
+
+| | Total |
+|---|---|
+| 105 trades | +319,6 |
+| sans le meilleur | +132,0 |
+| **sans les 2 meilleurs** | **−55,0** |
+| sans les 3 meilleurs | −206,2 |
+
+**Profit médian par trade : −6,39 USDT.** Les 5 meilleurs sont concentrés sur **SOL** (4/5). Même
+motif qu'en juillet (« le seul candidat positif retombe à +0,00R sans son meilleur trade »).
+⇒ **Ce +3,20 % n'est pas un edge.** Ne pas le citer sans la ligne « sans les 2 meilleurs ».
+
+⚠️ **Aucune attribution possible.** Le run contient A1 + A3 + C1 + G5, et la période diffère de
+celle du « B pur » de juillet (2018→2026). Le renversement (−17,38 % → +3,20 %) vient
+**presque certainement d'A1** — 41 shorts, qui tournaient sans stop-loss avant le 24/08. Ce
+n'est **pas** une comparaison contrôlée.
+
+Signal de churn intact : **99 sorties sur 105 sont des `trailing_stop_loss`, profit moyen −0,0 %.**
+94 % des sorties ne produisent rien.
+
+### ⚠️ « G5 strictement inerte » est FAUX sur ce substrat
+
+La journalisation de G5, ajoutée le 31/08, permet pour la première fois de le vérifier au lieu
+de l'inférer. Sur le run : `{'SL': 2269, 'G4': 27, 'G5': 8}` — **G5 s'est déclenchée 8 fois**
+(6 long, 2 short).
+
+⇒ La ligne « G5 | ❌ supprimer | strictement inerte, jamais déclenchée en 8,5 ans » du plan
+G-set v2 (`research/edge_2026-07/RAPPORT.md` §2) **repose sur un fait qui ne tient plus**. Ce
+verdict était long-only et antérieur au correctif A1. À re-mesurer, pas à appliquer.
+Ablation préenregistrée le 31/08 : `A8-ablation-G5` dans `research/EXPERIMENTS.jsonl`.
+
+### ⚠️ Correction d'une affirmation de la même session
+
+J'avais avancé que **B5** (G2 sans déclencheur) « étrangle les trades à t+0, donc les autres
+G-rules n'ont jamais l'occasion de se déclencher ». **Le journal l'infirme** : G4 exige +1,5R et
+s'est déclenchée **27 fois sur 105 trades (26 %)**. Un quart des trades atteint la cible.
+Ce qui reste vrai de B5 : c'est un bug de lecture de code, et le trade BNB montre qu'il peut
+diviser un stop par 16 à t+0. Ce qui tombe : l'idée qu'il neutralise mécaniquement les six
+autres règles. **B5 reste à corriger, son argument d'urgence est plus faible qu'annoncé.**
+
+## 2026-08-31 (soir) — DIAGNOSTIC : les plus grosses lacunes d'ARIT
+
+Rapport complet : **`research/diagnostic_2026-08-31/RAPPORT.md`**. Six lacunes classées par
+conséquence, enchaînées causalement. Résumé :
+
+1. **Le `n` ne permet de décider de rien** — 78 signaux / 5 ans, critère d'abandon `N < 250`
+   **FRANCHI**. Six mesures faites, six « INDÉCIDABLE ». Cause mécanique = **B1**.
+2. **Le Test 1 de `docs/01` n'a JAMAIS été exécuté** — rien au registre, rien dans `research/`,
+   alors que `AritV1.py:275` et `journal.py` ont été bâtis exprès pour lui. Les 4 expériences du
+   registre portent toutes sur de l'aval (scores, stops, G-rules).
+3. **Le look-ahead (interdit n° 3) est invérifiable** — 0/20 trades capturés, à cause de (1).
+4. **Rien n'a jamais tourné** — vérifié le 31/08 : `tradesv3.dryrun.sqlite` = **0 trade**,
+   **0 événement `live`** dans tous les journaux. Slippage, spread, funding, latence : aucun
+   chiffre réel n'existe.
+5. **Le +3,20 % tient sur 2 trades** — −55,0 USDT sans les deux meilleurs, médiane −6,39 USDT.
+6. **La doctrine ment sur le code** — 4 énoncés faux constatés dans la seule session du 31/08.
+
+> **ARIT mesure très bien des choses qui n'ont pas d'importance, parce que la seule chose qui en
+> a — l'edge existe-t-il ? — est bloquée par un manque de données que personne n'a traité.**
+
+**Ordre proposé** : **B1** (arbitrage Jonas) → **Test 1** → **funding** (86 % du profit de
+MacroFlip, jamais rouvert depuis le 27/07). Le reste (B5, B4, B3, D2) est de l'hygiène.

@@ -449,3 +449,74 @@ Leçon : la limite de session (reset 21:50) a tué T1 ×2 et la review risk EN V
 
 ## 2026-07-06 — sous-agents via l'outil Agent
 Session lancée depuis `C:\Users\jofar` → les `.claude/agents/` du repo ne sont pas chargés (chargement au démarrage seulement). Reproduction fidèle : outil Agent, modèle Opus, spec du `.md` injectée en tête de prompt. Pour une future session : lancer `claude` DANS le repo.
+
+## 2026-08-31 — PIÈGE : `Lettre+chiffre` désigne plusieurs objets à la fois
+
+Trois documents vivants numérotent leurs objets `Lettre+chiffre`, **indépendamment** :
+
+- `CHANTIERS.md` — familles de chantiers : `A.` décisions à signer · `B.` mesures statistiques ·
+  `C.` dettes techniques · `D.` branche macro · `E.` blocage dry-run · `F.` banc · `G.`/`H.` ML ·
+  `Q.` questions ;
+- `research/audit_2026-08-24/AUDIT.html` — sections thématiques : `A ·` ce qui tue le bot ·
+  `B ·` ce qui empêche le profit · `C ·` données · `D ·` écarts doctrine · `E.` à `H.` ;
+- `params.py` / `gestion.py` — les **G-rules** G1→G7 (règles de gestion de sortie).
+
+Collisions vérifiées le 31/08 : **B1** (modèle nul, E[R] −0,0123 · *vs* seuil hors de portée) ·
+**B5** (hold-out scellé *vs* G2 sans déclencheur) · **A2** (long+short *vs* short sature le
+budget *vs* retirer les pivots bruts) · **A3**, **C1**, **D2**, **D3**, **G1**, **G2**, **G3**.
+⇒ **Ne jamais écrire un identifiant nu.** Toujours qualifier la source, comme le font déjà
+`dedupe_journal.py` (« dette C1 **de l'audit du 24/08** ») et `calendar_source.py` (« dette C1
+**de `CHANTIERS.md`** »). Les ids du registre (`A5-ablation-porte-macro`) sont le bon modèle.
+
+**Dans le CODE, aucun conflit technique** (tokenisation des 5 arbres Python, 31/08) : aucun de
+ces identifiants n'est un nom Python. Seules exceptions : `T0` (timestamp de test) et
+`G1`/`G2`/`G3` en mots-clés d'appel (`update(G2=False)`).
+
+### Ce que l'homonymie a réellement coûté — 3 dégâts, tous sur des MOTS ORDINAIRES
+
+L'homonymie d'identifiants est **bruyante** (elle coûte du `grep` pollué). L'homonymie de mots
+est **silencieuse** et c'est elle qui a produit des chiffres faux :
+
+1. **« signal »** = ligne de journal *vs* signal distinct ⇒ « `news_window` bloque 91,75 % »
+   faux d'un facteur ~12 (756 lignes = 63 signaux, dont 53 acceptés ailleurs). C1-bis a failli
+   être tranchée dessus. (R6, BETA, 19/08)
+2. **« F&G »** = colonne brute *vs* composant `c5` du régime macro ⇒ « le F&G n'existe pas en
+   backtest » faux. Q11a reste juste, sa justification était fausse.
+3. **« régime »** = état (`regime`) *vs* sens (`trend_dir`) ⇒ **bug de production** : un marché
+   en tendance baissière tombait dans le fallback RANGE et **le short était structurellement
+   impossible**. Corrigé par A2 ; le commentaire est figé dans `contracts.py:66-69`.
+
+## 2026-08-31 — `ARIT_G_OFF` échouait en silence (corrigé, commit `91a25f0`)
+
+Toute valeur hors des sept (`g3`, `G8`, `A8`, `G3 `) laissait les **sept flags à `True`** :
+aucune erreur, aucun log, aucun test ne couvrait ce chemin. Un run d'ablation raté rendait donc
+un **produit B complet**, qu'on lisait « cette règle ne coûte rien ». Sur 7 runs d'ablation, une
+faute de frappe suffisait à condamner une règle à tort.
+
+Corrigé : validation à l'import (`params._valider_g_off`), message portant la correction exacte.
+**Pas de confirmation interactive** — décision Jonas 31/08, écartée pour raison technique : ces
+backtests tournent en parallèle, un process qui attend une réponse se bloque **en silence**,
+pire qu'un arrêt. L'intention est conservée par le message (`tu voulais dire 'G3' ?`).
+
+Ajouté aussi : chaque run écrit son protocole (`ARIT_G_OFF`, `ARIT_CONTROL_A`,
+`ARIT_CHOCH_PRIORITY`) en ligne `system` `kind='protocole'` — **ferme D3 de l'audit du 24/08**.
+
+## 2026-08-31 — G5 avait quatre défauts, dont un miroir short inversé
+
+Tous sur deux lignes d'`AritV1.py:187-188` :
+
+1. `active["G5"]` **jamais lu** ⇒ `ARIT_G_OFF=G5` était un no-op silencieux ;
+2. ⚠️ **elle lisait `bos_fresh_4h`, la cassure HAUSSIÈRE seule, quel que soit le sens du trade.**
+   Sur un **short**, G5 supprimait donc la sortie TP2 quand le marché repartait **contre** la
+   position. Même famille que A1. Le miroir `bos_fresh_bear_4h` existait depuis A2 (04/08) et
+   n'avait jamais été branché ⇒ bug latent pendant 4 semaines ;
+3. **aucune journalisation** ⇒ le verdict « jamais déclenchée en 8,5 ans » n'était pas
+   vérifiable dans les journaux, seulement inféré ;
+4. **métier dans la coquille freqtrade**, que `docs/M05 §2.5` place dans `gestion.py`.
+
+⇒ **Le défaut 4 CAUSAIT le défaut 1** : hors de `gestion.py`, la règle échappait mécaniquement
+au système de flags. Corriger le placement corrigeait l'ablation. Leçon générale : une règle de
+gestion écrite hors de `gestion.py` est invisible pour l'ablation, quoi qu'en dise son nom.
+
+Corrigé dans `gestion.set_extension()`. Un test verrouille désormais la cohérence entre
+`params.G_ABLATABLES` et les `active["Gx"]` réellement lus — c'est lui qui aurait attrapé G5.

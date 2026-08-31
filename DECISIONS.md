@@ -59,6 +59,70 @@ n'attend donc plus rien : sa substance est dans `research/pistes_2026-07-31/CHAN
 
 ---
 
+## ⭐ CHANTIERS PRIORITAIRES — posés par Jonas le 25/08
+
+> Ces deux lignes passent devant tout le reste de ce fichier. Le mot **PRIORITAIRE** dans la
+> colonne État n'est pas décoratif : ALPHA le lit et sort ces chantiers de l'agrégat
+> « N décisions en attente » pour leur donner leur propre carte, en tête du dashboard
+> (`alpha/config.py` → `DECISION_PRIORITY`). Retirer le mot ici, c'est retirer la priorité là-bas.
+
+| # | Chantier | État | Depuis |
+|---|---|---|---|
+| A8 | **G-rules** : reprise du travail sur G1-G7 et leurs poids | **PRIORITAIRE** — rouvert le 25/08. Outillage réparé le 31/08 (les 7 sont ablatables) ; **bloqué par B5, B4 et l'arbitrage B1** | 03/08 |
+| DE1 | **Données entrantes** : les flux qui alimentent les scores | **PRIORITAIRE** — ouvert le 25/08, périmètre à cadrer avant toute mesure | 25/08 |
+
+---
+
+## ⭐ B1 et Test 1 — les deux choses qui n'attendent QUE toi (posées le 31/08)
+
+Diagnostic complet : `research/diagnostic_2026-08-31/RAPPORT.md`. Deux points en sortent qui
+ne se résoudront par aucune mesure — ils attendent un arbitrage, et ils commandent tout le reste.
+
+### B1 — la prudence macro s'exprime sur le seuil OU sur le multiplicateur, jamais les deux
+
+Deux pénalités s'appliquent à la même situation et n'ont **jamais été calibrées ensemble** :
+multiplicateur **×0,85** hors accord macro/technique (`regimes._classify_macro`) **et** seuil
+**+0,05** en macro NEUTRE (`cio.conviction:106`). Comme `conviction = produit_pondéré ×
+multiplicateur`, le seuil effectif vaut `seuil / multiplicateur` :
+
+| macro | n (bougies TREND) | mult | seuil | **seuil effectif** | % qui passent |
+|---|---|---|---|---|---|
+| PORTEUR | 7 179 | 1,00 | 0,50 | **0,500** | 14,31 % |
+| **NEUTRE** | **9 670** | 0,85 | 0,55 | **0,647** | **1,65 %** |
+| HOSTILE | 2 855 | 0,85 | 0,50 | 0,588 | 1,37 % |
+
+Le p99 du produit pondéré vaut **0,695**, son maximum absolu sur 5 ans **0,875**. Exiger 0,647
+revient à demander le dernier centile — **49 % du temps**. Un facteur **9** entre PORTEUR et
+le reste.
+
+⚠️ **Ça ne se corrige pas par hyperopt (interdit n° 5).** Ça se corrige en décidant **où** la
+prudence macro s'exprime. Trois options :
+- **(a)** garder le multiplicateur ×0,85, **retirer** le bump +0,05 de seuil ;
+- **(b)** garder le bump de seuil, **retirer** le multiplicateur ;
+- **(c)** garder les deux mais **recalibrer** le couple pour viser un taux de passage cible.
+
+**Ma recommandation : (a)** — le multiplicateur agit déjà sur la conviction, le bump double
+la peine sur la même information. Mais c'est ta décision.
+
+**Pourquoi ça commande tout** : B1 est la cause mécanique du manque d'entrées, donc du `n`
+minuscule, donc de six mesures sur six rendues INDÉCIDABLES, donc de l'impossibilité de vérifier
+le look-ahead (D1, 0/20 trades). Tant qu'il n'est pas tranché, le projet ne peut pas apprendre.
+
+### Test 1 — le confirmes-tu comme prochain chantier après B1 ?
+
+`docs/01` v4, que **tu as signée le 03/08**, dit : « **L'ordre des tests n'est pas négociable :
+Test 1 d'abord.** » Or **Test 1 n'a jamais été exécuté** — rien dans `research/EXPERIMENTS.jsonl`,
+rien dans `research/`, rien dans `CHANTIERS.md`. Les 4 expériences du registre portent toutes sur
+de l'aval (scores, stops, G-rules).
+
+Test 1 = « la macro donne-t-elle vraiment la direction ? », contrôle = direction tirée à pile ou
+face, timing technique identique. C'est le seul test capable de dire **s'il y a un edge**.
+
+⇒ **Question** : on cadre Test 1 juste après B1, ou tu veux passer avant par le **funding**
+(86 % du profit de MacroFlip venait de là, jamais rouvert depuis le 27/07) ?
+
+---
+
 ## Sommaire des décisions ouvertes
 
 | # | Objet | État | Depuis |
@@ -68,7 +132,6 @@ n'attend donc plus rien : sa substance est dans `research/pistes_2026-07-31/CHAN
 | C1-bis | Calendrier éco : **barème de points** (nouvelle direction, 20/08) | **acté**, 3 paramètres à fixer | 04/08 |
 | G3 | Ablation de `s_sr` et `s_patterns` | mesurée, retenue — **question de Jonas en attente de sa réponse** | 12/08 |
 | G1 | Modèle appris à la place de l'agrégation Σ poids·score | **reporté 20/08** — reste une hypothèse, pas un chantier | 12/08 |
-| A8 | G-rules à retravailler | **reporté** (re-confirmé 20/08 : « des G-rules fixes me semblent dangereuses ») | 03/08 |
 | G8 | VPS (Hermes Agent + ARIT 24/24) | acté, non codé — **prérequis de G2 devenu explicite** | 12/08 |
 
 **Tranchées le 20/08 au soir, donc sorties d'ici** : **A2-sexies** (NEUTRE garde les deux
@@ -118,23 +181,130 @@ inchangée, et net de frais il retombe à ~×10. Corollaire : **la variable à o
 la distance de stop, c'est le couple (distance, cible)** ; les balayer séparément peut rater
 l'optimum.
 
-⇒ **Nouveau chantier `Q13` — balayage (distance, cible) en espérance nette**, écrit dans
-`CHANTIERS.md`. Il ne concurrence pas Q1 : Q1 dit *combien* de signaux on peut avoir, Q13 dit
-*combien vaut* chacun. Les deux répondent à « le système n'est pas rentable de base », et Q13
-est le seul des deux qui ait déjà un chiffre positif en face de lui.
+⇒ Chantier `Q13` — balayage (distance, cible) en espérance nette.
+⚠️ **CORRIGÉ le 31/08 : `Q13` est FERMÉ depuis le 20/08, hypothèse INFIRMÉE dans les deux sens**
+(`CHANTIERS.md` § « 20/08 (nuit, suite) », commit `6e23ec0` : « resserrer le stop dégrade »).
+Le paragraphe ci-dessus le présentait encore comme un « nouveau chantier » : il proposait donc
+une mesure **déjà faite, et qui a dit non**. Ne pas la relancer — le verrou B6 l'interdirait de
+toute façon sous l'ancien id.
+
+⇒ Ce qui reste vrai de ce raisonnement : le goulot n° 1 est **Q1** (rareté des entrées), et
+l'audit du 24/08 l'a depuis reclassé derrière **B1** (le seuil de conviction hors de portée
+hors PORTEUR).
 
 ---
 
-## A8 — G-rules : reporté, re-confirmé le 20/08
+## ⭐ A8 — G-rules : ROUVERT ET PRIORITAIRE le 25/08
 
-Jonas, 03/08 puis **20/08** : « encore reporté, **des G-rules fixes me semblent dangereuses
-pour le moment** mais à voir ». Rien à coder tant que ce n'est pas rouvert.
+**Jonas, 25/08** : les G-rules passent en chantier prioritaire. Ça annule le report du 20/08
+(« des G-rules fixes me semblent dangereuses pour le moment **mais à voir** ») — le « à voir »
+est arrivé.
 
-⚠️ Interdit n° 5 : G1-G7 et les poids ne sont **jamais** hyperoptés — la reprise se fera par
-mesure, pas par optimisation. Et le chiffre qui justifie sa méfiance est déjà mesuré
-(campagne edge 2026-07) : **B pur (G1-G7 actives) = −17,38 %** contre **A pur (entrées + TP
-+1,5R + SL, zéro G-rule) = +0,12 %**. Les G-rules coûtent ~17,5 points sur un substrat déjà
-nul, par churn (187 trades contre 128).
+**Ce qui ne change pas** : ⚠️ **interdit n° 5** — G1-G7 et leurs poids ne sont **jamais**
+hyperoptés. La reprise se fait **par mesure**, pas par optimisation. Une hyperopt sur ce
+périmètre ferme le chantier au lieu de l'ouvrir.
+
+**Le point de départ chiffré** (campagne edge 2026-07, déjà mesuré, rien à relancer) :
+**B pur (G1-G7 actives) = −17,38 %** contre **A pur (entrées + TP +1,5R + SL, zéro G-rule)
+= +0,12 %**. Les G-rules coûtent ~17,5 points sur un substrat déjà nul, **par churn**
+(187 trades contre 128). C'est le seul fait établi sur elles ; il dit *combien elles coûtent
+ensemble*, pas *laquelle coûte*.
+
+⚠️ **CORRIGÉ le 31/08** — la phrase « aucune ablation individuelle G1…G7 n'existe » écrite ici
+le 25/08 **est fausse**. `research/edge_2026-07/RAPPORT.md` §2 contient une ablation par règle,
+avec un verdict pour chacune, et c'est **la définition d'origine d'A8** dans `CHANTIERS.md`
+(« G-set v2 : supprimer G1/G2/G3/G5/G6, garder G4+G7 ») :
+
+| Règle | Verdict 11/07 | Chiffre |
+|---|---|---|
+| G1 BE +1R | ❌ supprimer | **+3,8 pts sans elle** |
+| G2 trailing structurel 1h | ❌ supprimer | classe « trailing 1h » ≤ 0 en R-space |
+| G3 trailing ATR 1h | ❌ supprimer | ≤ 0 même à 8×ATR |
+| G4 TP partiel 50 % @1,5R | ✅ **garder** | seule brique compatible avec la queue |
+| G5 extension post-BOS | ❌ supprimer | jamais déclenchée en 8,5 ans |
+| G6 CHoCH 1h | ❌ supprimer | **la pire : +20 pts retirés** |
+| G7 time-stop 24h | ⚪ garder (hygiène) | −0,01R |
+| G-giveback (nouveau) | ➕ à tester | seule politique > 0 sur 2021-22 **et** 2023-26 |
+
+**Le vrai manque n'est donc pas « mesurer », c'est « re-mesurer »** : ces ablations datent du
+11/07, donc **long-only** (le short arrive le 04/08 avec A2) et **avant le correctif A1** (aucun
+short n'avait de stop, corrigé le 24/08). Elles ne disent rien de la moitié short du produit.
+A8 = rejouer ces ablations sur le substrat actuel, puis transformer le §2 du RAPPORT en
+décision signée.
+
+### ✅ Prérequis livrés le 31/08 (commit `91a25f0`)
+
+L'outillage d'ablation était inutilisable sans le savoir. Deux défauts corrigés :
+
+1. **`ARIT_G_OFF` échouait en silence.** Toute valeur hors des sept laissait les sept flags à
+   `True`, sans erreur, sans log, sans test — un run d'ablation raté rendait un **produit B
+   complet**, lu à tort comme « cette règle ne coûte rien ». Démontré sur `g3`, `G8`, `A8`,
+   `G3 `. Le run s'arrête désormais à l'import avec la correction exacte à relancer.
+   ⚠️ **Arbitrage de Jonas (31/08)** : il proposait une **demande de confirmation** plutôt qu'un
+   arrêt. Écarté pour une raison technique qu'il a acceptée — ces backtests tournent **en
+   parallèle**, et un process qui attend une réponse se bloque **en silence**, ce qui est pire
+   qu'un arrêt. Son intention est conservée autrement : le message **nomme la correction**
+   (`tu voulais dire 'G3' ? Relance avec : ARIT_G_OFF=G3`).
+2. **G5 avait quatre défauts**, tous sur deux lignes d'`AritV1.py`. Le plus grave : elle lisait
+   `bos_fresh_4h`, la cassure **haussière** seule, quel que soit le sens du trade — **sur un
+   short, G5 supprimait la sortie TP2 quand le marché repartait CONTRE la position** (même
+   famille que A1 ; le miroir `bos_fresh_bear_4h` existait depuis A2 et n'était pas branché).
+   Elle ignorait aussi son flag, ne journalisait rien, et vivait dans la coquille freqtrade
+   alors que `M05 §2.5` la place dans `gestion.py` — c'est cette dernière violation qui
+   **causait** la première. Corrigée dans `gestion.set_extension()`.
+
+⇒ **Les 7 règles sont désormais ablatables** (elles ne l'étaient qu'à 6), chaque run écrit son
+protocole dans son journal (ferme **D3** de l'audit), et un test verrouille la cohérence entre
+« règles déclarées coupables » et « flags réellement lus ». 469 tests passent.
+
+### ⚠️ Ce qui bloque encore la mesure
+
+- **B5** (audit 24/08) — G2 s'exécute **sans déclencheur** (`gestion.py:165`), face au plancher
+  tout resserre. Ablater G2 mesurerait le bug, pas la règle.
+- **B4** (audit 24/08) — G4 calcule la quantité au **prix du pic**, pas au prix courant : la
+  fraction réellement vendue n'est pas 50 %. Même problème pour G4.
+- **B1** (audit 24/08) — empilement multiplicateur ×0,85 + bump +0,05 : le seuil effectif vaut
+  0,647 hors PORTEUR contre un p99 à 0,695. **Attend un arbitrage de Jonas, pas une mesure**
+  (la prudence macro s'exprime sur le seuil **ou** sur le multiplicateur, jamais les deux).
+  C'est lui qui commande le `n` disponible pour toute ablation.
+- **B2** (audit 24/08) — `s_patterns` est un **offset constant** (non nul 99,9 % du temps), pas
+  un score : il ne discrimine rien, il déplace le seuil. À lire avant le volet « poids ».
+
+⇒ **Ordre proposé** : B5 et B4 (bugs, ~1 h chacun) → arbitrage B1 par Jonas → préenregistrement
+`A8-ablation-g-rules` dans `research/EXPERIMENTS.jsonl` (verrou B6) → les 7 ablations.
+
+---
+
+## ⭐ DE1 — DONNÉES ENTRANTES : chantier prioritaire ouvert le 25/08
+
+**Jonas, 25/08** : les données entrantes passent en chantier prioritaire, en même temps qu'A8.
+
+⚠️ **Périmètre proposé, à confirmer par Jonas** — « données entrantes » n'a pas encore de
+définition écrite dans le projet. Ce que ce chantier couvre, sauf correction de sa part :
+**tout flux extérieur qui entre dans une évaluation** — et donc sa disponibilité, sa fraîcheur,
+son historique et sa journalisation. En l'état, ces flux sont éparpillés dans cinq décisions
+ouvertes et deux constats d'audit, sans aucun endroit qui les regarde ensemble :
+
+| flux | où il en est aujourd'hui | référence |
+|---|---|---|
+| `macro_state.json` | **requis à l'exécution mais gitignoré** — rien ne garantit sa présence ni son âge | C2 (audit 24/08) |
+| calendrier éco | barème de points acté, **3 paramètres à fixer** ; l'historique n'existe pas | C1-bis · Q15 |
+| fenêtre de news | la porte **retarde** un signal, elle ne l'élimine pas — les « 91,75 % » ne décrivent pas des signaux et ne doivent plus être cités | R6 (mesuré chez BETA le 19/08) |
+| Fear & Greed | adaptatif acté, P1-P3 tranchés le 20/08, **à coder** | A2-quinquies |
+| funding | 86 % du profit de MacroFlip vient de là (checkpoint 27/07) — jamais réexaminé depuis | — |
+| variables d'environnement | **non journalisées** : un run n'est pas reproductible à partir de son journal | D3 (audit 24/08) |
+
+**La question qui commande tout le reste, et qu'aucune mesure ne tranchera** : est-ce que DE1
+est un chantier de **fiabilité** (les données arrivent-elles, sont-elles fraîches, sait-on les
+rejouer ?) ou un chantier d'**edge** (ces données apportent-elles quelque chose ?). Les deux
+sont légitimes, ils n'ont pas le même premier pas :
+
+- **fiabilité** ⇒ première marche = C2 + D3 (présence, âge et journalisation des entrées) ;
+- **edge** ⇒ première marche = ablation des composants macro (D2/D3 de `CHANTIERS.md`), et elle
+  bute d'abord sur `n` (p = 0,095 sur 12 trades).
+
+Rien n'est codé sur DE1 tant que cette question n'est pas tranchée — écrire du code avant
+reviendrait à choisir la réponse en silence.
 
 ---
 
